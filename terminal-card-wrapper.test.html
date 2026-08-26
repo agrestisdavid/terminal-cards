@@ -1,0 +1,286 @@
+<!doctype html>
+<html lang="de">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>terminal-card-wrapper test läuft</title>
+    <style>
+      :root {
+        --card-background-color: #181825;
+        --primary-text-color: #cdd6f4;
+        --secondary-text-color: #6c7086;
+        --accent-color: #89b4fa;
+        --error-color: #f38ba8;
+      }
+      body {
+        box-sizing: border-box;
+        max-width: 1000px;
+        margin: 0 auto;
+        padding: 24px;
+        background: #11111b;
+        color: #cdd6f4;
+        font-family: system-ui, sans-serif;
+      }
+      main {
+        display: grid;
+        gap: 22px;
+      }
+      mock-ha-card {
+        display: block;
+      }
+      #result {
+        padding: 10px;
+        border: 1px solid #6c7086;
+        white-space: pre-wrap;
+      }
+    </style>
+    <script>
+      let createCount = 0;
+
+      class MockHaCard extends HTMLElement {
+        constructor(config) {
+          super();
+          this.config = config;
+          this.attachShadow({ mode: 'open' });
+          this._render();
+        }
+
+        set hass(value) {
+          this._hass = value;
+          this._render();
+        }
+
+        getCardSize() {
+          return this.config.sizeReject
+            ? Promise.reject(new Error('simulierter Child-Size-Fehler'))
+            : 1;
+        }
+
+        _render() {
+          if (!this.shadowRoot) return;
+          const cfg = this.config;
+          const entity = this._hass && cfg.entity && this._hass.states[cfg.entity];
+          const state = cfg.state || (entity && entity.state) || 'off';
+          const content = (entity && entity.attributes.friendly_name) || cfg.content;
+          this.shadowRoot.innerHTML = `
+            <style>
+              .card { box-sizing: border-box; min-height: 76px; padding: 12px;
+                border: 1px solid #45475a; background: #1e1e2e; }
+              .card[data-state="on"] { border-color: #89b4fa; }
+              .card[data-state="unavailable"] { border-color: #f38ba8; color: #f38ba8; }
+              strong, span { display: block; }
+            </style>
+            <div class="card" data-state="${state}">
+              <strong>${cfg.title}</strong><span>${content || state}</span>
+            </div>`;
+        }
+      }
+      customElements.define('mock-ha-card', MockHaCard);
+
+      window.loadCardHelpers = () =>
+        new Promise((resolve) => {
+          setTimeout(
+            () =>
+              resolve({
+                createCardElement(config) {
+                  createCount += 1;
+                  return new MockHaCard(config);
+                },
+              }),
+            10
+          );
+        });
+    </script>
+    <script src="terminal-card.js"></script>
+  </head>
+  <body>
+    <main id="scenes"></main>
+    <pre id="result">WAITING</pre>
+    <script>
+      let rebuildCount = 0;
+      document.addEventListener('ll-rebuild', () => {
+        rebuildCount += 1;
+      });
+
+      const hass = {
+        states: {
+          'light.desk': {
+            state: 'on',
+            attributes: { friendly_name: 'Schreibtisch ist an' },
+          },
+          'switch.fan': {
+            state: 'off',
+            attributes: { friendly_name: 'Ventilator ist aus' },
+          },
+        },
+      };
+
+      function wrapper(config) {
+        const element = document.createElement('terminal-card-wrapper');
+        element.setConfig(config);
+        // Absichtlich unmittelbar nach setConfig(), bevor Helpers auflösen.
+        element.earlyCardSize = Promise.resolve(element.getCardSize());
+        element.hass = hass;
+        document.querySelector('#scenes').appendChild(element);
+        return element;
+      }
+
+      const vertical = wrapper({
+        title: 'Vertikale Child-Cards',
+        cards: [
+          { type: 'mock', title: 'Licht', entity: 'light.desk', state: 'on' },
+          { type: 'mock', title: 'Lüfter', entity: 'switch.fan', state: 'off' },
+          { type: 'mock', title: 'Netz', content: 'Keine Verbindung', state: 'unavailable' },
+        ],
+      });
+
+      const grid = document.createElement('terminal-card-wrapper');
+      // Die erste, absichtlich überholte Config prüft den Generation-Guard.
+      grid.setConfig({
+        title: 'Veraltete Config',
+        cards: [{ type: 'mock', title: 'Darf nicht erscheinen', state: 'off' }],
+      });
+      grid.setConfig({
+        title: 'Zweispaltiges Grid',
+        columns: 2,
+        cards: [
+          { type: 'mock', title: 'Links', content: 'Spalte 1', state: 'on' },
+          {
+            type: 'mock',
+            title: 'Rechts',
+            content: 'Spalte 2',
+            state: 'off',
+            sizeReject: true,
+          },
+        ],
+      });
+      grid.hass = hass;
+      document.querySelector('#scenes').appendChild(grid);
+
+      const empty = wrapper({ title: 'Leerer erlaubter Wrapper', cards: [] });
+
+      const lifecycle = wrapper({
+        title: 'Disconnect/Reconnect',
+        cards: [
+          { type: 'mock', title: 'Lifecycle A', state: 'on' },
+          { type: 'mock', title: 'Lifecycle B', state: 'off' },
+        ],
+      });
+
+      function assert(condition, message) {
+        if (!condition) throw new Error(message);
+      }
+
+      async function waitFor(condition, message) {
+        const deadline = performance.now() + 3000;
+        while (!condition() && performance.now() < deadline) {
+          await new Promise((resolve) => setTimeout(resolve, 10));
+        }
+        assert(condition(), message);
+      }
+
+      async function run() {
+        await waitFor(
+          () =>
+            vertical._cards.length === 3 &&
+            grid._cards.length === 2 &&
+            lifecycle._cards.length === 2,
+          'Child-Erstellung hat Timeout erreicht'
+        );
+
+        const pane = vertical.shadowRoot.querySelector('.pane');
+        const title = vertical.shadowRoot.querySelector('.title');
+        const paneStyle = getComputedStyle(pane);
+        const titleStyle = getComputedStyle(title);
+        const paneRect = pane.getBoundingClientRect();
+        const titleRect = title.getBoundingClientRect();
+        assert(paneStyle.borderTopWidth === '1px', 'Rahmen ist nicht 1px');
+        assert(paneStyle.borderTopStyle === 'solid', 'Rahmen ist nicht sichtbar');
+        assert(paneStyle.borderRadius === '0px', 'Ecken sind nicht quadratisch');
+        assert(titleStyle.position === 'absolute', 'Title ist kein Overlay');
+        assert(titleStyle.backgroundColor === paneStyle.backgroundColor, 'Title hat nicht den Pane-Hintergrund');
+        assert(titleRect.top < paneRect.top && titleRect.bottom > paneRect.top, 'Title schneidet Rahmenlinie nicht');
+
+        const verticalContainer = vertical.shadowRoot.querySelector('.cards');
+        assert(getComputedStyle(verticalContainer).display === 'flex', 'Default ist nicht vertikal/flex');
+        assert(verticalContainer.children.length === 3, 'Vertikale Child-Cards fehlen');
+        assert([...verticalContainer.children].every((card) => card.getBoundingClientRect().height > 0), 'Child-Card unsichtbar');
+        assert(vertical._cards.every((card) => card._hass === hass), 'hass wurde nicht propagiert');
+
+        const gridContainer = grid.shadowRoot.querySelector('.cards');
+        const gridColumns = getComputedStyle(gridContainer).gridTemplateColumns.split(' ');
+        assert(getComputedStyle(gridContainer).display === 'grid', 'columns aktiviert kein Grid');
+        assert(gridColumns.length === 2, `Erwartete 2 Spalten, gefunden: ${gridColumns.join(' ')}`);
+        assert(gridContainer.children.length === 2, 'Grid-Child-Cards fehlen');
+        assert(grid.shadowRoot.querySelector('.title').textContent === 'Zweispaltiges Grid', 'Race hat alte Config gewonnen');
+
+        const emptyPane = empty.shadowRoot.querySelector('.pane');
+        assert(emptyPane.getBoundingClientRect().height > 0, 'Leerer Rahmen ist unsichtbar');
+        assert(empty.shadowRoot.querySelector('.title').textContent === 'Leerer erlaubter Wrapper', 'Leerer Title fehlt');
+        assert(empty.shadowRoot.querySelector('.cards').children.length === 0, 'Leerer Wrapper enthält Children');
+
+        const earlyVerticalSize = await vertical.earlyCardSize;
+        assert(earlyVerticalSize === 3, `Frühes getCardSize blieb bei ${earlyVerticalSize} statt 3`);
+        assert((await grid.getCardSize()) === 1, 'Abgelehnte Child-Size fiel nicht auf 1 zurück');
+        assert(vertical.getCardSize() === 3, 'Dynamische Card-Size ist falsch');
+        assert(grid.getGridOptions().rows === 'auto', 'Grid rows sind nicht dynamisch');
+
+        const initialLifecycleCards = [...lifecycle._cards];
+        lifecycle.remove();
+        assert(lifecycle._hass === null, 'Disconnect behielt hass-Referenz');
+        assert(lifecycle._cards.length === 0, 'Disconnect behielt Child-Referenzen');
+        assert(
+          lifecycle.shadowRoot.querySelector('.cards').children.length === 0,
+          'Disconnect behielt Child-DOM'
+        );
+
+        const countBeforeAbortedReconnect = createCount;
+        document.querySelector('#scenes').appendChild(lifecycle);
+        lifecycle.hass = hass;
+        lifecycle.remove();
+        await new Promise((resolve) => setTimeout(resolve, 30));
+        assert(lifecycle._cards.length === 0, 'Abgebrochene Erstellung befüllte detached Wrapper');
+        assert(
+          createCount === countBeforeAbortedReconnect,
+          'Abgebrochene Helper-Erstellung erzeugte Child-Cards'
+        );
+
+        document.querySelector('#scenes').appendChild(lifecycle);
+        lifecycle.hass = hass;
+        await waitFor(() => lifecycle._cards.length === 2, 'Reconnect baute Config nicht neu auf');
+        assert(
+          lifecycle._cards.every((card) => card._hass === hass),
+          'Reconnect propagierte hass nicht'
+        );
+        assert(
+          lifecycle._cards.every((card) => !initialLifecycleCards.includes(card)),
+          'Reconnect verwendete freizugebende Child-Instanzen erneut'
+        );
+        assert(createCount === 9, `Unerwartete Child-Erzeugungszahl: ${createCount}`);
+        assert(rebuildCount >= 4, 'Lovelace-Größenneuberechnung wurde nicht signalisiert');
+
+        const evidence = [
+          'PASS: 1px-Rahmen, quadratische Ecken und Title-Overlay geprüft',
+          'PASS: 3 vertikale Child-Cards sichtbar; hass propagiert',
+          'PASS: columns=2 ergibt CSS-Grid mit 2 Spalten',
+          'PASS: cards=[] ergibt sichtbaren Rahmen + Title ohne Children',
+          'PASS: Generation-Guard verwirft überholte setConfig-Erstellung',
+          'PASS: frühes getCardSize wartet auf Cards und ergibt 3',
+          'PASS: asynchron abgelehnte Child-Size fällt auf 1 zurück',
+          'PASS: Disconnect räumt auf; Reconnect baut Config genau einmal neu',
+          'PASS: ll-rebuild signalisiert Größenneuberechnung',
+        ].join('\n');
+        document.querySelector('#result').textContent = evidence;
+        document.body.dataset.testStatus = 'PASS';
+        document.title = 'PASS terminal-card-wrapper';
+      }
+
+      run().catch((error) => {
+        document.querySelector('#result').textContent = `FAIL: ${error.stack || error}`;
+        document.body.dataset.testStatus = 'FAIL';
+        document.title = 'FAIL terminal-card-wrapper';
+        console.error(error);
+      });
+    </script>
+  </body>
+</html>

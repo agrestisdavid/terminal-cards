@@ -2,6 +2,8 @@
 
 Terminal-style Lovelace cards for Home Assistant, inspired by Herdr panes: square 1 px borders, monospace labels embedded in the top border, and theme-aware state colors.
 
+![Terminal Cards preview](docs/terminal-cards-preview.png)
+
 ## Cards
 
 ### `custom:terminal-card-wrapper`

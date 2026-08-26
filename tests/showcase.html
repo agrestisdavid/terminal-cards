@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Terminal Cards preview</title>
+    <style>
+      :root {
+        --card-background-color: #181825;
+        --primary-text-color: #cdd6f4;
+        --secondary-text-color: #6c7086;
+        --accent-color: #89b4fa;
+        --error-color: #f38ba8;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        min-height: 100vh;
+        padding: 48px;
+        background: #11111b;
+        color: #cdd6f4;
+        font-family: ui-monospace, "Cascadia Code", Consolas, monospace;
+      }
+      h1 { margin: 0 0 30px; color: #89b4fa; font-size: 20px; font-weight: 700; }
+      h1 span { color: #6c7086; font-weight: 400; }
+      terminal-card-wrapper { max-width: 1000px; }
+    </style>
+    <script>
+      customElements.define(
+        'ha-icon',
+        class extends HTMLElement {
+          set icon(value) {
+            this._icon = value;
+            this.textContent = value?.includes('dots') ? '⋮' : '◉';
+            this.style.display = 'grid';
+            this.style.placeItems = 'center';
+            this.style.fontSize = value?.includes('dots') ? '22px' : '20px';
+          }
+          get icon() { return this._icon; }
+        }
+      );
+      window.loadCardHelpers = async () => ({
+        createCardElement(config) {
+          const tag = config.type.startsWith('custom:') ? config.type.slice(7) : config.type;
+          const card = document.createElement(tag);
+          card.setConfig(config);
+          return card;
+        },
+      });
+    </script>
+    <script type="module" src="../dist/terminal-cards.js"></script>
+  </head>
+  <body>
+    <h1>terminal-cards <span>// wrapper + light-card</span></h1>
+    <main></main>
+    <script type="module">
+      const hass = {
+        states: {
+          'light.kitchen': {
+            entity_id: 'light.kitchen', state: 'on',
+            attributes: { friendly_name: 'kitchen', brightness: 204, supported_color_modes: ['brightness'] },
+          },
+          'light.dining': {
+            entity_id: 'light.dining', state: 'off',
+            attributes: { friendly_name: 'dining', brightness: 92, supported_color_modes: ['brightness'] },
+          },
+          'light.garage': {
+            entity_id: 'light.garage', state: 'unavailable',
+            attributes: { friendly_name: 'garage', supported_color_modes: ['onoff'] },
+          },
+        },
+        formatEntityState: (entity) => entity.state,
+        callService() {},
+      };
+
+      await customElements.whenDefined('terminal-card-wrapper');
+      const wrapper = document.createElement('terminal-card-wrapper');
+      wrapper.setConfig({
+        title: 'lighting',
+        columns: 3,
+        cards: [
+          { type: 'custom:terminal-light-card', entity: 'light.kitchen', show_brightness: true },
+          { type: 'custom:terminal-light-card', entity: 'light.dining', show_brightness: true },
+          { type: 'custom:terminal-light-card', entity: 'light.garage', show_brightness: true },
+        ],
+      });
+      wrapper.hass = hass;
+      document.querySelector('main').append(wrapper);
+    </script>
+  </body>
+</html>

@@ -23,7 +23,7 @@ cards:
 
 ### `custom:terminal-light-card`
 
-A compact light card with terminal state colors and an optional brightness control. Its border is continuous: unlike the wrapper, the Light Card deliberately has **no title embedded in the border**. Its name is shown inside the card.
+A compact light card with terminal state colors and an optional segmented brightness control made from small squares. Its border is continuous: unlike the wrapper, the Light Card deliberately has **no title embedded in the border**. Its name is shown inside the card.
 
 ```yaml
 type: custom:terminal-light-card

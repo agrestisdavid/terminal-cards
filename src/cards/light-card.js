@@ -31,6 +31,9 @@ const STYLES = `
   }
   .card[data-state="on"] { border-color: var(--terminal-accent); }
   .card[data-state="unavailable"] { border-color: var(--terminal-error); }
+  .card:not([data-state="unavailable"]):hover { border-color: var(--terminal-accent); }
+  .card:not([data-state="unavailable"]):hover .icon,
+  .card:not([data-state="unavailable"]):hover .name { color: var(--terminal-accent); }
   .main {
     box-sizing: border-box;
     display: flex;
@@ -44,7 +47,6 @@ const STYLES = `
     -webkit-tap-highlight-color: transparent;
   }
   .main:focus-visible { outline: 1px solid var(--terminal-accent); outline-offset: -3px; }
-  .card[data-state="off"] .main:hover { color: var(--terminal-accent); }
   .icon {
     flex: 0 0 auto;
     width: 30px;
@@ -64,21 +66,35 @@ const STYLES = `
   .state { color: var(--terminal-dim); font-size: 12px; }
   .card[data-state="unavailable"] .state { color: var(--terminal-error); }
   .more {
+    box-sizing: border-box;
     flex: 0 0 auto;
-    display: grid;
-    place-items: center;
+    display: flex;
+    align-items: center;
+    justify-content: center;
     width: 34px;
     height: 34px;
     padding: 0;
-    border: 0;
-    border-radius: 0;
+    border: 1px solid transparent;
+    border-radius: 50%;
     background: transparent;
     color: var(--terminal-dim);
+    line-height: 0;
     cursor: pointer;
   }
   .more[hidden] { display: none; }
-  .more:hover, .more:focus-visible { color: var(--terminal-accent); outline: 1px solid currentColor; }
-  .more ha-icon { width: 20px; height: 20px; }
+  .more:hover, .more:focus-visible {
+    border-color: currentColor;
+    color: var(--terminal-accent);
+    outline: none;
+  }
+  .more ha-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    --mdc-icon-size: 20px;
+  }
   .brightness {
     display: grid;
     grid-template-columns: minmax(0, 1fr) 42px;
@@ -87,13 +103,48 @@ const STYLES = `
     padding: 0 14px 12px;
   }
   .brightness[hidden] { display: none; }
-  input[type="range"] {
+  .dimmer {
+    position: relative;
+    display: flex;
+    align-items: center;
+    min-width: 0;
+    height: 20px;
+  }
+  .dimmer:focus-within {
+    outline: 1px solid var(--terminal-accent);
+    outline-offset: 2px;
+  }
+  .dimmer[data-disabled="true"] { cursor: not-allowed; opacity: .55; }
+  .segments {
+    display: grid;
+    grid-template-columns: repeat(16, minmax(3px, 8px));
+    align-items: center;
+    justify-content: space-between;
     width: 100%;
+    pointer-events: none;
+  }
+  .segment {
+    width: 100%;
+    aspect-ratio: 1;
+    background: var(--terminal-dim);
+    opacity: .42;
+  }
+  .segment[data-active="true"] {
+    background: var(--terminal-accent);
+    opacity: 1;
+  }
+  input[type="range"] {
+    appearance: none;
+    -webkit-appearance: none;
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
     margin: 0;
-    accent-color: var(--terminal-accent);
+    opacity: 0;
     cursor: pointer;
   }
-  input[type="range"]:disabled { cursor: not-allowed; opacity: .55; }
+  input[type="range"]:disabled { cursor: not-allowed; }
   .percent { color: var(--terminal-dim); text-align: right; font-size: 12px; }
 `;
 
@@ -214,14 +265,26 @@ export class TerminalLightCard extends HTMLElement {
 
     this._brightness = document.createElement('div');
     this._brightness.className = 'brightness';
+    this._dimmer = document.createElement('div');
+    this._dimmer.className = 'dimmer';
+    this._segments = document.createElement('div');
+    this._segments.className = 'segments';
+    this._segments.setAttribute('aria-hidden', 'true');
+    this._segmentElements = Array.from({ length: 16 }, () => {
+      const segment = document.createElement('span');
+      segment.className = 'segment';
+      this._segments.append(segment);
+      return segment;
+    });
     this._slider = document.createElement('input');
     this._slider.type = 'range';
-    this._slider.min = '1';
+    this._slider.min = '0';
     this._slider.max = '100';
     this._slider.setAttribute('aria-label', 'Brightness');
+    this._dimmer.append(this._segments, this._slider);
     this._percent = document.createElement('span');
     this._percent.className = 'percent';
-    this._brightness.append(this._slider, this._percent);
+    this._brightness.append(this._dimmer, this._percent);
     this._card.append(this._main, this._brightness);
     root.append(style, this._card);
 
@@ -246,7 +309,7 @@ export class TerminalLightCard extends HTMLElement {
     });
     this._slider.addEventListener('click', (event) => event.stopPropagation());
     this._slider.addEventListener('input', () => {
-      this._percent.textContent = `${this._slider.value}%`;
+      this._renderBrightness(Number(this._slider.value));
     });
     this._slider.addEventListener('change', () => this._setBrightness());
   }
@@ -308,24 +371,28 @@ export class TerminalLightCard extends HTMLElement {
     const state = this._dataState();
     const unavailable = state === 'unavailable';
     const attributes = entity?.attributes || {};
-    const brightness = Math.max(
-      1,
-      Math.round(((Number(attributes.brightness) || 0) / 255) * 100)
+    const rawBrightness = Math.round(
+      ((Number(attributes.brightness) || 0) / 255) * 100
     );
+    const brightness = state === 'on'
+      ? Math.max(1, Math.min(100, rawBrightness))
+      : 0;
 
     this._card.dataset.state = state;
     this._card.setAttribute('aria-label', this._config.name || attributes.friendly_name || this._config.entity);
     this._icon.icon = this._config.icon || attributes.icon || 'mdi:lightbulb';
     this._name.textContent = this._config.name || attributes.friendly_name || this._config.entity;
     this._state.hidden = this._config.show_state === false;
-    this._state.textContent = entity
+    const formattedState = entity
       ? this._hass?.formatEntityState?.(entity) || entity.state
       : 'unavailable';
+    this._state.textContent = String(formattedState).toLocaleLowerCase();
     this._more.hidden = this._config.show_more_info === false;
     this._brightness.hidden = !this._showBrightness();
     this._slider.value = String(brightness);
     this._slider.disabled = unavailable;
-    this._percent.textContent = `${brightness}%`;
+    this._dimmer.dataset.disabled = unavailable ? 'true' : 'false';
+    this._renderBrightness(brightness);
     this._main.setAttribute('aria-disabled', unavailable ? 'true' : 'false');
   }
 
@@ -366,12 +433,24 @@ export class TerminalLightCard extends HTMLElement {
     }
   }
 
+  _renderBrightness(value) {
+    const brightness = Math.max(0, Math.min(100, Math.round(Number(value) || 0)));
+    const activeSegments = Math.ceil(
+      (brightness / 100) * this._segmentElements.length
+    );
+    this._segmentElements.forEach((segment, index) => {
+      segment.dataset.active = index < activeSegments ? 'true' : 'false';
+    });
+    this._percent.textContent = `${brightness}%`;
+  }
+
   _setBrightness() {
     if (!this._hass || !this._config || this._slider.disabled) return;
+    const brightness = Number(this._slider.value);
     this._hass.callService(
       'light',
-      'turn_on',
-      { brightness_pct: Number(this._slider.value) },
+      brightness === 0 ? 'turn_off' : 'turn_on',
+      brightness === 0 ? {} : { brightness_pct: brightness },
       { entity_id: this._config.entity }
     );
   }

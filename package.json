@@ -1,0 +1,25 @@
+{
+  "name": "terminal-cards",
+  "version": "0.1.0",
+  "description": "Herdr-inspired terminal-style Lovelace cards for Home Assistant",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "check": "node --check src/index.js && node --check scripts/build.mjs && node --check scripts/run-browser-tests.mjs",
+    "test:browser": "node scripts/run-browser-tests.mjs",
+    "test": "npm run build && npm run check && npm run test:browser"
+  },
+  "keywords": [
+    "home-assistant",
+    "lovelace",
+    "hacs",
+    "custom-card",
+    "terminal"
+  ],
+  "author": "David Jovanovic",
+  "license": "MIT",
+  "devDependencies": {
+    "esbuild": "^0.25.0"
+  }
+}

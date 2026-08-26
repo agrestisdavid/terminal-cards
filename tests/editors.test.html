@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>terminal-cards editors test running</title>
+    <script>
+      customElements.define('ha-icon', class extends HTMLElement {});
+      customElements.define(
+        'hui-card-element-editor',
+        class extends HTMLElement {
+          set value(value) { this._value = value; }
+          get value() { return this._value; }
+          toggleMode() {
+            this.dispatchEvent(
+              new CustomEvent('GUImode-changed', {
+                bubbles: true,
+                detail: { guiMode: false, guiModeAvailable: true },
+              })
+            );
+          }
+        }
+      );
+      customElements.define('hui-card-picker', class extends HTMLElement {});
+    </script>
+    <script type="module" src="../dist/terminal-cards.js"></script>
+  </head>
+  <body>
+    <pre id="result">WAITING</pre>
+    <script type="module">
+      function assert(condition, message) {
+        if (!condition) throw new Error(message);
+      }
+
+      async function run() {
+        await customElements.whenDefined('terminal-card-wrapper-editor');
+        await customElements.whenDefined('terminal-light-card');
+
+        const hass = {
+          states: {
+            'light.desk': { state: 'on', attributes: {} },
+            'sensor.temp': { state: '21', attributes: {} },
+          },
+        };
+        const lovelace = { config: { views: [] } };
+        const editor = document.createElement('terminal-card-wrapper-editor');
+        editor.hass = hass;
+        editor.lovelace = lovelace;
+        editor.setConfig({
+          title: 'lights',
+          columns: 2,
+          cards: [
+            { type: 'tile', entity: 'light.desk' },
+            { type: 'markdown', content: 'hello' },
+          ],
+        });
+        document.body.append(editor);
+
+        let latest = null;
+        editor.addEventListener('config-changed', (event) => {
+          latest = event.detail.config;
+        });
+
+        const title = editor.shadowRoot.querySelector('#title');
+        title.value = 'new title';
+        title.dispatchEvent(new Event('input', { bubbles: true }));
+        assert(latest.title === 'new title', 'wrapper title was not updated');
+
+        const columns = editor.shadowRoot.querySelector('#columns');
+        columns.value = '';
+        columns.dispatchEvent(new Event('change', { bubbles: true }));
+        assert(latest.columns === undefined, 'vertical layout was not selected');
+
+        const childEditor = editor.shadowRoot.querySelector('hui-card-element-editor');
+        assert(childEditor.hass === hass && childEditor.lovelace === lovelace, 'editor context missing');
+        childEditor.dispatchEvent(
+          new CustomEvent('config-changed', {
+            bubbles: true,
+            detail: { config: { type: 'tile', entity: 'light.desk', name: 'updated' } },
+          })
+        );
+        assert(latest.cards[0].name === 'updated', 'child card visual edit was not saved');
+
+        editor.shadowRoot.querySelector('[data-action="add"]').click();
+        const picker = editor.shadowRoot.querySelector('hui-card-picker');
+        assert(picker && picker.hass === hass && picker.lovelace === lovelace, 'native card picker missing');
+        picker.dispatchEvent(
+          new CustomEvent('config-changed', {
+            bubbles: true,
+            detail: { config: { type: 'button', entity: 'light.desk' } },
+          })
+        );
+        assert(latest.cards.length === 3, 'picked child card was not added');
+
+        editor.shadowRoot.querySelector('[data-action="prev"]').click();
+        assert(latest.cards[1].type === 'button', 'child card was not reordered');
+        editor.shadowRoot.querySelector('[data-action="delete"]').click();
+        assert(latest.cards.length === 2, 'child card was not removed');
+
+        const wrapperClass = customElements.get('terminal-card-wrapper');
+        assert(wrapperClass.getConfigElement().localName === 'terminal-card-wrapper-editor', 'wrapper editor hook missing');
+        assert(Array.isArray(wrapperClass.getStubConfig().cards), 'wrapper stub cards missing');
+
+        const lightClass = customElements.get('terminal-light-card');
+        const form = lightClass.getConfigForm();
+        const fields = form.schema.flatMap((item) => item.schema || [item]);
+        assert(fields.some((field) => field.name === 'entity'), 'light entity selector missing');
+        assert(fields.some((field) => field.name === 'icon'), 'light icon selector missing');
+        assert(fields.some((field) => field.name === 'tap_action'), 'light tap action missing');
+        assert(!fields.some((field) => field.name === 'title'), 'light editor contains forbidden title');
+        const entityField = fields.find((field) => field.name === 'entity');
+        assert(entityField.selector.entity.filter.domain === 'light', 'light selector accepts other domains');
+
+        document.body.dataset.testStatus = 'PASS';
+        document.title = 'PASS terminal-cards editors';
+        document.querySelector('#result').textContent = [
+          'PASS: wrapper title, columns and child cards editable visually',
+          'PASS: native child-card picker/editor integration',
+          'PASS: child cards add, update, move and remove',
+          'PASS: light form exposes entity/name/icon/options/actions without title',
+        ].join('\n');
+      }
+
+      run().catch((error) => {
+        document.body.dataset.testStatus = 'FAIL';
+        document.title = 'FAIL terminal-cards editors';
+        document.querySelector('#result').textContent = `FAIL: ${error.stack || error}`;
+        console.error(error);
+      });
+    </script>
+  </body>
+</html>

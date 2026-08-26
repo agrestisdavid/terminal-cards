@@ -91,12 +91,12 @@
           );
         });
     </script>
-    <script src="terminal-card.js"></script>
+    <script type="module" src="../dist/terminal-cards.js"></script>
   </head>
   <body>
     <main id="scenes"></main>
     <pre id="result">WAITING</pre>
-    <script>
+    <script type="module">
       let rebuildCount = 0;
       document.addEventListener('ll-rebuild', () => {
         rebuildCount += 1;
@@ -257,7 +257,10 @@
           'Reconnect verwendete freizugebende Child-Instanzen erneut'
         );
         assert(createCount === 9, `Unerwartete Child-Erzeugungszahl: ${createCount}`);
-        assert(rebuildCount >= 4, 'Lovelace-Größenneuberechnung wurde nicht signalisiert');
+        assert(
+          rebuildCount === 0,
+          'Wrapper löste ll-rebuild aus und würde sich in Home Assistant neu erstellen'
+        );
 
         const evidence = [
           'PASS: 1px-Rahmen, quadratische Ecken und Title-Overlay geprüft',
@@ -268,7 +271,7 @@
           'PASS: frühes getCardSize wartet auf Cards und ergibt 3',
           'PASS: asynchron abgelehnte Child-Size fällt auf 1 zurück',
           'PASS: Disconnect räumt auf; Reconnect baut Config genau einmal neu',
-          'PASS: ll-rebuild signalisiert Größenneuberechnung',
+          'PASS: kein selbst ausgelöstes ll-rebuild/Recreation-Loop',
         ].join('\n');
         document.querySelector('#result').textContent = evidence;
         document.body.dataset.testStatus = 'PASS';

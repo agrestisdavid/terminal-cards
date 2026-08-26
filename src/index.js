@@ -1,0 +1,14 @@
+import './editors/wrapper-editor.js';
+import './cards/wrapper-card.js';
+import './cards/light-card.js';
+
+const VERSION =
+  typeof __TERMINAL_CARDS_VERSION__ === 'string'
+    ? __TERMINAL_CARDS_VERSION__
+    : 'dev';
+
+console.info(
+  `%c TERMINAL-CARDS %c v${VERSION} `,
+  'background:#89b4fa;color:#11111b;font-weight:700;',
+  'background:#181825;color:#cdd6f4;'
+);

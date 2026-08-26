@@ -9,4 +9,11 @@ Thumbs.db
 
 # Node / Build
 node_modules/
+dist/
+coverage/
 _herdr_contracts/
+
+# Lokale Deploy-/Browser-Artefakte
+*.deploy.*
+.esc.json
+wrapper-only.js

@@ -1,0 +1,11 @@
+# Bewusst ignoriert (User-Wunsch)
+ideas.md
+PLAN.md
+
+# Temporäre / lokale Dateien
+*.log
+.DS_Store
+Thumbs.db
+
+# Node / Build
+node_modules/

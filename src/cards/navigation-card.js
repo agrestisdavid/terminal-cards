@@ -2,6 +2,7 @@ import {
   DOCUMENTATION_URL,
   defineElement,
   executeAction,
+  isEntityInactive,
   registerCard,
 } from '../shared/ha.js';
 import {
@@ -29,7 +30,8 @@ const STYLES = `
     display: block;
     height: 100%;
   }
-  :host([data-variant="pane"]) { padding-top: 8px; }
+  :host([data-variant="pane"]),
+  :host([data-border-title="true"]) { padding-top: 8px; }
   .card {
     position: relative;
     box-sizing: border-box;
@@ -125,10 +127,19 @@ const STYLES = `
   .icon, .arrow {
     flex: 0 0 auto;
     color: var(--terminal-dim);
-    pointer-events: none;
   }
-  .icon { width: 28px; height: 28px; }
-  .arrow { width: 20px; height: 20px; }
+  .icon { width: 28px; height: 28px; pointer-events: none; }
+  .arrow {
+    box-sizing: border-box;
+    display: grid;
+    place-items: center;
+    width: 34px;
+    height: 34px;
+    border: 1px solid transparent;
+    pointer-events: auto;
+    --mdc-icon-size: 20px;
+  }
+  .arrow:hover { border-color: currentColor; }
   .card:hover .icon, .card:hover .name, .card:hover .arrow,
   .card:focus-within .icon, .card:focus-within .name,
   .card:focus-within .arrow { color: var(--terminal-accent); }
@@ -150,6 +161,7 @@ export class TerminalNavigationCard extends HTMLElement {
       navigation_path: 'Navigation path',
       name: 'Name',
       icon: 'Icon',
+      off_icon: 'Inactive-state icon',
       variant: 'Border style',
       label: 'Secondary label',
       show_path: 'Show navigation path',
@@ -160,6 +172,7 @@ export class TerminalNavigationCard extends HTMLElement {
       title_position: 'Border title position',
       more_icon: 'Navigation icon',
       popup_title: 'Popup border title',
+      border_title: 'Border title',
     };
     return {
       schema: [
@@ -175,6 +188,7 @@ export class TerminalNavigationCard extends HTMLElement {
           schema: [
             { name: 'name', required: true, selector: { text: {} } },
             { name: 'icon', selector: { icon: {} } },
+            { name: 'off_icon', selector: { icon: {} } },
           ],
         },
         {
@@ -228,25 +242,37 @@ export class TerminalNavigationCard extends HTMLElement {
             titlePosition: true,
             moreIcon: true,
             popupTitle: true,
-          }),
+            borderTitle: true,
+          }).map((field) => field.name === 'border_title'
+            ? {
+                ...field,
+                visible: { field: 'variant', operator: 'not_eq', value: 'pane' },
+              }
+            : field),
         },
       ],
       computeLabel: (schema) => labels[schema.name] || schema.name,
       computeHelper: (schema) => {
         if (schema.name === 'state_template') {
-          return 'Rendered reactively by Home Assistant. Template output overrides the entity state.';
+          return 'Rendered reactively by Home Assistant. Template output overrides free text and entity state.';
         }
         if (schema.name === 'entity') {
-          return 'Shows the formatted entity state when no template result is available.';
+          return 'Shows the formatted entity state when neither template result nor free text is available.';
         }
         if (schema.name === 'label') {
-          return 'Fallback shown before the navigation path.';
+          return 'Free text shown after template output but before the entity state.';
         }
         if (schema.name === 'icon_tap_action') {
           return 'Runs only when the main icon is clicked. Toggle and more-info use the selected state entity.';
         }
         if (schema.name === 'popup_title') {
           return 'Overrides the default “more-info” title for a main-icon more-info action.';
+        }
+        if (schema.name === 'off_icon') {
+          return 'Used when the selected state entity is off, or closed for a cover.';
+        }
+        if (schema.name === 'border_title') {
+          return 'Optional only for continuous borders; pane navigation already uses the name in its border.';
         }
         return undefined;
       },
@@ -373,6 +399,7 @@ export class TerminalNavigationCard extends HTMLElement {
     validateAppearance(config, 'terminal-navigation-card', {
       titlePosition: true,
       popupTitle: true,
+      borderTitle: true,
     });
     this._teardownTemplateSubscription();
     this._config = { ...config };
@@ -406,15 +433,23 @@ export class TerminalNavigationCard extends HTMLElement {
     const variant = this._config.variant || 'continuous';
     const pane = variant === 'pane';
     const name = this._config.name.trim();
+    const customBorderTitle = pane ? '' : this._config.border_title?.trim() || '';
+    const borderTitle = pane ? name : customBorderTitle;
+    const entity = this._config.entity
+      ? this._hass?.states?.[this._config.entity]
+      : null;
     this.dataset.variant = variant;
+    this.dataset.borderTitle = String(Boolean(customBorderTitle));
     this._card.dataset.variant = variant;
     this._card.setAttribute('aria-label', `Navigate to ${name}`);
-    this._borderTitle.hidden = !pane;
+    this._borderTitle.hidden = !borderTitle;
     this._borderTitle.dataset.titlePosition = this._config.title_position || 'left';
-    this._borderTitle.textContent = name;
+    this._borderTitle.textContent = borderTitle;
     this._name.hidden = pane;
     this._name.textContent = name;
-    this._icon.icon = this._config.icon || 'mdi:arrow-right';
+    this._icon.icon = isEntityInactive(entity) && this._config.off_icon
+      ? this._config.off_icon
+      : this._config.icon || 'mdi:arrow-right';
     this._arrow.icon = this._config.more_icon || 'mdi:chevron-right';
     const hasIconAction = (this._config.icon_tap_action?.action || 'none') !== 'none';
     const iconActionLabel = hasIconAction
@@ -431,6 +466,7 @@ export class TerminalNavigationCard extends HTMLElement {
 
   _secondaryContent() {
     if (this._templateValue !== undefined) return this._templateValue;
+    if (this._config.label) return this._config.label;
     if (this._config.entity) {
       const entity = this._hass?.states?.[this._config.entity];
       if (entity) {
@@ -439,7 +475,6 @@ export class TerminalNavigationCard extends HTMLElement {
       }
       return 'unavailable';
     }
-    if (this._config.label) return this._config.label;
     return this._config.show_path === false ? '' : this._config.navigation_path;
   }
 

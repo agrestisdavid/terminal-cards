@@ -121,7 +121,14 @@
         more_icon: 'mdi:tune-variant',
         show_more_info: true,
       });
-      const simple = create({ entity: 'light.simple', show_brightness: true });
+      const simple = create({
+        entity: 'light.simple',
+        icon: 'mdi:lightbulb-on',
+        off_icon: 'mdi:lightbulb-off',
+        border_title: 'office',
+        title_position: 'right',
+        show_brightness: true,
+      });
       const dimmedOff = create({
         entity: 'light.dimmed_off',
         show_brightness: true,
@@ -165,12 +172,31 @@
         const mainText = light.shadowRoot.querySelector('.text');
         assert(mainIcon.icon === 'mdi:desk-lamp', 'custom icon missing');
         assert(getComputedStyle(mainIcon).display === 'grid', 'light icon is not internally centered');
+        assert(getComputedStyle(mainIcon).borderTopWidth === '1px', 'light main icon has no hover-border box');
+        assert(
+          mainIcon.getBoundingClientRect().width === 34 && mainIcon.getBoundingClientRect().height === 34,
+          'light hover-border box is not 34px square'
+        );
+        assert(
+          light.shadowRoot.querySelector('style').textContent.includes('.icon:hover') &&
+            light.shadowRoot.querySelector('style').textContent.includes('border-color: currentColor'),
+          'light hover state does not color the icon border'
+        );
         assert(
           Math.abs((mainIcon.getBoundingClientRect().top + mainIcon.getBoundingClientRect().bottom) / 2 -
             (mainText.getBoundingClientRect().top + mainText.getBoundingClientRect().bottom) / 2) < 1,
           'light icon is not vertically centered against name and state'
         );
         assert(card.dataset.state === 'on', 'on state missing');
+        assert(simple.shadowRoot.querySelector('.icon').icon === 'mdi:lightbulb-off', 'light off-state icon is missing');
+        const simpleBorderTitle = simple.shadowRoot.querySelector('.border-title');
+        assert(simpleBorderTitle.textContent === 'office', 'light border title is missing');
+        assert(getComputedStyle(simpleBorderTitle).right === '12px', 'light border title cannot be positioned right');
+        assert(
+          simpleBorderTitle.getBoundingClientRect().top < simple.shadowRoot.querySelector('.card').getBoundingClientRect().top,
+          'light border title is clipped instead of cutting the frame'
+        );
+        assert(simple.shadowRoot.querySelector('.name').textContent === 'Simple light', 'light border title replaced the internal name');
         assert(card.dataset.lightColor === 'true', 'active RGB color feedback is missing');
         assert(
           card.style.getPropertyValue('--terminal-light-color') === 'rgb(10 120 240)',

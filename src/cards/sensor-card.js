@@ -19,6 +19,10 @@ export class TerminalSensorCard extends TerminalEntityCard {
     return entity?.entity_id?.startsWith('binary_sensor.') && entity.state === 'on';
   }
 
+  static isInactive(entity) {
+    return entity?.entity_id?.startsWith('binary_sensor.') && entity.state === 'off';
+  }
+
   static iconForEntity(entity) {
     if (entity?.entity_id?.startsWith('binary_sensor.')) {
       return entity.state === 'on' ? 'mdi:radiobox-marked' : 'mdi:radiobox-blank';

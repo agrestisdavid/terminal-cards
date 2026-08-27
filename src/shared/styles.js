@@ -26,6 +26,48 @@ export const TERMINAL_ENTITY_ALIGNMENT = `
   }
 `;
 
+export const TERMINAL_MAIN_ICON_HOVER = `
+  .icon {
+    box-sizing: border-box;
+    width: 34px;
+    height: 34px;
+    border: 1px solid transparent;
+    pointer-events: auto;
+  }
+  .icon:hover {
+    border-color: currentColor;
+  }
+`;
+
+export const TERMINAL_BORDER_TITLE = `
+  .border-title {
+    position: absolute;
+    z-index: 1;
+    top: 0;
+    left: 12px;
+    box-sizing: border-box;
+    transform: translateY(-50%);
+    max-width: calc(100% - 24px);
+    padding: 0 8px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    background: var(--terminal-background);
+    color: var(--terminal-dim);
+    font: 12px/1.4 ${TERMINAL_FONT};
+    pointer-events: none;
+  }
+  .border-title[data-title-position="right"] {
+    right: 12px;
+    left: auto;
+  }
+  .border-title[hidden] { display: none; }
+  .card:hover .border-title,
+  .card:focus-within .border-title {
+    color: var(--terminal-effective-accent, var(--terminal-accent));
+  }
+`;
+
 export const EDITOR_STYLES = `
   :host { display: block; }
   .editor { display: grid; gap: 16px; }

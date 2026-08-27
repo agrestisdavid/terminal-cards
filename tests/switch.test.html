@@ -39,6 +39,11 @@
             state: 'unavailable',
             attributes: { friendly_name: 'Offline switch' },
           },
+          'input_boolean.guest_mode': {
+            entity_id: 'input_boolean.guest_mode',
+            state: 'off',
+            attributes: { friendly_name: 'Guest mode' },
+          },
         },
         formatEntityState: (entity) => entity.state.toUpperCase(),
         callService: (...args) => calls.push(args),
@@ -53,6 +58,13 @@
       }
 
       const active = create({ entity: 'switch.coffee', accent_color: 'green' });
+      const inputBoolean = create({
+        entity: 'input_boolean.guest_mode',
+        icon: 'mdi:account-check',
+        off_icon: 'mdi:account-off',
+        border_title: 'presence',
+        title_position: 'right',
+      });
       const offline = create({ entity: 'switch.offline' });
 
       function assert(condition, message) {
@@ -72,6 +84,16 @@
         assert(active.shadowRoot.querySelector('.state').textContent === 'on', 'switch state is not formatted and lowercased');
         assert(icon.icon === 'mdi:toggle-switch', 'active switch default icon is wrong');
         assert(getComputedStyle(icon).display === 'grid', 'switch icon is not internally centered');
+        assert(getComputedStyle(icon).borderTopWidth === '1px', 'switch main icon has no hover-border box');
+        assert(
+          icon.getBoundingClientRect().width === 34 && icon.getBoundingClientRect().height === 34,
+          'switch hover-border box is not 34px square'
+        );
+        assert(
+          active.shadowRoot.querySelector('style').textContent.includes('.icon:hover') &&
+            active.shadowRoot.querySelector('style').textContent.includes('border-color: currentColor'),
+          'switch hover state does not color the icon border'
+        );
         assert(
           Math.abs((icon.getBoundingClientRect().top + icon.getBoundingClientRect().bottom) / 2 -
             (text.getBoundingClientRect().top + text.getBoundingClientRect().bottom) / 2) < 1,
@@ -86,6 +108,18 @@
         assert(calls.length === 1, 'switch tap did not execute');
         assert(calls[0][0] === 'switch' && calls[0][1] === 'toggle', 'switch tap did not use switch.toggle');
         assert(calls[0][3].entity_id === 'switch.coffee', 'switch toggle target is wrong');
+        assert(inputBoolean.shadowRoot.querySelector('.icon').icon === 'mdi:account-off', 'input boolean off icon is missing');
+        const inputBorderTitle = inputBoolean.shadowRoot.querySelector('.border-title');
+        assert(inputBorderTitle.textContent === 'presence', 'switch border title missing');
+        assert(getComputedStyle(inputBorderTitle).right === '12px', 'switch border title cannot be positioned right');
+        assert(
+          inputBorderTitle.getBoundingClientRect().top < inputBoolean.shadowRoot.querySelector('.card').getBoundingClientRect().top,
+          'switch border title is clipped instead of cutting the frame'
+        );
+        assert(inputBoolean.shadowRoot.querySelector('.name').textContent === 'Guest mode', 'border title replaced the entity name');
+        inputBoolean.shadowRoot.querySelector('.main').click();
+        assert(calls[1][0] === 'input_boolean' && calls[1][1] === 'toggle', 'input boolean did not use input_boolean.toggle');
+        assert(calls[1][3].entity_id === 'input_boolean.guest_mode', 'input boolean target is wrong');
 
         active._startHold();
         await new Promise((resolve) => setTimeout(resolve, 520));
@@ -108,9 +142,15 @@
         const Card = customElements.get('terminal-switch-card');
         const form = Card.getConfigForm();
         const fields = form.schema.flatMap((item) => item.schema || [item]);
-        assert(fields.find((field) => field.name === 'entity').selector.entity.filter.domain === 'switch', 'switch editor domain is wrong');
+        const switchDomains = fields.find((field) => field.name === 'entity').selector.entity.filter.domain;
+        assert(
+          switchDomains.includes('switch') && switchDomains.includes('input_boolean'),
+          'switch editor does not offer switch and input_boolean domains'
+        );
         assert(fields.find((field) => field.name === 'tap_action').selector.ui_action, 'switch native tap action is missing');
         assert(fields.find((field) => field.name === 'accent_color').selector.ui_color, 'switch HA color palette is missing');
+        assert(fields.find((field) => field.name === 'off_icon').selector.icon, 'switch off icon selector missing');
+        assert(fields.find((field) => field.name === 'border_title').selector.text, 'switch border title selector missing');
         assert(Card.getStubConfig(hass).entity === 'switch.coffee', 'switch stub did not find a real switch');
         assert(window.customCards.some((entry) => entry.type === 'terminal-switch-card'), 'switch picker metadata missing');
         assert(active.getCardSize() === 1, 'switch card size is wrong');
@@ -118,8 +158,8 @@
         document.body.dataset.testStatus = 'PASS';
         document.title = 'PASS terminal-switch-card';
         document.querySelector('#result').textContent = [
-          'PASS: square switch states and vertically centered icon',
-          'PASS: native toggle, hold popup and unavailable styling',
+          'PASS: square switch states, off icon, hover box and border title',
+          'PASS: native switch/input_boolean toggles, hold popup and unavailable styling',
           'PASS: native editor selectors and picker metadata',
         ].join('\n');
       }

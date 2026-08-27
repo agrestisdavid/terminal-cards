@@ -19,9 +19,11 @@ import {
   segmentCountForWidth,
 } from '../shared/segments.js';
 import {
+  TERMINAL_BORDER_TITLE,
   TERMINAL_COLORS,
   TERMINAL_ENTITY_ALIGNMENT,
   TERMINAL_FONT,
+  TERMINAL_MAIN_ICON_HOVER,
 } from '../shared/styles.js';
 
 const TAG = 'terminal-shutter-card';
@@ -36,10 +38,13 @@ const SUPPORT_SET_TILT_POSITION = 64;
 const STYLES = `
   :host {
     ${TERMINAL_COLORS}
+    box-sizing: border-box;
     display: block;
     height: 100%;
   }
+  :host([data-border-title="true"]) { padding-top: 8px; }
   .card {
+    position: relative;
     box-sizing: border-box;
     display: flex;
     flex-direction: column;
@@ -53,7 +58,7 @@ const STYLES = `
     font-family: ${TERMINAL_FONT};
     font-size: 13px;
     line-height: 1.4;
-    overflow: hidden;
+    overflow: visible;
     transition: border-color 120ms ease;
   }
   .card[data-state="open"],
@@ -211,7 +216,9 @@ const STYLES = `
     cursor: pointer;
   }
   input[type="range"]:disabled { cursor: not-allowed; }
+  ${TERMINAL_BORDER_TITLE}
   ${TERMINAL_ENTITY_ALIGNMENT}
+  ${TERMINAL_MAIN_ICON_HOVER}
 `;
 
 export class TerminalShutterCard extends HTMLElement {
@@ -220,6 +227,7 @@ export class TerminalShutterCard extends HTMLElement {
       entity: 'Cover entity',
       name: 'Name',
       icon: 'Icon',
+      off_icon: 'Closed-state icon',
       show_state: 'Show state',
       show_controls: 'Show controls button',
       show_position: 'Show position',
@@ -228,6 +236,8 @@ export class TerminalShutterCard extends HTMLElement {
       accent_color: 'Accent color',
       more_icon: 'Controls icon',
       popup_title: 'Popup border title',
+      border_title: 'Border title',
+      title_position: 'Border title position',
       tap_action: 'Tap action',
       hold_action: 'Hold action',
     };
@@ -246,6 +256,11 @@ export class TerminalShutterCard extends HTMLElement {
             { name: 'name', selector: { text: {} } },
             {
               name: 'icon',
+              selector: { icon: {} },
+              context: { icon_entity: 'entity' },
+            },
+            {
+              name: 'off_icon',
               selector: { icon: {} },
               context: { icon_entity: 'entity' },
             },
@@ -269,7 +284,12 @@ export class TerminalShutterCard extends HTMLElement {
           name: '',
           title: 'Appearance',
           flatten: true,
-          schema: appearanceSchema({ moreIcon: true, popupTitle: true }),
+          schema: appearanceSchema({
+            moreIcon: true,
+            popupTitle: true,
+            borderTitle: true,
+            titlePosition: true,
+          }),
         },
         {
           type: 'expandable',
@@ -304,6 +324,10 @@ export class TerminalShutterCard extends HTMLElement {
         if (schema.name === 'show_tilt') return 'Shown only when tilt position is supported.';
         if (schema.name === 'popup_title') {
           return 'Overrides the default “more-info” title embedded in the popup border.';
+        }
+        if (schema.name === 'off_icon') return 'Used while the selected cover is closed.';
+        if (schema.name === 'border_title') {
+          return 'Optional label embedded in the upper border; the cover name remains inside the card.';
         }
         return undefined;
       },
@@ -341,6 +365,9 @@ export class TerminalShutterCard extends HTMLElement {
     style.textContent = STYLES;
     this._card = document.createElement('article');
     this._card.className = 'card';
+    this._borderTitle = document.createElement('div');
+    this._borderTitle.className = 'border-title';
+    this._borderTitle.hidden = true;
     this._main = document.createElement('div');
     this._main.className = 'main';
     this._main.tabIndex = 0;
@@ -380,7 +407,7 @@ export class TerminalShutterCard extends HTMLElement {
     this._controls.append(this._commands);
     this._createRange('position', 'pos', 'set_cover_position', 'position');
     this._createRange('tilt', 'tilt', 'set_cover_tilt_position', 'tilt_position');
-    this._card.append(this._main, this._controls);
+    this._card.append(this._borderTitle, this._main, this._controls);
     root.append(style, this._card);
 
     this._main.addEventListener('click', () => this._tap());
@@ -436,7 +463,11 @@ export class TerminalShutterCard extends HTMLElement {
     if (!config.entity.startsWith('cover.')) {
       throw new Error('terminal-shutter-card: "entity" must be a cover');
     }
-    validateAppearance(config, 'terminal-shutter-card', { popupTitle: true });
+    validateAppearance(config, 'terminal-shutter-card', {
+      popupTitle: true,
+      borderTitle: true,
+      titlePosition: true,
+    });
     const previousDefault = this._config?.controls_expanded;
     this._config = { ...config };
     if (previousDefault !== config.controls_expanded) {
@@ -547,12 +578,19 @@ export class TerminalShutterCard extends HTMLElement {
     const attributes = entity?.attributes || {};
     const state = this._dataState();
     const unavailable = state === 'unavailable';
+    const borderTitle = this._config.border_title?.trim() || '';
+    this.dataset.borderTitle = String(Boolean(borderTitle));
+    this._borderTitle.hidden = !borderTitle;
+    this._borderTitle.dataset.titlePosition = this._config.title_position || 'left';
+    this._borderTitle.textContent = borderTitle;
     this._card.dataset.state = state;
     this._card.setAttribute(
       'aria-label',
       this._config.name || attributes.friendly_name || this._config.entity
     );
-    this._icon.icon = this._config.icon || attributes.icon || 'mdi:blinds-horizontal';
+    this._icon.icon = state === 'closed' && this._config.off_icon
+      ? this._config.off_icon
+      : this._config.icon || attributes.icon || 'mdi:blinds-horizontal';
     this._expandIcon.icon = this._config.more_icon || DEFAULT_MORE_ICON;
     this._name.textContent = this._config.name || attributes.friendly_name || this._config.entity;
     this._state.hidden = this._config.show_state === false;

@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.9.0 — 2026-08-27
+
+- Let Switch Cards control both `switch.*` and `input_boolean.*` entities with their native toggle services.
+- Change Navigation secondary precedence to template → free text → entity state → path.
+- Add domain-aware `off_icon` selection to Light, Switch, Sensor, Shutter, and Navigation Cards.
+- Give every visible entity/control/navigation icon a consistent square hover border, including Navigation's trailing icon.
+- Equalize the desktop popup shell padding to 14 px on every side while preserving all mobile spacing rules.
+- Add an optional independent `border_title` with shared left/right positioning to Light, Switch, Sensor, Shutter, and continuous Navigation Cards without replacing the internal entity name.
+
 ## 0.8.0 — 2026-08-27
 
 - Match Wrapper child-card spacing at 18 px above and below the content.

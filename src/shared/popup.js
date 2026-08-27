@@ -50,7 +50,7 @@ const STYLES = `
     box-sizing: border-box;
     width: min(480px, calc(100vw - 32px));
     max-height: calc(100vh - 32px);
-    padding: 14px 8px 8px;
+    padding: 14px;
     border: 0;
     background: var(--terminal-background);
     overflow: visible;
@@ -59,7 +59,7 @@ const STYLES = `
     position: relative;
     box-sizing: border-box;
     width: 100%;
-    max-height: calc(100vh - 54px);
+    max-height: calc(100vh - 60px);
     overflow: visible;
   }
   .dialog {

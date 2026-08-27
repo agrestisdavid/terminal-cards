@@ -27,9 +27,11 @@ import {
   temperatureSegmentColor,
 } from '../shared/segments.js';
 import {
+  TERMINAL_BORDER_TITLE,
   TERMINAL_COLORS,
   TERMINAL_ENTITY_ALIGNMENT,
   TERMINAL_FONT,
+  TERMINAL_MAIN_ICON_HOVER,
 } from '../shared/styles.js';
 
 const TAG = 'terminal-light-card';
@@ -39,10 +41,13 @@ const DEFAULT_HOLD_ACTION = { action: 'more-info' };
 const STYLES = `
   :host {
     ${TERMINAL_COLORS}
+    box-sizing: border-box;
     display: block;
     height: 100%;
   }
+  :host([data-border-title="true"]) { padding-top: 8px; }
   .card {
+    position: relative;
     box-sizing: border-box;
     display: flex;
     flex-direction: column;
@@ -57,7 +62,7 @@ const STYLES = `
     font-size: 13px;
     line-height: 1.4;
     --terminal-effective-accent: var(--terminal-accent);
-    overflow: hidden;
+    overflow: visible;
     transition: border-color 120ms ease;
   }
   .card[data-light-color="true"] {
@@ -210,7 +215,9 @@ const STYLES = `
     cursor: pointer;
   }
   input[type="range"]:disabled { cursor: not-allowed; }
+  ${TERMINAL_BORDER_TITLE}
   ${TERMINAL_ENTITY_ALIGNMENT}
+  ${TERMINAL_MAIN_ICON_HOVER}
 `;
 
 export class TerminalLightCard extends HTMLElement {
@@ -219,6 +226,7 @@ export class TerminalLightCard extends HTMLElement {
       entity: 'Light entity',
       name: 'Name',
       icon: 'Icon',
+      off_icon: 'Off-state icon',
       show_state: 'Show state',
       show_brightness: 'Show brightness',
       show_hue: 'Show hue',
@@ -227,6 +235,8 @@ export class TerminalLightCard extends HTMLElement {
       accent_color: 'Accent color',
       more_icon: 'Controls icon',
       popup_title: 'Popup border title',
+      border_title: 'Border title',
+      title_position: 'Border title position',
       show_controls: 'Show controls button',
       controls_expanded: 'Expand controls by default',
       tap_action: 'Tap action',
@@ -247,6 +257,11 @@ export class TerminalLightCard extends HTMLElement {
             { name: 'name', selector: { text: {} } },
             {
               name: 'icon',
+              selector: { icon: {} },
+              context: { icon_entity: 'entity' },
+            },
+            {
+              name: 'off_icon',
               selector: { icon: {} },
               context: { icon_entity: 'entity' },
             },
@@ -272,7 +287,12 @@ export class TerminalLightCard extends HTMLElement {
           name: '',
           title: 'Appearance',
           flatten: true,
-          schema: appearanceSchema({ moreIcon: true, popupTitle: true }),
+          schema: appearanceSchema({
+            moreIcon: true,
+            popupTitle: true,
+            borderTitle: true,
+            titlePosition: true,
+          }),
         },
         {
           type: 'expandable',
@@ -318,6 +338,12 @@ export class TerminalLightCard extends HTMLElement {
         if (schema.name === 'popup_title') {
           return 'Overrides the default “more-info” title embedded in the popup border.';
         }
+        if (schema.name === 'off_icon') {
+          return 'Used while the selected light is off.';
+        }
+        if (schema.name === 'border_title') {
+          return 'Optional label embedded in the upper border; the light name remains inside the card.';
+        }
         return undefined;
       },
     };
@@ -356,6 +382,9 @@ export class TerminalLightCard extends HTMLElement {
     style.textContent = STYLES;
     this._card = document.createElement('article');
     this._card.className = 'card';
+    this._borderTitle = document.createElement('div');
+    this._borderTitle.className = 'border-title';
+    this._borderTitle.hidden = true;
     this._main = document.createElement('div');
     this._main.className = 'main';
     this._main.tabIndex = 0;
@@ -387,7 +416,7 @@ export class TerminalLightCard extends HTMLElement {
     this._createControl('hue', 'hue', 0, 360, 1);
     this._createControl('temperature', 'temp', 2000, 6500, 50);
 
-    this._card.append(this._main, this._controls);
+    this._card.append(this._borderTitle, this._main, this._controls);
     root.append(style, this._card);
 
     this._main.addEventListener('click', () => this._tap());
@@ -442,7 +471,11 @@ export class TerminalLightCard extends HTMLElement {
     if (!config.entity.startsWith('light.')) {
       throw new Error('terminal-light-card: "entity" must be a light');
     }
-    validateAppearance(config, 'terminal-light-card', { popupTitle: true });
+    validateAppearance(config, 'terminal-light-card', {
+      popupTitle: true,
+      borderTitle: true,
+      titlePosition: true,
+    });
     const previousDefault = this._config?.controls_expanded;
     this._config = { ...config };
     if (previousDefault !== config.controls_expanded) {
@@ -573,6 +606,11 @@ export class TerminalLightCard extends HTMLElement {
     const temperatureBounds = lightTemperatureBounds(attributes);
     const colorTemperature = lightColorTemperature(attributes, temperatureBounds);
     const lightColor = activeLightColor(entity, this._config.use_light_color === true);
+    const borderTitle = this._config.border_title?.trim() || '';
+    this.dataset.borderTitle = String(Boolean(borderTitle));
+    this._borderTitle.hidden = !borderTitle;
+    this._borderTitle.dataset.titlePosition = this._config.title_position || 'left';
+    this._borderTitle.textContent = borderTitle;
     this._card.dataset.state = state;
     this._card.dataset.lightColor = lightColor ? 'true' : 'false';
     if (lightColor) this._card.style.setProperty('--terminal-light-color', lightColor);
@@ -581,7 +619,9 @@ export class TerminalLightCard extends HTMLElement {
       'aria-label',
       this._config.name || attributes.friendly_name || this._config.entity
     );
-    this._icon.icon = this._config.icon || attributes.icon || 'mdi:lightbulb';
+    this._icon.icon = state === 'off' && this._config.off_icon
+      ? this._config.off_icon
+      : this._config.icon || attributes.icon || 'mdi:lightbulb';
     this._moreIcon.icon = this._config.more_icon || DEFAULT_MORE_ICON;
     this._name.textContent = this._config.name || attributes.friendly_name || this._config.entity;
     this._state.hidden = this._config.show_state === false;
@@ -765,6 +805,6 @@ defineElement(TAG, TerminalLightCard);
 registerCard({
   type: TAG,
   name: 'Terminal Light Card',
-  description: 'A terminal-style light control without a border title.',
+  description: 'A terminal-style light control with an optional independent border title.',
   documentationURL: DOCUMENTATION_URL,
 });

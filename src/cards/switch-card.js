@@ -9,8 +9,8 @@ const TAG = 'terminal-switch-card';
 
 export class TerminalSwitchCard extends TerminalEntityCard {
   static cardName = TAG;
-  static entityDomains = ['switch'];
-  static entityLabel = 'Switch entity';
+  static entityDomains = ['switch', 'input_boolean'];
+  static entityLabel = 'Switch or input boolean entity';
   static defaultIcon = 'mdi:toggle-switch-off-outline';
   static defaultTapAction = { action: 'toggle' };
   static defaultHoldAction = { action: 'more-info' };

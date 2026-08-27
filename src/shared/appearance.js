@@ -47,7 +47,7 @@ export function normalizeAccentColor(value) {
 export function validateAppearance(
   config,
   cardName,
-  { titlePosition = false, popupTitle = false } = {}
+  { titlePosition = false, popupTitle = false, borderTitle = false } = {}
 ) {
   if (config.accent_color !== undefined && normalizeAccentColor(config.accent_color) === null) {
     throw new Error(`${cardName}: "accent_color" must be a Home Assistant theme color`);
@@ -59,11 +59,20 @@ export function validateAppearance(
   ) {
     throw new Error(`${cardName}: "title_position" must be left or right`);
   }
+  for (const iconKey of ['more_icon', 'off_icon']) {
+    if (
+      config[iconKey] !== undefined &&
+      (typeof config[iconKey] !== 'string' || !config[iconKey].trim())
+    ) {
+      throw new Error(`${cardName}: "${iconKey}" must be a non-empty icon name`);
+    }
+  }
   if (
-    config.more_icon !== undefined &&
-    (typeof config.more_icon !== 'string' || !config.more_icon.trim())
+    borderTitle &&
+    config.border_title !== undefined &&
+    (typeof config.border_title !== 'string' || !config.border_title.trim())
   ) {
-    throw new Error(`${cardName}: "more_icon" must be a non-empty icon name`);
+    throw new Error(`${cardName}: "border_title" must be a non-empty title`);
   }
   if (
     popupTitle &&
@@ -82,7 +91,12 @@ export function applyAccentColor(element, value, variable = '--terminal-card-acc
 }
 
 export function appearanceSchema(
-  { titlePosition = false, moreIcon = false, popupTitle = false } = {}
+  {
+    titlePosition = false,
+    moreIcon = false,
+    popupTitle = false,
+    borderTitle = false,
+  } = {}
 ) {
   const schema = [
     {
@@ -107,6 +121,9 @@ export function appearanceSchema(
   }
   if (moreIcon) {
     schema.push({ name: 'more_icon', selector: { icon: {} } });
+  }
+  if (borderTitle) {
+    schema.push({ name: 'border_title', selector: { text: {} } });
   }
   if (popupTitle) {
     schema.push({ name: 'popup_title', selector: { text: {} } });

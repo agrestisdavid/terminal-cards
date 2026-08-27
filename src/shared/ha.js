@@ -26,6 +26,12 @@ export function fireConfigChanged(element, config) {
   );
 }
 
+export function isEntityInactive(entity) {
+  if (!entity || typeof entity.state !== 'string') return false;
+  if (entity.state === 'off') return true;
+  return entity.entity_id?.startsWith('cover.') && entity.state === 'closed';
+}
+
 export function fireMoreInfo(element, entityId) {
   element.dispatchEvent(
     new CustomEvent('hass-more-info', {

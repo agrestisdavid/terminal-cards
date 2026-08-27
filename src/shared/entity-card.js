@@ -1,13 +1,15 @@
 import { appearanceSchema, applyAccentColor, validateAppearance } from './appearance.js';
-import { executeAction } from './ha.js';
+import { executeAction, isEntityInactive } from './ha.js';
 import {
   closeTerminalEntityPopup,
   updateTerminalEntityPopup,
 } from './popup.js';
 import {
+  TERMINAL_BORDER_TITLE,
   TERMINAL_COLORS,
   TERMINAL_ENTITY_ALIGNMENT,
   TERMINAL_FONT,
+  TERMINAL_MAIN_ICON_HOVER,
 } from './styles.js';
 
 const ACTIONS = ['toggle', 'more-info', 'navigate', 'url', 'perform-action', 'none'];
@@ -15,10 +17,13 @@ const ACTIONS = ['toggle', 'more-info', 'navigate', 'url', 'perform-action', 'no
 const STYLES = `
   :host {
     ${TERMINAL_COLORS}
+    box-sizing: border-box;
     display: block;
     height: 100%;
   }
+  :host([data-border-title="true"]) { padding-top: 8px; }
   .card {
+    position: relative;
     box-sizing: border-box;
     display: flex;
     flex-direction: column;
@@ -32,7 +37,7 @@ const STYLES = `
     font-family: ${TERMINAL_FONT};
     font-size: 13px;
     line-height: 1.4;
-    overflow: hidden;
+    overflow: visible;
     transition: border-color 120ms ease;
   }
   .card[data-active="true"] { border-color: var(--terminal-accent); }
@@ -77,7 +82,9 @@ const STYLES = `
   .state { color: var(--terminal-dim); font-size: 12px; }
   .state[hidden] { display: none; }
   .card[data-state="unavailable"] .state { color: var(--terminal-error); }
+  ${TERMINAL_BORDER_TITLE}
   ${TERMINAL_ENTITY_ALIGNMENT}
+  ${TERMINAL_MAIN_ICON_HOVER}
 `;
 
 export class TerminalEntityCard extends HTMLElement {
@@ -90,6 +97,10 @@ export class TerminalEntityCard extends HTMLElement {
 
   static isActive(_entity) {
     return false;
+  }
+
+  static isInactive(entity) {
+    return isEntityInactive(entity);
   }
 
   static iconForEntity(_entity) {
@@ -107,8 +118,11 @@ export class TerminalEntityCard extends HTMLElement {
       entity: this.entityLabel,
       name: 'Name',
       icon: 'Icon',
+      off_icon: 'Off-state icon',
       show_state: 'Show state',
       accent_color: 'Accent color',
+      border_title: 'Border title',
+      title_position: 'Border title position',
       popup_title: 'Popup border title',
       tap_action: 'Tap action',
       hold_action: 'Hold action',
@@ -131,6 +145,11 @@ export class TerminalEntityCard extends HTMLElement {
               selector: { icon: {} },
               context: { icon_entity: 'entity' },
             },
+            {
+              name: 'off_icon',
+              selector: { icon: {} },
+              context: { icon_entity: 'entity' },
+            },
           ],
         },
         { name: 'show_state', default: true, selector: { boolean: {} } },
@@ -139,7 +158,11 @@ export class TerminalEntityCard extends HTMLElement {
           name: '',
           title: 'Appearance',
           flatten: true,
-          schema: appearanceSchema({ popupTitle: true }),
+          schema: appearanceSchema({
+            popupTitle: true,
+            borderTitle: true,
+            titlePosition: true,
+          }),
         },
         {
           type: 'expandable',
@@ -173,6 +196,12 @@ export class TerminalEntityCard extends HTMLElement {
         if (schema.name === 'popup_title') {
           return 'Overrides the default “more-info” title embedded in the popup border.';
         }
+        if (schema.name === 'off_icon') {
+          return 'Used when this entity is in its domain-specific inactive state.';
+        }
+        if (schema.name === 'border_title') {
+          return 'Optional label embedded in the upper border; the entity name remains inside the card.';
+        }
         return undefined;
       },
     };
@@ -198,6 +227,9 @@ export class TerminalEntityCard extends HTMLElement {
     style.textContent = STYLES;
     this._card = document.createElement('article');
     this._card.className = 'card';
+    this._borderTitle = document.createElement('div');
+    this._borderTitle.className = 'border-title';
+    this._borderTitle.hidden = true;
     this._main = document.createElement('div');
     this._main.className = 'main';
     this._main.tabIndex = 0;
@@ -212,7 +244,7 @@ export class TerminalEntityCard extends HTMLElement {
     this._state.className = 'state';
     this._text.append(this._name, this._state);
     this._main.append(this._icon, this._text);
-    this._card.append(this._main);
+    this._card.append(this._borderTitle, this._main);
     root.append(style, this._card);
 
     this._main.addEventListener('click', () => this._tap());
@@ -254,7 +286,11 @@ export class TerminalEntityCard extends HTMLElement {
         `${Card.cardName}: "entity" must use ${Card.entityDomains.join(' or ')}`
       );
     }
-    validateAppearance(config, Card.cardName, { popupTitle: true });
+    validateAppearance(config, Card.cardName, {
+      popupTitle: true,
+      borderTitle: true,
+      titlePosition: true,
+    });
     this._config = { ...config };
     this._render();
   }
@@ -283,18 +319,26 @@ export class TerminalEntityCard extends HTMLElement {
     const entity = this._entity();
     const unavailable = !entity || entity.state === 'unavailable' || entity.state === 'unknown';
     const state = unavailable ? 'unavailable' : entity.state;
+    const inactive = !unavailable && Card.isInactive(entity);
     const name = this._config.name || entity?.attributes?.friendly_name || this._config.entity;
+    const borderTitle = this._config.border_title?.trim() || '';
     const formattedState = unavailable
       ? 'unavailable'
       : Card.formatState(this._hass, entity);
     applyAccentColor(this, this._config.accent_color);
+    this.dataset.borderTitle = String(Boolean(borderTitle));
+    this._borderTitle.hidden = !borderTitle;
+    this._borderTitle.dataset.titlePosition = this._config.title_position || 'left';
+    this._borderTitle.textContent = borderTitle;
     this._card.dataset.state = state;
     this._card.dataset.active = String(!unavailable && Card.isActive(entity));
     this._card.setAttribute('aria-label', `${name}: ${formattedState}`);
     this._name.textContent = name;
     this._state.hidden = this._config.show_state === false;
     this._state.textContent = formattedState;
-    this._icon.icon = this._config.icon || entity?.attributes?.icon || Card.iconForEntity(entity);
+    this._icon.icon = inactive && this._config.off_icon
+      ? this._config.off_icon
+      : this._config.icon || entity?.attributes?.icon || Card.iconForEntity(entity);
   }
 
   _tap() {

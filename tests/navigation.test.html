@@ -45,7 +45,7 @@
           },
           'light.kitchen': {
             entity_id: 'light.kitchen',
-            state: 'on',
+            state: 'off',
             attributes: { friendly_name: 'Kitchen light' },
           },
         },
@@ -66,6 +66,7 @@
         navigation_path: '/dashboard-test/kitchen',
         icon: 'mdi:fridge',
         variant: 'continuous',
+        border_title: 'rooms',
         show_path: true,
       });
       const pane = create({
@@ -88,12 +89,14 @@
         navigation_path: '/lovelace/template',
         entity: 'sensor.destination',
         state_template: '{{ states(config.entity) }}',
+        label: 'manual fallback',
       }, hass);
       const iconAction = create({
         name: 'light shortcut',
         navigation_path: '/lovelace/lights',
         entity: 'light.kitchen',
         icon: 'mdi:lightbulb',
+        off_icon: 'mdi:lightbulb-off',
         icon_tap_action: { action: 'toggle' },
       }, hass);
       const equalGrid = document.createElement('div');
@@ -129,9 +132,14 @@
           'navigation name does not adopt the hover accent'
         );
         assert(continuousCard.dataset.variant === 'continuous', 'continuous variant missing');
-        assert(continuous.shadowRoot.querySelector('.border-title').hidden, 'continuous variant has border title');
+        assert(
+          !continuous.shadowRoot.querySelector('.border-title').hidden &&
+            continuous.shadowRoot.querySelector('.border-title').textContent === 'rooms',
+          'optional continuous navigation border title is missing'
+        );
+        assert(parseFloat(getComputedStyle(continuous).paddingTop) >= 8, 'navigation border title has no outer clearance');
         assert(!continuous.shadowRoot.querySelector('.name').hidden, 'continuous name is hidden');
-        assert(continuous.shadowRoot.querySelector('.name').textContent === 'kitchen', 'navigation name missing');
+        assert(continuous.shadowRoot.querySelector('.name').textContent === 'kitchen', 'border title replaced navigation name');
         assert(
           continuous.shadowRoot.querySelector('.secondary').textContent === '/dashboard-test/kitchen',
           'navigation path is not displayed'
@@ -161,9 +169,16 @@
         assert(titleRect.top < paneRect.top && titleRect.bottom > paneRect.top, 'pane title does not cut border');
         assert(pane.shadowRoot.querySelector('.name').hidden, 'pane repeats name in content');
         assert(pane.shadowRoot.querySelector('.secondary').textContent === 'settings', 'pane label missing');
+        const trailingIcon = pane.shadowRoot.querySelector('.arrow');
+        assert(trailingIcon.icon === 'mdi:arrow-right-bold', 'custom navigation icon is missing');
+        assert(getComputedStyle(trailingIcon).borderTopWidth === '1px', 'trailing navigation icon has no hover-border box');
         assert(
-          pane.shadowRoot.querySelector('.arrow').icon === 'mdi:arrow-right-bold',
-          'custom navigation icon is missing'
+          trailingIcon.getBoundingClientRect().width === 34 && trailingIcon.getBoundingClientRect().height === 34,
+          'trailing navigation hover box is not 34px square'
+        );
+        assert(
+          pane.shadowRoot.querySelector('style').textContent.includes('.arrow:hover { border-color: currentColor; }'),
+          'trailing navigation hover state does not color its border'
         );
         assert(
           entityState.shadowRoot.querySelector('.secondary').textContent === 'open',
@@ -181,8 +196,8 @@
           'template entity tracking hint is missing'
         );
         assert(
-          templated.shadowRoot.querySelector('.secondary').textContent === 'open',
-          'entity state is not used while the template is pending'
+          templated.shadowRoot.querySelector('.secondary').textContent === 'manual fallback',
+          'free text does not override the entity state while the template is pending'
         );
         firstTemplateSubscription.callback({
           result: '<b>template result</b>',
@@ -215,14 +230,15 @@
           navigation_path: '/lovelace/template',
           entity: 'sensor.destination',
           state_template: '{{ states(config.entity) | upper }}',
+          label: 'updated fallback',
         });
         await Promise.resolve();
         assert(firstTemplateSubscription.unsubscribed, 'old template subscription was not stopped');
         const secondTemplateSubscription = templateSubscriptions[1];
         firstTemplateSubscription.callback({ result: 'stale result', listeners: {} });
         assert(
-          templated.shadowRoot.querySelector('.secondary').textContent === 'open',
-          'stale template callback overwrote current fallback content'
+          templated.shadowRoot.querySelector('.secondary').textContent === 'updated fallback',
+          'stale template callback overwrote the free-text fallback content'
         );
         secondTemplateSubscription.callback({ result: 'OPEN', listeners: {} });
         assert(
@@ -266,6 +282,12 @@
         assert(navigations[1]?.endsWith('/config/dashboard'), 'keyboard navigation path is wrong');
         assert(locationChanged === 2, 'keyboard did not dispatch location-changed');
         const actionButton = iconAction.shadowRoot.querySelector('.icon-action');
+        assert(getComputedStyle(actionButton).borderTopWidth === '1px', 'navigation main icon has no hover-border box');
+        assert(
+          actionButton.getBoundingClientRect().width === 34 && actionButton.getBoundingClientRect().height === 34,
+          'navigation main icon hover box is not 34px square'
+        );
+        assert(iconAction.shadowRoot.querySelector('.icon').icon === 'mdi:lightbulb-off', 'navigation off-state icon is missing');
         actionButton.click();
         assert(calls.length === 1, 'main icon action did not execute');
         assert(calls[0][0] === 'light' && calls[0][1] === 'toggle', 'main icon did not use the native light toggle service');
@@ -328,6 +350,7 @@
         const variantField = fields.find((field) => field.name === 'variant');
         assert(variantField.selector.select.options.length === 2, 'variant selector is incomplete');
         assert(fields.some((field) => field.name === 'more_icon'), 'navigation icon field missing');
+        assert(fields.find((field) => field.name === 'off_icon').selector.icon, 'navigation off icon selector missing');
         assert(fields.find((field) => field.name === 'entity').selector.entity, 'navigation entity selector missing');
         assert(
           fields.find((field) => field.name === 'state_template').selector.template,

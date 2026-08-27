@@ -81,7 +81,14 @@
         accent_color: 'yellow',
         more_icon: 'mdi:menu',
       });
-      const basic = create({ entity: 'cover.basic', controls_expanded: true });
+      const basic = create({
+        entity: 'cover.basic',
+        icon: 'mdi:blinds-open',
+        off_icon: 'mdi:blinds',
+        border_title: 'guest room',
+        title_position: 'right',
+        controls_expanded: true,
+      });
       const offline = create({ entity: 'cover.offline', controls_expanded: true });
 
       function assert(condition, message) {
@@ -103,12 +110,21 @@
         const mainIcon = blind.shadowRoot.querySelector('.icon');
         const mainText = blind.shadowRoot.querySelector('.text');
         assert(getComputedStyle(mainIcon).display === 'grid', 'shutter icon is not internally centered');
+        assert(getComputedStyle(mainIcon).borderTopWidth === '1px', 'shutter main icon has no hover-border box');
+        assert(
+          mainIcon.getBoundingClientRect().width === 34 && mainIcon.getBoundingClientRect().height === 34,
+          'shutter hover-border box is not 34px square'
+        );
         assert(
           Math.abs((mainIcon.getBoundingClientRect().top + mainIcon.getBoundingClientRect().bottom) / 2 -
             (mainText.getBoundingClientRect().top + mainText.getBoundingClientRect().bottom) / 2) < 1,
           'shutter icon is not vertically centered against name and state'
         );
-        assert(!blind.shadowRoot.querySelector('.title'), 'shutter contains a border title');
+        assert(basic.shadowRoot.querySelector('.icon').icon === 'mdi:blinds', 'closed shutter icon is missing');
+        assert(basic.shadowRoot.querySelector('.border-title').textContent === 'guest room', 'shutter border title is missing');
+        assert(getComputedStyle(basic.shadowRoot.querySelector('.border-title')).right === '12px', 'shutter border title cannot be positioned right');
+        assert(basic.shadowRoot.querySelector('.name').textContent === 'Basic shutter', 'shutter border title replaced the internal name');
+        assert(!blind.shadowRoot.querySelector('.title'), 'shutter contains a legacy title element');
 
         let nativeMoreInfoCount = 0;
         blind.addEventListener('hass-more-info', () => { nativeMoreInfoCount += 1; });

@@ -39,6 +39,11 @@
             state: 'on',
             attributes: { friendly_name: 'Kitchen window' },
           },
+          'binary_sensor.door': {
+            entity_id: 'binary_sensor.door',
+            state: 'off',
+            attributes: { friendly_name: 'Front door' },
+          },
           'sensor.offline': {
             entity_id: 'sensor.offline',
             state: 'unavailable',
@@ -58,8 +63,18 @@
         return card;
       }
 
-      const temperature = create({ entity: 'sensor.temperature', accent_color: 'cyan' });
+      const temperature = create({
+        entity: 'sensor.temperature',
+        accent_color: 'cyan',
+        border_title: 'living room',
+        title_position: 'right',
+      });
       const binary = create({ entity: 'binary_sensor.window' });
+      const inactiveBinary = create({
+        entity: 'binary_sensor.door',
+        icon: 'mdi:door-open',
+        off_icon: 'mdi:door-closed',
+      });
       const offline = create({ entity: 'sensor.offline' });
       const actionable = create({
         entity: 'sensor.temperature',
@@ -83,9 +98,16 @@
         const text = temperature.shadowRoot.querySelector('.text');
         assert(getComputedStyle(card).borderRadius === '0px', 'sensor corners are not square');
         assert(temperature.shadowRoot.querySelector('.name').textContent === 'Living temperature', 'sensor friendly name missing');
+        assert(temperature.shadowRoot.querySelector('.border-title').textContent === 'living room', 'sensor border title is missing');
+        assert(getComputedStyle(temperature.shadowRoot.querySelector('.border-title')).right === '12px', 'sensor border title cannot be positioned right');
         assert(temperature.shadowRoot.querySelector('.state').textContent === '22.5 °C', 'formatted sensor state or unit casing is wrong');
         assert(icon.icon === 'mdi:gauge', 'sensor default icon is wrong');
         assert(getComputedStyle(icon).display === 'grid', 'sensor icon is not internally centered');
+        assert(getComputedStyle(icon).borderTopWidth === '1px', 'sensor main icon has no hover-border box');
+        assert(
+          icon.getBoundingClientRect().width === 34 && icon.getBoundingClientRect().height === 34,
+          'sensor hover-border box is not 34px square'
+        );
         assert(
           Math.abs((icon.getBoundingClientRect().top + icon.getBoundingClientRect().bottom) / 2 -
             (text.getBoundingClientRect().top + text.getBoundingClientRect().bottom) / 2) < 1,
@@ -107,6 +129,7 @@
 
         assert(binary.shadowRoot.querySelector('.card').dataset.active === 'true', 'binary sensor on state is not active');
         assert(binary.shadowRoot.querySelector('.icon').icon === 'mdi:radiobox-marked', 'binary sensor active icon is wrong');
+        assert(inactiveBinary.shadowRoot.querySelector('.icon').icon === 'mdi:door-closed', 'binary sensor off icon is missing');
         assert(offline.shadowRoot.querySelector('.card').dataset.state === 'unavailable', 'offline sensor state missing');
         assert(
           getComputedStyle(offline.shadowRoot.querySelector('.card')).borderTopColor === 'rgb(243, 139, 168)',

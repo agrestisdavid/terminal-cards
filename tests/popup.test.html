@@ -127,6 +127,13 @@
         assert(popupDialog.getAttribute('aria-modal') === 'true', 'popup is not modal');
         assert(shellStyle.borderTopWidth === '0px', 'popup background shell renders a border');
         assert(shellStyle.backgroundColor === dialogStyle.backgroundColor, 'popup shell does not match the dialog background');
+        assert(
+          shellStyle.paddingTop === '14px' &&
+            shellStyle.paddingRight === shellStyle.paddingTop &&
+            shellStyle.paddingBottom === shellStyle.paddingTop &&
+            shellStyle.paddingLeft === shellStyle.paddingTop,
+          'desktop popup shell padding is not equal to the former top padding on every side'
+        );
         assert(getComputedStyle(popupFrame).overflow === 'visible', 'popup title frame clips overflow');
         assert(titleRect.top < dialogRect.top && titleRect.bottom > dialogRect.top, 'popup title is clipped above the border');
         assert(

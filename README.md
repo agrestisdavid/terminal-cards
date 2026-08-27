@@ -41,13 +41,15 @@ accent_color: blue
 
 ### `custom:terminal-light-card`
 
-A compact light card with terminal state colors and responsive square controls for brightness, hue, and color temperature when the selected light supports them. The square three-dot button expands or collapses those controls. Its border is continuous: unlike the wrapper, the Light Card deliberately has **no title embedded in the border**. Its name is shown inside the card.
+A compact light card with terminal state colors and responsive square controls for brightness, hue, and color temperature when the selected light supports them. The square three-dot button expands or collapses those controls. Its name always remains inside the card; an independent optional `border_title` can additionally label the surrounding room or group.
 
 ```yaml
 type: custom:terminal-light-card
 entity: light.kitchen
 name: ceiling light
 icon: mdi:ceiling-light
+off_icon: mdi:lightbulb-off-outline
+border_title: office
 show_state: true
 show_brightness: true
 show_hue: true
@@ -68,13 +70,15 @@ All options are available through Home Assistant-native visual form controls. Th
 
 ### `custom:terminal-switch-card`
 
-A compact card for `switch.*` entities. Tap toggles the switch by default; hold opens the terminal popup. Both actions can be replaced through Home Assistant's native action editor.
+A compact card for `switch.*` and `input_boolean.*` entities. Tap toggles the entity by default; hold opens the terminal popup. Both actions can be replaced through Home Assistant's native action editor.
 
 ```yaml
 type: custom:terminal-switch-card
-entity: switch.coffee_machine
-name: coffee machine
-icon: mdi:coffee-maker
+entity: input_boolean.guest_mode
+name: guest mode
+icon: mdi:account-check
+off_icon: mdi:account-off
+border_title: presence
 show_state: true
 accent_color: green
 popup_title: switch-details
@@ -93,6 +97,7 @@ type: custom:terminal-sensor-card
 entity: sensor.living_room_temperature
 name: living temperature
 icon: mdi:thermometer
+border_title: living room
 show_state: true
 accent_color: cyan
 tap_action:
@@ -108,6 +113,8 @@ type: custom:terminal-shutter-card
 entity: cover.office_blind
 name: office blind
 icon: mdi:blinds-horizontal
+off_icon: mdi:blinds
+border_title: office
 show_state: true
 show_controls: true
 show_position: true
@@ -128,8 +135,10 @@ An internal Home Assistant navigation card. `variant` switches between a continu
 type: custom:terminal-navigation-card
 name: kitchen
 navigation_path: /dashboard-test/kitchen
-icon: mdi:fridge
-variant: pane # or: continuous
+icon: mdi:lightbulb
+off_icon: mdi:lightbulb-off-outline
+variant: continuous
+border_title: shortcuts # optional for continuous; pane uses name
 title_position: right
 accent_color: cyan
 more_icon: mdi:arrow-right-bold
@@ -144,13 +153,13 @@ show_path: true
 
 Every card uses Home Assistant's native theme-color palette for `accent_color` (for example `blue`, `green`, `purple`, or `cyan`) instead of an RGB color picker. The selected theme token controls the active border, icons, hover/focus state, and controls, and follows theme overrides such as `--blue-color`. Existing RGB-array configurations remain render-compatible but are no longer offered by the visual editor. The design intentionally has no box-shadow glow. Light state color takes precedence when `use_light_color: true`.
 
-Wrapper, Title, and pane-style Navigation Cards support `title_position: left|right`. Wrapper state supports `state_position: top-left|top-right|bottom-left|bottom-right`; labels sharing a corner shrink without overlapping. Entity icons are vertically centered against their name/state stack across Light, Switch, Sensor, Shutter, and Navigation Cards. Light, Shutter, and Navigation Cards support `more_icon`; Navigation uses it for the trailing navigation icon. These conventions should also be used by future Terminal Cards.
+Every card with a border title supports `title_position: left|right`. Wrapper state supports `state_position: top-left|top-right|bottom-left|bottom-right`; labels sharing a corner shrink without overlapping. Light, Switch, Sensor, Shutter, and continuous Navigation Cards support an optional independent `border_title` without moving or replacing the internal entity name. Their domain-aware `off_icon` is used for `off`, and for `closed` covers. Every visible icon receives the same square hover border, including Navigation's trailing icon. Entity icons remain vertically centered against their name/state stack.
 
-A `more-info` action opens the bundle's own terminal-style entity popup instead of Home Assistant's native dialog. A borderless terminal-background shell surrounds the bordered dialog. Its TitleCard-style border title defaults to `more-info` and can be changed with `popup_title`. The card name or entity friendly name is shown separately above the formatted state. On mobile the popup becomes a near-full-width bottom sheet with an 8 px gap on both sides. The layer order is standard `--card-background-color` outer area → 1 px accent border → card surface. The outer area measures 12 vh above and below the popup (or the larger device safe area), protecting rounded phone corners; title/header stay fixed and only the content scrolls. Capability-aware Light and Cover ranges use the same responsive square segments as the cards.
+A `more-info` action opens the bundle's own terminal-style entity popup instead of Home Assistant's native dialog. On desktop, its borderless terminal-background shell uses the former 14 px top padding equally on all four sides. Its TitleCard-style border title defaults to `more-info` and can be changed with `popup_title`. The card name or entity friendly name is shown separately above the formatted state. On mobile the popup becomes a near-full-width bottom sheet with an 8 px gap on both sides. The layer order is standard `--card-background-color` outer area → 1 px accent border → card surface. The outer area measures 12 vh above and below the popup (or the larger device safe area), protecting rounded phone corners; title/header stay fixed and only the content scrolls. Capability-aware Light and Cover ranges use the same responsive square segments as the cards.
 
 The collapsed `logs` field loads on demand and displays up to six entity changes from Home Assistant's last 24 hours of Logbook data. When expanded, the complete terminal tree is enclosed by its own square Wrapper-style frame with `logs` embedded on the left and the dropdown icon fixed on the right. Service-backed entries place `domain.service · on|off` on their second line. While open, selected-entity changes trigger a debounced live Logbook refresh. The popup also supports pointer and keyboard holds, traps focus, closes with Escape/backdrop/close, and returns focus to the card.
 
-Navigation secondary content uses this precedence: a successful reactive `state_template` result, then the formatted `entity` state, then `label`, then the navigation path when `show_path` is enabled. Wrapper border state uses template result, then formatted entity state. Title subtitles combine Markdown with reactive templates. All templates use Home Assistant's `render_template` WebSocket subscription with generation guards and unsubscribe cleanup.
+Navigation secondary content uses this precedence: a successful reactive `state_template` result, then free-text `label`, then the formatted `entity` state, then the navigation path when `show_path` is enabled. Wrapper border state uses template result, then formatted entity state. Title subtitles combine Markdown with reactive templates. All templates use Home Assistant's `render_template` WebSocket subscription with generation guards and unsubscribe cleanup.
 
 ## Installation with HACS
 

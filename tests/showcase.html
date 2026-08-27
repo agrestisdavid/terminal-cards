@@ -89,9 +89,9 @@
               current_tilt_position: 35, supported_features: 79,
             },
           },
-          'switch.coffee': {
-            entity_id: 'switch.coffee', state: 'on',
-            attributes: { friendly_name: 'coffee machine' },
+          'input_boolean.guest_mode': {
+            entity_id: 'input_boolean.guest_mode', state: 'off',
+            attributes: { friendly_name: 'guest mode' },
           },
           'sensor.temperature': {
             entity_id: 'sensor.temperature', state: '22.5',
@@ -137,10 +137,12 @@
             type: 'custom:terminal-light-card', entity: 'light.kitchen',
             show_brightness: true, show_hue: true, show_color_temp: true,
             use_light_color: true, more_icon: 'mdi:tune-variant', controls_expanded: true,
+            border_title: 'ground floor', off_icon: 'mdi:lightbulb-off-outline',
           },
           {
             type: 'custom:terminal-light-card', entity: 'light.dining',
             show_brightness: true, controls_expanded: true,
+            border_title: 'dining', off_icon: 'mdi:lightbulb-off-outline',
           },
           { type: 'custom:terminal-light-card', entity: 'light.garage', show_brightness: true },
         ],
@@ -159,21 +161,23 @@
           {
             type: 'custom:terminal-shutter-card', entity: 'cover.office',
             accent_color: 'yellow', more_icon: 'mdi:menu',
-            controls_expanded: false,
+            border_title: 'office', off_icon: 'mdi:blinds', controls_expanded: false,
           },
           {
-            type: 'custom:terminal-switch-card', entity: 'switch.coffee',
-            accent_color: 'green',
+            type: 'custom:terminal-switch-card', entity: 'input_boolean.guest_mode',
+            icon: 'mdi:account-check', off_icon: 'mdi:account-off',
+            border_title: 'presence', accent_color: 'green',
           },
           {
             type: 'custom:terminal-sensor-card', entity: 'sensor.temperature',
-            accent_color: 'cyan',
+            border_title: 'climate', accent_color: 'cyan',
           },
           {
             type: 'custom:terminal-navigation-card', name: 'kitchen',
             navigation_path: '/dashboard-test/kitchen', icon: 'mdi:fridge',
             variant: 'continuous', accent_color: 'cyan',
             more_icon: 'mdi:arrow-right-bold', entity: 'light.kitchen',
+            off_icon: 'mdi:lightbulb-off-outline', border_title: 'shortcuts',
             icon_tap_action: { action: 'toggle' },
           },
           {

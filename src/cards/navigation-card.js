@@ -1,10 +1,23 @@
-import { DOCUMENTATION_URL, defineElement, registerCard } from '../shared/ha.js';
+import {
+  DOCUMENTATION_URL,
+  defineElement,
+  executeAction,
+  registerCard,
+} from '../shared/ha.js';
 import {
   appearanceSchema,
   applyAccentColor,
   validateAppearance,
 } from '../shared/appearance.js';
-import { TERMINAL_COLORS, TERMINAL_FONT } from '../shared/styles.js';
+import {
+  closeTerminalEntityPopup,
+  updateTerminalEntityPopup,
+} from '../shared/popup.js';
+import {
+  TERMINAL_COLORS,
+  TERMINAL_ENTITY_ALIGNMENT,
+  TERMINAL_FONT,
+} from '../shared/styles.js';
 
 const TAG = 'terminal-navigation-card';
 const VARIANTS = new Set(['continuous', 'pane']);
@@ -69,18 +82,52 @@ const STYLES = `
     gap: 14px;
     min-height: 72px;
     padding: 12px 14px;
-    cursor: pointer;
-    outline: none;
     user-select: none;
     -webkit-tap-highlight-color: transparent;
   }
-  .main:focus-visible { outline: 1px solid var(--terminal-accent); outline-offset: -3px; }
+  .nav-target {
+    align-self: stretch;
+    box-sizing: border-box;
+    display: flex;
+    flex: 1 1 auto;
+    align-items: center;
+    gap: 14px;
+    min-width: 0;
+    cursor: pointer;
+    outline: none;
+  }
+  .nav-target:focus-visible {
+    outline: 1px solid var(--terminal-accent);
+    outline-offset: 3px;
+  }
+  .icon-action {
+    box-sizing: border-box;
+    display: grid;
+    flex: 0 0 auto;
+    place-items: center;
+    width: 34px;
+    height: 34px;
+    padding: 0;
+    border: 1px solid transparent;
+    border-radius: 0;
+    background: transparent;
+    color: var(--terminal-dim);
+    cursor: pointer;
+  }
+  .icon-action:hover, .icon-action:focus-visible {
+    border-color: currentColor;
+    color: var(--terminal-accent);
+    outline: none;
+  }
+  .icon-action[data-has-action="false"]:not(:hover):not(:focus-visible) {
+    border-color: transparent;
+  }
   .icon, .arrow {
     flex: 0 0 auto;
     color: var(--terminal-dim);
     pointer-events: none;
   }
-  .icon { width: 30px; height: 30px; }
+  .icon { width: 28px; height: 28px; }
   .arrow { width: 20px; height: 20px; }
   .card:hover .icon, .card:hover .name, .card:hover .arrow,
   .card:focus-within .icon, .card:focus-within .name,
@@ -94,6 +141,7 @@ const STYLES = `
   .name { font-weight: 600; }
   .name[hidden], .secondary[hidden] { display: none; }
   .secondary { color: var(--terminal-dim); font-size: 12px; }
+  ${TERMINAL_ENTITY_ALIGNMENT}
 `;
 
 export class TerminalNavigationCard extends HTMLElement {
@@ -107,9 +155,11 @@ export class TerminalNavigationCard extends HTMLElement {
       show_path: 'Show navigation path',
       entity: 'State entity',
       state_template: 'State template',
+      icon_tap_action: 'Main icon action',
       accent_color: 'Accent color',
       title_position: 'Border title position',
       more_icon: 'Navigation icon',
+      popup_title: 'Popup border title',
     };
     return {
       schema: [
@@ -155,9 +205,30 @@ export class TerminalNavigationCard extends HTMLElement {
         {
           type: 'expandable',
           name: '',
+          title: 'Main icon action',
+          flatten: true,
+          schema: [
+            {
+              name: 'icon_tap_action',
+              selector: {
+                ui_action: {
+                  actions: ['toggle', 'more-info', 'navigate', 'url', 'perform-action', 'none'],
+                  default_action: 'none',
+                },
+              },
+            },
+          ],
+        },
+        {
+          type: 'expandable',
+          name: '',
           title: 'Appearance',
           flatten: true,
-          schema: appearanceSchema({ titlePosition: true, moreIcon: true }),
+          schema: appearanceSchema({
+            titlePosition: true,
+            moreIcon: true,
+            popupTitle: true,
+          }),
         },
       ],
       computeLabel: (schema) => labels[schema.name] || schema.name,
@@ -170,6 +241,12 @@ export class TerminalNavigationCard extends HTMLElement {
         }
         if (schema.name === 'label') {
           return 'Fallback shown before the navigation path.';
+        }
+        if (schema.name === 'icon_tap_action') {
+          return 'Runs only when the main icon is clicked. Toggle and more-info use the selected state entity.';
+        }
+        if (schema.name === 'popup_title') {
+          return 'Overrides the default “more-info” title for a main-icon more-info action.';
         }
         return undefined;
       },
@@ -206,10 +283,16 @@ export class TerminalNavigationCard extends HTMLElement {
     this._borderTitle.className = 'border-title';
     this._main = document.createElement('div');
     this._main.className = 'main';
-    this._main.tabIndex = 0;
-    this._main.setAttribute('role', 'link');
+    this._iconAction = document.createElement('button');
+    this._iconAction.className = 'icon-action';
+    this._iconAction.type = 'button';
     this._icon = document.createElement('ha-icon');
     this._icon.className = 'icon';
+    this._iconAction.append(this._icon);
+    this._navTarget = document.createElement('div');
+    this._navTarget.className = 'nav-target';
+    this._navTarget.tabIndex = 0;
+    this._navTarget.setAttribute('role', 'link');
     this._text = document.createElement('div');
     this._text.className = 'text';
     this._name = document.createElement('div');
@@ -220,12 +303,17 @@ export class TerminalNavigationCard extends HTMLElement {
     this._arrow = document.createElement('ha-icon');
     this._arrow.className = 'arrow';
     this._arrow.icon = 'mdi:chevron-right';
-    this._main.append(this._icon, this._text, this._arrow);
+    this._navTarget.append(this._text, this._arrow);
+    this._main.append(this._iconAction, this._navTarget);
     this._card.append(this._borderTitle, this._main);
     root.append(style, this._card);
 
+    this._iconAction.addEventListener('click', (event) => {
+      event.stopPropagation();
+      this._runIconAction();
+    });
     this._main.addEventListener('click', () => this._navigate());
-    this._main.addEventListener('keydown', (event) => {
+    this._navTarget.addEventListener('keydown', (event) => {
       if (event.key === 'Enter' || event.key === ' ') {
         event.preventDefault();
         this._navigate();
@@ -239,10 +327,12 @@ export class TerminalNavigationCard extends HTMLElement {
 
   disconnectedCallback() {
     this._teardownTemplateSubscription();
+    closeTerminalEntityPopup(this);
     this._hass = null;
   }
 
   setConfig(config) {
+    closeTerminalEntityPopup(this);
     if (!config?.name || typeof config.name !== 'string' || !config.name.trim()) {
       throw new Error('terminal-navigation-card: "name" is required');
     }
@@ -272,7 +362,18 @@ export class TerminalNavigationCard extends HTMLElement {
     ) {
       throw new Error('terminal-navigation-card: "state_template" must be a string');
     }
-    validateAppearance(config, 'terminal-navigation-card', { titlePosition: true });
+    if (
+      config.icon_tap_action !== undefined &&
+      (!config.icon_tap_action ||
+        typeof config.icon_tap_action !== 'object' ||
+        Array.isArray(config.icon_tap_action))
+    ) {
+      throw new Error('terminal-navigation-card: "icon_tap_action" must be an action');
+    }
+    validateAppearance(config, 'terminal-navigation-card', {
+      titlePosition: true,
+      popupTitle: true,
+    });
     this._teardownTemplateSubscription();
     this._config = { ...config };
     this._templateValue = undefined;
@@ -284,6 +385,7 @@ export class TerminalNavigationCard extends HTMLElement {
   set hass(hass) {
     const connectionChanged = this._hass?.connection !== hass?.connection;
     this._hass = hass;
+    updateTerminalEntityPopup(hass);
     this._render();
     if (connectionChanged || this._templateSubscription === null) {
       this._ensureTemplateSubscription();
@@ -314,6 +416,14 @@ export class TerminalNavigationCard extends HTMLElement {
     this._name.textContent = name;
     this._icon.icon = this._config.icon || 'mdi:arrow-right';
     this._arrow.icon = this._config.more_icon || 'mdi:chevron-right';
+    const hasIconAction = (this._config.icon_tap_action?.action || 'none') !== 'none';
+    const iconActionLabel = hasIconAction
+      ? `Run main icon action for ${name}`
+      : `Navigate to ${name}`;
+    this._iconAction.dataset.hasAction = String(hasIconAction);
+    this._iconAction.tabIndex = hasIconAction ? 0 : -1;
+    this._iconAction.title = iconActionLabel;
+    this._iconAction.setAttribute('aria-label', iconActionLabel);
     const secondary = this._secondaryContent();
     this._secondary.hidden = secondary === '';
     this._secondary.textContent = secondary;
@@ -410,6 +520,17 @@ export class TerminalNavigationCard extends HTMLElement {
         })
         .catch(() => undefined);
     }
+  }
+
+  _runIconAction() {
+    if (!this._config) return;
+    const actionConfig = this._config.icon_tap_action;
+    if (!actionConfig || (actionConfig.action || 'none') === 'none') {
+      this._navigate();
+      return;
+    }
+    if (!this._hass) return;
+    executeAction(this, this._hass, this._config, actionConfig);
   }
 
   _navigate() {

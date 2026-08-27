@@ -161,7 +161,15 @@
         assert(!light.shadowRoot.querySelector('.title'), 'light card contains a border title');
         assert(light.shadowRoot.querySelector('.name').textContent === 'work light', 'custom name missing');
         assert(light.shadowRoot.querySelector('.state').textContent === 'on', 'state is not lowercase');
-        assert(light.shadowRoot.querySelector('.icon').icon === 'mdi:desk-lamp', 'custom icon missing');
+        const mainIcon = light.shadowRoot.querySelector('.icon');
+        const mainText = light.shadowRoot.querySelector('.text');
+        assert(mainIcon.icon === 'mdi:desk-lamp', 'custom icon missing');
+        assert(getComputedStyle(mainIcon).display === 'grid', 'light icon is not internally centered');
+        assert(
+          Math.abs((mainIcon.getBoundingClientRect().top + mainIcon.getBoundingClientRect().bottom) / 2 -
+            (mainText.getBoundingClientRect().top + mainText.getBoundingClientRect().bottom) / 2) < 1,
+          'light icon is not vertically centered against name and state'
+        );
         assert(card.dataset.state === 'on', 'on state missing');
         assert(card.dataset.lightColor === 'true', 'active RGB color feedback is missing');
         assert(

@@ -18,7 +18,11 @@ import {
   SEGMENT_SIZE,
   segmentCountForWidth,
 } from '../shared/segments.js';
-import { TERMINAL_COLORS, TERMINAL_FONT } from '../shared/styles.js';
+import {
+  TERMINAL_COLORS,
+  TERMINAL_ENTITY_ALIGNMENT,
+  TERMINAL_FONT,
+} from '../shared/styles.js';
 
 const TAG = 'terminal-shutter-card';
 const DEFAULT_TAP_ACTION = { action: 'more-info' };
@@ -207,6 +211,7 @@ const STYLES = `
     cursor: pointer;
   }
   input[type="range"]:disabled { cursor: not-allowed; }
+  ${TERMINAL_ENTITY_ALIGNMENT}
 `;
 
 export class TerminalShutterCard extends HTMLElement {

@@ -100,6 +100,14 @@
         assert(card.dataset.state === 'open', 'cover state data is wrong');
         assert(blind.shadowRoot.querySelector('.state').textContent === 'open', 'cover state is not lowercase');
         assert(blind.shadowRoot.querySelector('.name').textContent === 'living blind', 'cover name missing');
+        const mainIcon = blind.shadowRoot.querySelector('.icon');
+        const mainText = blind.shadowRoot.querySelector('.text');
+        assert(getComputedStyle(mainIcon).display === 'grid', 'shutter icon is not internally centered');
+        assert(
+          Math.abs((mainIcon.getBoundingClientRect().top + mainIcon.getBoundingClientRect().bottom) / 2 -
+            (mainText.getBoundingClientRect().top + mainText.getBoundingClientRect().bottom) / 2) < 1,
+          'shutter icon is not vertically centered against name and state'
+        );
         assert(!blind.shadowRoot.querySelector('.title'), 'shutter contains a border title');
 
         let nativeMoreInfoCount = 0;

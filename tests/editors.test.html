@@ -70,6 +70,8 @@
         await customElements.whenDefined('terminal-card-wrapper-editor');
         await customElements.whenDefined('terminal-title-card');
         await customElements.whenDefined('terminal-light-card');
+        await customElements.whenDefined('terminal-switch-card');
+        await customElements.whenDefined('terminal-sensor-card');
         await customElements.whenDefined('terminal-shutter-card');
         await customElements.whenDefined('terminal-navigation-card');
 
@@ -206,6 +208,22 @@
         const entityField = fields.find((field) => field.name === 'entity');
         assert(entityField.selector.entity.filter.domain === 'light', 'light selector accepts other domains');
 
+        const switchForm = customElements.get('terminal-switch-card').getConfigForm();
+        const switchFields = switchForm.schema.flatMap((item) => item.schema || [item]);
+        assert(
+          switchFields.find((field) => field.name === 'entity').selector.entity.filter.domain === 'switch',
+          'switch selector accepts other domains'
+        );
+        assert(switchFields.find((field) => field.name === 'tap_action').selector.ui_action, 'switch native actions missing');
+        assert(switchFields.find((field) => field.name === 'accent_color').selector.ui_color, 'switch HA color selector missing');
+
+        const sensorForm = customElements.get('terminal-sensor-card').getConfigForm();
+        const sensorFields = sensorForm.schema.flatMap((item) => item.schema || [item]);
+        const sensorDomains = sensorFields.find((field) => field.name === 'entity').selector.entity.filter.domain;
+        assert(sensorDomains.includes('sensor') && sensorDomains.includes('binary_sensor'), 'sensor selector domains missing');
+        assert(sensorFields.find((field) => field.name === 'tap_action').selector.ui_action, 'sensor native actions missing');
+        assert(sensorFields.find((field) => field.name === 'accent_color').selector.ui_color, 'sensor HA color selector missing');
+
         const shutterForm = customElements.get('terminal-shutter-card').getConfigForm();
         const shutterFields = shutterForm.schema.flatMap((item) => item.schema || [item]);
         const coverEntity = shutterFields.find((field) => field.name === 'entity');
@@ -236,6 +254,12 @@
           navigationFields.find((field) => field.name === 'state_template').selector.template,
           'navigation state template selector missing'
         );
+        const navigationIconAction = navigationFields.find((field) => field.name === 'icon_tap_action');
+        assert(navigationIconAction.selector.ui_action, 'navigation main icon native action missing');
+        assert(
+          navigationIconAction.selector.ui_action.actions.includes('perform-action'),
+          'navigation main icon does not offer native HA services'
+        );
         const wrapperStateFields = wrapperForm.schema[1].schema;
         const wrapperAppearanceFields = wrapperForm.schema[2].schema;
         assert(wrapperStateFields.find((field) => field.name === 'entity').selector.entity, 'wrapper state entity selector missing');
@@ -253,7 +277,8 @@
           'PASS: native HA tabs, icon buttons, card picker and child editor',
           'PASS: child cards add, update, move and remove',
           'PASS: title card exposes native title, Markdown/template subtitle, size and appearance controls',
-          'PASS: light form uses native expandable controls and actions',
+          'PASS: light, switch and sensor forms use native entity/action controls',
+          'PASS: navigation main icon exposes native HA services',
           'PASS: all cards use the native HA theme color selector instead of RGB pickers',
           'PASS: wrapper state, shutter and navigation forms use native HA selectors',
         ].join('\n');

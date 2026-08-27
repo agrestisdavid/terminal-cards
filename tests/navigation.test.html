@@ -26,6 +26,7 @@
     <pre id="result">WAITING</pre>
     <script type="module">
       const templateSubscriptions = [];
+      const calls = [];
       const connection = {
         subscribeMessage(callback, params) {
           const subscription = { callback, params, unsubscribed: false };
@@ -42,8 +43,14 @@
             state: 'open',
             attributes: { friendly_name: 'Destination state' },
           },
+          'light.kitchen': {
+            entity_id: 'light.kitchen',
+            state: 'on',
+            attributes: { friendly_name: 'Kitchen light' },
+          },
         },
         formatEntityState: (entity) => entity.state.toUpperCase(),
+        callService: (...args) => calls.push(args),
       };
 
       function create(config, hassContext = null) {
@@ -81,6 +88,13 @@
         navigation_path: '/lovelace/template',
         entity: 'sensor.destination',
         state_template: '{{ states(config.entity) }}',
+      }, hass);
+      const iconAction = create({
+        name: 'light shortcut',
+        navigation_path: '/lovelace/lights',
+        entity: 'light.kitchen',
+        icon: 'mdi:lightbulb',
+        icon_tap_action: { action: 'toggle' },
       }, hass);
       const equalGrid = document.createElement('div');
       equalGrid.id = 'equal-grid';
@@ -122,7 +136,15 @@
           continuous.shadowRoot.querySelector('.secondary').textContent === '/dashboard-test/kitchen',
           'navigation path is not displayed'
         );
-        assert(continuous.shadowRoot.querySelector('.icon').icon === 'mdi:fridge', 'navigation icon missing');
+        const mainIcon = continuous.shadowRoot.querySelector('.icon');
+        const mainText = continuous.shadowRoot.querySelector('.text');
+        assert(mainIcon.icon === 'mdi:fridge', 'navigation icon missing');
+        assert(getComputedStyle(mainIcon).display === 'grid', 'navigation icon is not internally centered');
+        assert(
+          Math.abs((mainIcon.getBoundingClientRect().top + mainIcon.getBoundingClientRect().bottom) / 2 -
+            (mainText.getBoundingClientRect().top + mainText.getBoundingClientRect().bottom) / 2) < 1,
+          'navigation icon is not vertically centered against name and state'
+        );
 
         const paneCard = pane.shadowRoot.querySelector('.card');
         const paneRect = paneCard.getBoundingClientRect();
@@ -232,17 +254,39 @@
         History.prototype.pushState = (_state, _title, path) => navigations.push(path);
         let locationChanged = 0;
         window.addEventListener('location-changed', () => { locationChanged += 1; });
-        continuous.shadowRoot.querySelector('.main').click();
+        continuous.shadowRoot.querySelector('.nav-target').click();
         assert(
           navigations[0]?.endsWith('/dashboard-test/kitchen'),
           `click navigation path is wrong: ${JSON.stringify(navigations)}`
         );
         assert(locationChanged === 1, 'click did not dispatch location-changed');
-        pane.shadowRoot.querySelector('.main').dispatchEvent(
+        pane.shadowRoot.querySelector('.nav-target').dispatchEvent(
           new KeyboardEvent('keydown', { key: 'Enter', bubbles: true })
         );
         assert(navigations[1]?.endsWith('/config/dashboard'), 'keyboard navigation path is wrong');
         assert(locationChanged === 2, 'keyboard did not dispatch location-changed');
+        const actionButton = iconAction.shadowRoot.querySelector('.icon-action');
+        actionButton.click();
+        assert(calls.length === 1, 'main icon action did not execute');
+        assert(calls[0][0] === 'light' && calls[0][1] === 'toggle', 'main icon did not use the native light toggle service');
+        assert(calls[0][3].entity_id === 'light.kitchen', 'main icon action targeted the wrong entity');
+        assert(navigations.length === 2, 'main icon action also navigated');
+        iconAction.shadowRoot.querySelector('.nav-target').click();
+        assert(navigations[2]?.endsWith('/lovelace/lights'), 'navigation body stopped navigating');
+        iconAction.setConfig({
+          name: 'light shortcut',
+          navigation_path: '/lovelace/lights',
+          entity: 'light.kitchen',
+          icon_tap_action: { action: 'more-info' },
+          popup_title: 'light-shortcut',
+        });
+        iconAction.hass = hass;
+        iconAction.shadowRoot.querySelector('.icon-action').click();
+        const popup = document.querySelector('terminal-entity-popup');
+        assert(popup && !popup.hidden, 'navigation main icon more-info did not open the terminal popup');
+        assert(popup.shadowRoot.querySelector('.border-title').textContent === 'light-shortcut', 'navigation popup title is wrong');
+        iconAction.remove();
+        assert(popup.hidden, 'navigation disconnect did not close its popup');
         History.prototype.pushState = originalPushState;
 
         templated.remove();
@@ -263,6 +307,7 @@
           { name: 'bad color', navigation_path: '/lovelace', accent_color: 'chartreuse' },
           { name: 'bad icon', navigation_path: '/lovelace', more_icon: '' },
           { name: 'bad template', navigation_path: '/lovelace', state_template: 42 },
+          { name: 'bad icon action', navigation_path: '/lovelace', icon_tap_action: 'toggle' },
         ]) {
           try {
             document.createElement('terminal-navigation-card').setConfig(config);
@@ -270,7 +315,7 @@
             invalidConfig += 1;
           }
         }
-        assert(invalidConfig === 9, 'invalid navigation configuration was accepted');
+        assert(invalidConfig === 10, 'invalid navigation configuration was accepted');
         assert(continuous.getCardSize() === 1, 'navigation card size is wrong');
         assert(
           window.customCards.some((entry) => entry.type === 'terminal-navigation-card'),
@@ -288,6 +333,12 @@
           fields.find((field) => field.name === 'state_template').selector.template,
           'native navigation template selector missing'
         );
+        const iconActionField = fields.find((field) => field.name === 'icon_tap_action');
+        assert(iconActionField.selector.ui_action, 'native HA icon action selector missing');
+        assert(
+          iconActionField.selector.ui_action.actions.includes('perform-action'),
+          'main icon action does not offer native HA services'
+        );
 
         document.body.dataset.testStatus = 'PASS';
         document.title = 'PASS terminal-navigation-card';
@@ -295,6 +346,7 @@
           'PASS: continuous and title-in-border navigation variants',
           'PASS: square border, title overlay, hover accent without glow and equal-row sizing',
           'PASS: click and keyboard internal navigation',
+          'PASS: separate main-icon entity action with native HA services',
           'PASS: native navigation/variant form and picker metadata',
         ].join('\n');
       }

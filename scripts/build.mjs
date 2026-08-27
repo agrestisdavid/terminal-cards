@@ -25,6 +25,8 @@ for (const element of [
   'terminal-card-wrapper',
   'terminal-title-card',
   'terminal-light-card',
+  'terminal-switch-card',
+  'terminal-sensor-card',
   'terminal-shutter-card',
   'terminal-navigation-card',
   'terminal-entity-popup',

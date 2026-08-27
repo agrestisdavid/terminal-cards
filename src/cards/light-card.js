@@ -26,7 +26,11 @@ import {
   segmentCountForWidth,
   temperatureSegmentColor,
 } from '../shared/segments.js';
-import { TERMINAL_COLORS, TERMINAL_FONT } from '../shared/styles.js';
+import {
+  TERMINAL_COLORS,
+  TERMINAL_ENTITY_ALIGNMENT,
+  TERMINAL_FONT,
+} from '../shared/styles.js';
 
 const TAG = 'terminal-light-card';
 const DEFAULT_TAP_ACTION = { action: 'toggle' };
@@ -206,6 +210,7 @@ const STYLES = `
     cursor: pointer;
   }
   input[type="range"]:disabled { cursor: not-allowed; }
+  ${TERMINAL_ENTITY_ALIGNMENT}
 `;
 
 export class TerminalLightCard extends HTMLElement {

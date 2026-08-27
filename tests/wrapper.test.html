@@ -275,6 +275,10 @@
         assert(paneStyle.borderTopWidth === '1px', 'Rahmen ist nicht 1px');
         assert(paneStyle.borderTopStyle === 'solid', 'Rahmen ist nicht sichtbar');
         assert(paneStyle.borderRadius === '0px', 'Ecken sind nicht quadratisch');
+        assert(
+          paneStyle.paddingTop === paneStyle.paddingBottom,
+          'Wrapper-Abstand zu Child-Cards ist oben und unten nicht identisch'
+        );
         assert(!paneStyle.transitionProperty.includes('box-shadow'), 'Wrapper animiert weiterhin einen Glow');
         assert(paneStyle.boxShadow === 'none', 'Wrapper rendert weiterhin einen Glow');
         assert(

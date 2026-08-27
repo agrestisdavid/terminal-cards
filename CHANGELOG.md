@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.8.0 — 2026-08-27
+
+- Match Wrapper child-card spacing at 18 px above and below the content.
+- Vertically center every entity icon against its name/state stack and center TitleCard subtitles within their frame.
+- Add a separate Navigation Card `icon_tap_action` with Home Assistant's native action/service editor while preserving card-body navigation.
+- Add `custom:terminal-switch-card` with switch-domain selection, native actions, toggle default, popup support, and active/unavailable states.
+- Add `custom:terminal-sensor-card` for sensor and binary-sensor entities with formatted states, native actions, popup support, and active binary-sensor feedback.
+
 ## 0.7.0 — 2026-08-27
 
 - Replace every Terminal Card RGB color picker with Home Assistant's native internal theme-color palette.

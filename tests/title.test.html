@@ -96,6 +96,11 @@
         assert(subtitle.content === '**power:** 42 W', 'rendered subtitle was not passed to HA Markdown');
         assert(subtitle.textContent === '**power:** 42 W', 'subtitle template result is missing');
         assert(subtitle.hass === hass, 'Home Assistant context was not passed to HA Markdown');
+        const subtitleRect = subtitle.getBoundingClientRect();
+        assert(
+          Math.abs((subtitleRect.top + subtitleRect.bottom) / 2 - (frameRect.top + frameRect.bottom) / 2) < 1,
+          'subtitle is not vertically centered in the title frame'
+        );
         assert(frame.children.length === 2, 'title card subtitle container is missing');
         assert(card.getGridOptions().columns === 12, 'title card is not full-width by default');
         assert(card.getCardSize() === 2, 'title card size does not reflect the large font');

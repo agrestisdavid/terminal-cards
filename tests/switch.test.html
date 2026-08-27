@@ -1,0 +1,135 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>terminal-switch-card test running</title>
+    <style>
+      :root {
+        --card-background-color: #181825;
+        --primary-text-color: #cdd6f4;
+        --secondary-text-color: #6c7086;
+        --accent-color: #89b4fa;
+        --error-color: #f38ba8;
+      }
+      body { background: #11111b; color: #cdd6f4; padding: 24px; }
+      terminal-switch-card { display: block; width: 420px; margin-bottom: 16px; }
+    </style>
+    <script>
+      customElements.define('ha-icon', class extends HTMLElement {
+        set icon(value) { this._icon = value; }
+        get icon() { return this._icon; }
+      });
+    </script>
+    <script type="module" src="../dist/terminal-cards.js"></script>
+  </head>
+  <body>
+    <main id="cards"></main>
+    <pre id="result">WAITING</pre>
+    <script type="module">
+      const calls = [];
+      const hass = {
+        states: {
+          'switch.coffee': {
+            entity_id: 'switch.coffee',
+            state: 'on',
+            attributes: { friendly_name: 'Coffee machine' },
+          },
+          'switch.offline': {
+            entity_id: 'switch.offline',
+            state: 'unavailable',
+            attributes: { friendly_name: 'Offline switch' },
+          },
+        },
+        formatEntityState: (entity) => entity.state.toUpperCase(),
+        callService: (...args) => calls.push(args),
+      };
+
+      function create(config) {
+        const card = document.createElement('terminal-switch-card');
+        card.setConfig(config);
+        card.hass = hass;
+        document.querySelector('#cards').append(card);
+        return card;
+      }
+
+      const active = create({ entity: 'switch.coffee', accent_color: 'green' });
+      const offline = create({ entity: 'switch.offline' });
+
+      function assert(condition, message) {
+        if (!condition) throw new Error(message);
+      }
+
+      async function run() {
+        await customElements.whenDefined('terminal-switch-card');
+        await new Promise((resolve) => setTimeout(resolve, 30));
+
+        const card = active.shadowRoot.querySelector('.card');
+        const icon = active.shadowRoot.querySelector('.icon');
+        const text = active.shadowRoot.querySelector('.text');
+        assert(getComputedStyle(card).borderRadius === '0px', 'switch corners are not square');
+        assert(card.dataset.state === 'on' && card.dataset.active === 'true', 'active switch state is missing');
+        assert(active.shadowRoot.querySelector('.name').textContent === 'Coffee machine', 'switch friendly name missing');
+        assert(active.shadowRoot.querySelector('.state').textContent === 'on', 'switch state is not formatted and lowercased');
+        assert(icon.icon === 'mdi:toggle-switch', 'active switch default icon is wrong');
+        assert(getComputedStyle(icon).display === 'grid', 'switch icon is not internally centered');
+        assert(
+          Math.abs((icon.getBoundingClientRect().top + icon.getBoundingClientRect().bottom) / 2 -
+            (text.getBoundingClientRect().top + text.getBoundingClientRect().bottom) / 2) < 1,
+          'switch icon is not vertically centered against name and state'
+        );
+        assert(
+          active.style.getPropertyValue('--terminal-card-accent') === 'var(--green-color, #4caf50)',
+          'switch HA theme accent is missing'
+        );
+
+        active.shadowRoot.querySelector('.main').click();
+        assert(calls.length === 1, 'switch tap did not execute');
+        assert(calls[0][0] === 'switch' && calls[0][1] === 'toggle', 'switch tap did not use switch.toggle');
+        assert(calls[0][3].entity_id === 'switch.coffee', 'switch toggle target is wrong');
+
+        active._startHold();
+        await new Promise((resolve) => setTimeout(resolve, 520));
+        const popup = document.querySelector('terminal-entity-popup');
+        assert(popup && !popup.hidden, 'switch hold did not open the terminal popup');
+        assert(popup.shadowRoot.querySelector('.border-title').textContent === 'more-info', 'switch popup title is wrong');
+        popup.shadowRoot.querySelector('.close').click();
+
+        assert(offline.shadowRoot.querySelector('.card').dataset.state === 'unavailable', 'offline switch state missing');
+        assert(
+          getComputedStyle(offline.shadowRoot.querySelector('.card')).borderTopColor === 'rgb(243, 139, 168)',
+          'offline switch does not use the error border'
+        );
+
+        let invalid = false;
+        try { document.createElement('terminal-switch-card').setConfig({ entity: 'sensor.temperature' }); }
+        catch (_error) { invalid = true; }
+        assert(invalid, 'non-switch entity was accepted');
+
+        const Card = customElements.get('terminal-switch-card');
+        const form = Card.getConfigForm();
+        const fields = form.schema.flatMap((item) => item.schema || [item]);
+        assert(fields.find((field) => field.name === 'entity').selector.entity.filter.domain === 'switch', 'switch editor domain is wrong');
+        assert(fields.find((field) => field.name === 'tap_action').selector.ui_action, 'switch native tap action is missing');
+        assert(fields.find((field) => field.name === 'accent_color').selector.ui_color, 'switch HA color palette is missing');
+        assert(Card.getStubConfig(hass).entity === 'switch.coffee', 'switch stub did not find a real switch');
+        assert(window.customCards.some((entry) => entry.type === 'terminal-switch-card'), 'switch picker metadata missing');
+        assert(active.getCardSize() === 1, 'switch card size is wrong');
+
+        document.body.dataset.testStatus = 'PASS';
+        document.title = 'PASS terminal-switch-card';
+        document.querySelector('#result').textContent = [
+          'PASS: square switch states and vertically centered icon',
+          'PASS: native toggle, hold popup and unavailable styling',
+          'PASS: native editor selectors and picker metadata',
+        ].join('\n');
+      }
+
+      run().catch((error) => {
+        document.body.dataset.testStatus = 'FAIL';
+        document.title = 'FAIL terminal-switch-card';
+        document.querySelector('#result').textContent = `FAIL: ${error.stack || error}`;
+        console.error(error);
+      });
+    </script>
+  </body>
+</html>

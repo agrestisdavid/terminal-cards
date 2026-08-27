@@ -8,6 +8,8 @@ const tests = [
   'wrapper',
   'title',
   'light',
+  'switch',
+  'sensor',
   'shutter',
   'navigation',
   'popup',

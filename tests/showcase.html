@@ -60,7 +60,7 @@
     <script type="module" src="../dist/terminal-cards.js"></script>
   </head>
   <body>
-    <h1>terminal-cards <span>// title + wrapper + light + shutter + navigation</span></h1>
+    <h1>terminal-cards <span>// title + wrapper + light + switch + sensor + shutter + navigation</span></h1>
     <main></main>
     <script type="module">
       const hass = {
@@ -88,6 +88,14 @@
               friendly_name: 'office blind', current_position: 68,
               current_tilt_position: 35, supported_features: 79,
             },
+          },
+          'switch.coffee': {
+            entity_id: 'switch.coffee', state: 'on',
+            attributes: { friendly_name: 'coffee machine' },
+          },
+          'sensor.temperature': {
+            entity_id: 'sensor.temperature', state: '22.5',
+            attributes: { friendly_name: 'living temperature', unit_of_measurement: '°C' },
           },
         },
         formatEntityState: (entity) => entity.state,
@@ -142,7 +150,7 @@
 
       const controls = document.createElement('terminal-card-wrapper');
       controls.setConfig({
-        title: 'covers + navigation',
+        title: 'covers + entities + navigation',
         accent_color: 'cyan',
         entity: 'cover.office',
         state_position: 'top-right',
@@ -151,13 +159,22 @@
           {
             type: 'custom:terminal-shutter-card', entity: 'cover.office',
             accent_color: 'yellow', more_icon: 'mdi:menu',
-            controls_expanded: true,
+            controls_expanded: false,
+          },
+          {
+            type: 'custom:terminal-switch-card', entity: 'switch.coffee',
+            accent_color: 'green',
+          },
+          {
+            type: 'custom:terminal-sensor-card', entity: 'sensor.temperature',
+            accent_color: 'cyan',
           },
           {
             type: 'custom:terminal-navigation-card', name: 'kitchen',
             navigation_path: '/dashboard-test/kitchen', icon: 'mdi:fridge',
             variant: 'continuous', accent_color: 'cyan',
-            more_icon: 'mdi:arrow-right-bold', entity: 'cover.office',
+            more_icon: 'mdi:arrow-right-bold', entity: 'light.kitchen',
+            icon_tap_action: { action: 'toggle' },
           },
           {
             type: 'custom:terminal-navigation-card', name: 'system',

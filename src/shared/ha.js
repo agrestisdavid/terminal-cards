@@ -42,7 +42,9 @@ export function executeAction(element, hass, config, actionConfig) {
 
   if (action === 'none') return;
   if (action === 'toggle') {
-    hass.callService('light', 'toggle', {}, { entity_id: entityId });
+    if (!entityId || typeof entityId !== 'string' || !entityId.includes('.')) return;
+    const domain = entityId.split('.', 1)[0];
+    hass.callService(domain, 'toggle', {}, { entity_id: entityId });
     return;
   }
   if (action === 'more-info') {

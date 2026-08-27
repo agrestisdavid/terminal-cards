@@ -9,6 +9,23 @@ export const TERMINAL_COLORS = `
   --terminal-error: var(--error-color, #f38ba8);
 `;
 
+export const TERMINAL_ENTITY_ALIGNMENT = `
+  .icon {
+    align-self: center;
+    display: grid;
+    place-items: center;
+    line-height: 0;
+    --mdc-icon-size: 28px;
+  }
+  .text {
+    align-self: center;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    min-height: 30px;
+  }
+`;
+
 export const EDITOR_STYLES = `
   :host { display: block; }
   .editor { display: grid; gap: 16px; }

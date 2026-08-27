@@ -8,7 +8,7 @@ Terminal-style Lovelace cards for Home Assistant, inspired by Herdr panes: squar
 
 ### `custom:terminal-card-wrapper`
 
-Frames arbitrary Lovelace child cards with a terminal-style title embedded in its top border. Child cards are vertical by default; set `columns` for a grid. Children in the same grid row stretch to an equal height. When the final grid row contains only one card, that card automatically spans the complete row. An optional formatted entity state or reactive template result can be embedded in any of the four frame corners. The native-style visual editor can add, configure, reorder, and remove child cards without YAML.
+Frames arbitrary Lovelace child cards with a terminal-style title embedded in its top border. Child cards have matching 18 px top and bottom spacing. They are vertical by default; set `columns` for a grid. Children in the same grid row stretch to an equal height. When the final grid row contains only one card, that card automatically spans the complete row. An optional formatted entity state or reactive template result can be embedded in any of the four frame corners. The native-style visual editor can add, configure, reorder, and remove child cards without YAML.
 
 ```yaml
 type: custom:terminal-card-wrapper
@@ -28,7 +28,7 @@ cards:
 
 ### `custom:terminal-title-card`
 
-A compact terminal heading frame for dashboard sections. Its large title remains embedded slightly inside the upper border and can be positioned left or right. Font size is configurable from 14 to 48 px. An optional `subtitle` accepts Markdown and reactive Home Assistant templates in the same field; rendered template output is passed to Home Assistant's Markdown component.
+A compact terminal heading frame for dashboard sections. Its large title remains embedded slightly inside the upper border and can be positioned left or right. Font size is configurable from 14 to 48 px. An optional vertically centered `subtitle` accepts Markdown and reactive Home Assistant templates in the same field; rendered template output is passed to Home Assistant's Markdown component.
 
 ```yaml
 type: custom:terminal-title-card
@@ -66,6 +66,39 @@ hold_action:
 
 All options are available through Home Assistant-native visual form controls. The entity selector only offers `light.*` entities; action fields use Home Assistant's native action editor. The number of square segments adapts automatically to the rendered card width. Temperature runs from warm/low Kelvin on the left to cold/high Kelvin on the right. With `use_light_color`, the active RGB/HS color or color temperature drives the icon, border, controls icon, brightness segments, and popup accent.
 
+### `custom:terminal-switch-card`
+
+A compact card for `switch.*` entities. Tap toggles the switch by default; hold opens the terminal popup. Both actions can be replaced through Home Assistant's native action editor.
+
+```yaml
+type: custom:terminal-switch-card
+entity: switch.coffee_machine
+name: coffee machine
+icon: mdi:coffee-maker
+show_state: true
+accent_color: green
+popup_title: switch-details
+tap_action:
+  action: toggle
+hold_action:
+  action: more-info
+```
+
+### `custom:terminal-sensor-card`
+
+A read-focused card for `sensor.*` and `binary_sensor.*` entities. It displays Home Assistant's formatted state, accents active binary sensors, and opens the terminal popup on tap by default. Native actions remain configurable for dashboards that need a sensor shortcut.
+
+```yaml
+type: custom:terminal-sensor-card
+entity: sensor.living_room_temperature
+name: living temperature
+icon: mdi:thermometer
+show_state: true
+accent_color: cyan
+tap_action:
+  action: more-info
+```
+
 ### `custom:terminal-shutter-card`
 
 A capability-aware control for `cover.*` entities. The square controls button reveals only the functions supported by the selected shutter or blind: open, stop, close, position, and tilt position.
@@ -89,7 +122,7 @@ hold_action:
 
 ### `custom:terminal-navigation-card`
 
-An internal Home Assistant navigation card. `variant` switches between a continuous border and the Wrapper-style name embedded in the top border. The visual editor uses Home Assistant's native navigation-path picker.
+An internal Home Assistant navigation card. `variant` switches between a continuous border and the Wrapper-style name embedded in the top border. The visual editor uses Home Assistant's native navigation-path picker. The optional state `entity` can also power a separate `icon_tap_action`: clicking the main icon runs a native Home Assistant action or service while clicking the remaining card still navigates.
 
 ```yaml
 type: custom:terminal-navigation-card
@@ -100,8 +133,10 @@ variant: pane # or: continuous
 title_position: right
 accent_color: cyan
 more_icon: mdi:arrow-right-bold
-entity: sensor.kitchen_status
+entity: light.kitchen
 state_template: "{{ states(config.entity) | upper }}"
+icon_tap_action:
+  action: toggle
 show_path: true
 ```
 
@@ -109,7 +144,7 @@ show_path: true
 
 Every card uses Home Assistant's native theme-color palette for `accent_color` (for example `blue`, `green`, `purple`, or `cyan`) instead of an RGB color picker. The selected theme token controls the active border, icons, hover/focus state, and controls, and follows theme overrides such as `--blue-color`. Existing RGB-array configurations remain render-compatible but are no longer offered by the visual editor. The design intentionally has no box-shadow glow. Light state color takes precedence when `use_light_color: true`.
 
-Wrapper, Title, and pane-style Navigation Cards support `title_position: left|right`. Wrapper state supports `state_position: top-left|top-right|bottom-left|bottom-right`; labels sharing a corner shrink without overlapping. Light, Shutter, and Navigation Cards support `more_icon`; Navigation uses it for the trailing navigation icon. These conventions should also be used by future Terminal Cards.
+Wrapper, Title, and pane-style Navigation Cards support `title_position: left|right`. Wrapper state supports `state_position: top-left|top-right|bottom-left|bottom-right`; labels sharing a corner shrink without overlapping. Entity icons are vertically centered against their name/state stack across Light, Switch, Sensor, Shutter, and Navigation Cards. Light, Shutter, and Navigation Cards support `more_icon`; Navigation uses it for the trailing navigation icon. These conventions should also be used by future Terminal Cards.
 
 A `more-info` action opens the bundle's own terminal-style entity popup instead of Home Assistant's native dialog. A borderless terminal-background shell surrounds the bordered dialog. Its TitleCard-style border title defaults to `more-info` and can be changed with `popup_title`. The card name or entity friendly name is shown separately above the formatted state. On mobile the popup becomes a near-full-width bottom sheet with an 8 px gap on both sides. The layer order is standard `--card-background-color` outer area → 1 px accent border → card surface. The outer area measures 12 vh above and below the popup (or the larger device safe area), protecting rounded phone corners; title/header stay fixed and only the content scrolls. Capability-aware Light and Cover ranges use the same responsive square segments as the cards.
 
@@ -124,7 +159,7 @@ Navigation secondary content uses this precedence: a successful reactive `state_
 3. Install **Terminal Cards**.
 4. Hard-refresh Home Assistant (`Ctrl+Shift+R`).
 
-HACS loads the release asset `terminal-cards.js`; no inline `data:` resource is needed. All five cards appear in Home Assistant's card picker and provide graphical configuration.
+HACS loads the release asset `terminal-cards.js`; no inline `data:` resource is needed. All seven cards appear in Home Assistant's card picker and provide graphical configuration.
 
 ## Development
 

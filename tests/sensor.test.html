@@ -1,0 +1,156 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>terminal-sensor-card test running</title>
+    <style>
+      :root {
+        --card-background-color: #181825;
+        --primary-text-color: #cdd6f4;
+        --secondary-text-color: #6c7086;
+        --accent-color: #89b4fa;
+        --error-color: #f38ba8;
+      }
+      body { background: #11111b; color: #cdd6f4; padding: 24px; }
+      terminal-sensor-card { display: block; width: 420px; margin-bottom: 16px; }
+    </style>
+    <script>
+      customElements.define('ha-icon', class extends HTMLElement {
+        set icon(value) { this._icon = value; }
+        get icon() { return this._icon; }
+      });
+    </script>
+    <script type="module" src="../dist/terminal-cards.js"></script>
+  </head>
+  <body>
+    <main id="cards"></main>
+    <pre id="result">WAITING</pre>
+    <script type="module">
+      const calls = [];
+      const hass = {
+        states: {
+          'sensor.temperature': {
+            entity_id: 'sensor.temperature',
+            state: '22.5',
+            attributes: { friendly_name: 'Living temperature', unit_of_measurement: '°C' },
+          },
+          'binary_sensor.window': {
+            entity_id: 'binary_sensor.window',
+            state: 'on',
+            attributes: { friendly_name: 'Kitchen window' },
+          },
+          'sensor.offline': {
+            entity_id: 'sensor.offline',
+            state: 'unavailable',
+            attributes: { friendly_name: 'Offline sensor' },
+          },
+        },
+        formatEntityState: (entity) =>
+          entity.entity_id === 'sensor.temperature' ? '22.5 °C' : entity.state.toUpperCase(),
+        callService: (...args) => calls.push(args),
+      };
+
+      function create(config) {
+        const card = document.createElement('terminal-sensor-card');
+        card.setConfig(config);
+        card.hass = hass;
+        document.querySelector('#cards').append(card);
+        return card;
+      }
+
+      const temperature = create({ entity: 'sensor.temperature', accent_color: 'cyan' });
+      const binary = create({ entity: 'binary_sensor.window' });
+      const offline = create({ entity: 'sensor.offline' });
+      const actionable = create({
+        entity: 'sensor.temperature',
+        tap_action: {
+          action: 'perform-action',
+          perform_action: 'homeassistant.update_entity',
+          target: { entity_id: 'sensor.temperature' },
+        },
+      });
+
+      function assert(condition, message) {
+        if (!condition) throw new Error(message);
+      }
+
+      async function run() {
+        await customElements.whenDefined('terminal-sensor-card');
+        await new Promise((resolve) => setTimeout(resolve, 30));
+
+        const card = temperature.shadowRoot.querySelector('.card');
+        const icon = temperature.shadowRoot.querySelector('.icon');
+        const text = temperature.shadowRoot.querySelector('.text');
+        assert(getComputedStyle(card).borderRadius === '0px', 'sensor corners are not square');
+        assert(temperature.shadowRoot.querySelector('.name').textContent === 'Living temperature', 'sensor friendly name missing');
+        assert(temperature.shadowRoot.querySelector('.state').textContent === '22.5 °C', 'formatted sensor state or unit casing is wrong');
+        assert(icon.icon === 'mdi:gauge', 'sensor default icon is wrong');
+        assert(getComputedStyle(icon).display === 'grid', 'sensor icon is not internally centered');
+        assert(
+          Math.abs((icon.getBoundingClientRect().top + icon.getBoundingClientRect().bottom) / 2 -
+            (text.getBoundingClientRect().top + text.getBoundingClientRect().bottom) / 2) < 1,
+          'sensor icon is not vertically centered against name and state'
+        );
+        assert(
+          temperature.style.getPropertyValue('--terminal-card-accent') === 'var(--cyan-color, #00bcd4)',
+          'sensor HA theme accent is missing'
+        );
+
+        temperature.shadowRoot.querySelector('.main').click();
+        const popup = document.querySelector('terminal-entity-popup');
+        assert(popup && !popup.hidden, 'sensor tap did not open the terminal popup');
+        assert(
+          popup.shadowRoot.querySelector('.detail-value').textContent === 'sensor.temperature',
+          'sensor popup targets the wrong entity'
+        );
+        popup.shadowRoot.querySelector('.close').click();
+
+        assert(binary.shadowRoot.querySelector('.card').dataset.active === 'true', 'binary sensor on state is not active');
+        assert(binary.shadowRoot.querySelector('.icon').icon === 'mdi:radiobox-marked', 'binary sensor active icon is wrong');
+        assert(offline.shadowRoot.querySelector('.card').dataset.state === 'unavailable', 'offline sensor state missing');
+        assert(
+          getComputedStyle(offline.shadowRoot.querySelector('.card')).borderTopColor === 'rgb(243, 139, 168)',
+          'offline sensor does not use the error border'
+        );
+
+        actionable.shadowRoot.querySelector('.main').click();
+        assert(calls.length === 1, 'sensor native perform-action did not execute');
+        assert(
+          calls[0][0] === 'homeassistant' && calls[0][1] === 'update_entity',
+          'sensor perform-action used the wrong service'
+        );
+
+        let invalid = false;
+        try { document.createElement('terminal-sensor-card').setConfig({ entity: 'light.desk' }); }
+        catch (_error) { invalid = true; }
+        assert(invalid, 'non-sensor entity was accepted');
+
+        const Card = customElements.get('terminal-sensor-card');
+        const form = Card.getConfigForm();
+        const fields = form.schema.flatMap((item) => item.schema || [item]);
+        const domains = fields.find((field) => field.name === 'entity').selector.entity.filter.domain;
+        assert(domains.includes('sensor') && domains.includes('binary_sensor'), 'sensor editor domains are incomplete');
+        assert(fields.find((field) => field.name === 'tap_action').selector.ui_action, 'sensor native tap action is missing');
+        assert(fields.find((field) => field.name === 'accent_color').selector.ui_color, 'sensor HA color palette is missing');
+        assert(Card.getStubConfig(hass).entity === 'sensor.temperature', 'sensor stub did not find a real sensor');
+        assert(window.customCards.some((entry) => entry.type === 'terminal-sensor-card'), 'sensor picker metadata missing');
+        assert(temperature.getCardSize() === 1, 'sensor card size is wrong');
+
+        document.body.dataset.testStatus = 'PASS';
+        document.title = 'PASS terminal-sensor-card';
+        document.querySelector('#result').textContent = [
+          'PASS: sensor and binary-sensor states with centered icons',
+          'PASS: terminal popup, native actions and unavailable styling',
+          'PASS: native editor selectors and picker metadata',
+        ].join('\n');
+      }
+
+      run().catch((error) => {
+        document.body.dataset.testStatus = 'FAIL';
+        document.title = 'FAIL terminal-sensor-card';
+        document.querySelector('#result').textContent = `FAIL: ${error.stack || error}`;
+        console.error(error);
+      });
+    </script>
+  </body>
+</html>

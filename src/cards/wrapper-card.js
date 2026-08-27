@@ -21,7 +21,7 @@ const STYLES = `
     box-sizing: border-box;
     min-width: 0;
     margin-top: 8px;
-    padding: 18px 12px 12px;
+    padding: 18px 12px;
     border: 1px solid var(--terminal-dim);
     border-radius: 0;
     background: var(--terminal-background);

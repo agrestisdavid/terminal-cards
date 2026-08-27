@@ -38,6 +38,11 @@ const STYLES = `
     color: var(--terminal-text);
     font-family: ${TERMINAL_FONT};
   }
+  .frame[data-has-subtitle="true"] {
+    display: flex;
+    align-items: center;
+    min-height: max(56px, calc(var(--terminal-title-font-size) * 1.1 + 36px));
+  }
   .title {
     position: absolute;
     z-index: 1;
@@ -62,8 +67,9 @@ const STYLES = `
   .subtitle {
     box-sizing: border-box;
     display: block;
+    width: 100%;
     min-width: 0;
-    padding: calc(var(--terminal-title-font-size) * .7 + 4px) 14px 9px;
+    padding: 0 14px;
     overflow-wrap: anywhere;
     color: var(--terminal-dim);
     font: 12px/1.35 ${TERMINAL_FONT};
@@ -219,7 +225,9 @@ export class TerminalTitleCard extends HTMLElement {
     const content = usesTemplate
       ? this._templateValue ?? (this._templateError ? 'template unavailable' : '')
       : subtitle;
-    this._subtitle.hidden = !subtitle.trim();
+    const hasSubtitle = Boolean(subtitle.trim());
+    this._frame.dataset.hasSubtitle = String(hasSubtitle);
+    this._subtitle.hidden = !hasSubtitle;
     this._subtitle.hass = this._hass;
     this._subtitle.content = content;
   }

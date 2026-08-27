@@ -113,7 +113,6 @@
           popupEntity?.textContent === 'cover.blind',
           `terminal popup targets the wrong cover: ${popup._body?.innerHTML}`
         );
-        await new Promise((resolve) => requestAnimationFrame(resolve));
         assert(
           popup.shadowRoot.querySelector('[data-kind="position"] .segment'),
           'popup cover position does not use segmented controls'

@@ -107,13 +107,25 @@ const STYLES = `
     color: var(--terminal-popup-effective-accent);
     --mdc-icon-size: 32px;
   }
-  .header-text { flex: 1 1 auto; min-width: 0; }
-  .state {
+  .header-text {
+    display: grid;
+    flex: 1 1 auto;
+    gap: 2px;
+    min-width: 0;
+  }
+  .entity-name, .state {
     overflow: hidden;
-    color: var(--terminal-dim);
-    font-size: 13px;
     text-overflow: ellipsis;
     white-space: nowrap;
+  }
+  .entity-name {
+    color: var(--terminal-text);
+    font-size: 13px;
+    font-weight: 600;
+  }
+  .state {
+    color: var(--terminal-dim);
+    font-size: 12px;
   }
   .close, .action {
     box-sizing: border-box;
@@ -158,6 +170,18 @@ const STYLES = `
     font-size: 11px;
     font-weight: 600;
   }
+  .logbook-section {
+    position: relative;
+    box-sizing: border-box;
+    display: block;
+    min-width: 0;
+    border: 1px solid var(--terminal-dim);
+    transition: border-color 120ms ease;
+  }
+  .logbook-section[data-open="true"] {
+    padding: 16px 10px 10px;
+    border-color: var(--terminal-popup-effective-accent);
+  }
   .details {
     display: grid;
     grid-template-columns: max-content minmax(0, 1fr);
@@ -186,7 +210,7 @@ const STYLES = `
     width: 100%;
     min-height: 36px;
     padding: 0 10px;
-    border: 1px solid var(--terminal-dim);
+    border: 0;
     border-radius: 0;
     background: transparent;
     color: var(--terminal-dim);
@@ -195,9 +219,18 @@ const STYLES = `
   }
   .logs-toggle:hover, .logs-toggle:focus-visible,
   .logs-toggle[aria-expanded="true"] {
-    border-color: var(--terminal-popup-effective-accent);
     color: var(--terminal-popup-effective-accent);
     outline: none;
+  }
+  .logbook-section[data-open="true"] .logs-toggle {
+    position: absolute;
+    top: 0;
+    left: 10px;
+    width: auto;
+    min-height: 0;
+    padding: 0 8px;
+    transform: translateY(-50%);
+    background: var(--terminal-background);
   }
   .logs-toggle ha-icon {
     width: 18px;
@@ -207,7 +240,7 @@ const STYLES = `
   .log-tree {
     display: grid;
     gap: 6px;
-    padding: 2px 0 0;
+    padding: 0;
     font-size: 11px;
   }
   .log-tree[hidden] { display: none; }
@@ -299,26 +332,29 @@ const STYLES = `
   input[type="range"]:disabled { cursor: not-allowed; }
   @media (max-width: 600px) {
     :host {
-      padding: 8px;
+      box-sizing: border-box;
+      padding: max(12vh, calc(env(safe-area-inset-top) + 12px)) 0
+        max(18px, calc(env(safe-area-inset-bottom) + 8px));
+      padding-top: max(12dvh, calc(env(safe-area-inset-top) + 12px));
       place-items: stretch;
     }
     .dialog-shell {
-      width: calc(100vw - 16px);
-      height: calc(100vh - 16px);
-      height: calc(100dvh - 16px);
+      width: 100vw;
+      height: 100%;
       max-height: none;
+      padding: 14px 0 0;
     }
     .dialog-frame, .dialog { height: 100%; max-height: none; }
     .border-title {
       max-width: calc(100% - 64px);
       font-size: 18px;
     }
-    .header { min-height: 58px; padding: 16px 10px 6px; }
+    .header { min-height: 62px; padding: 17px 12px 7px; }
     .entity-icon { width: 28px; height: 28px; --mdc-icon-size: 28px; }
     .close { flex-basis: 34px; width: 34px; min-width: 34px; }
     .body {
       max-height: none;
-      padding: 4px 10px max(12px, env(safe-area-inset-bottom));
+      padding: 4px 12px 14px;
       overscroll-behavior: contain;
     }
     .details { gap: 6px 10px; }
@@ -354,6 +390,7 @@ export class TerminalEntityPopup extends HTMLElement {
     this._logEntries = null;
     this._logError = null;
     this._logTree = null;
+    this._logsSection = null;
     this._logsToggle = null;
     this._logsIcon = null;
     this._resizeObserver = typeof ResizeObserver === 'function'
@@ -382,12 +419,15 @@ export class TerminalEntityPopup extends HTMLElement {
     this._entityIcon.className = 'entity-icon';
     this._headerText = document.createElement('div');
     this._headerText.className = 'header-text';
+    this._entityName = document.createElement('div');
+    this._entityName.className = 'entity-name';
     this._state = document.createElement('div');
     this._state.className = 'state';
-    this._headerText.append(this._state);
+    this._headerText.append(this._entityName, this._state);
     this._close = document.createElement('button');
     this._close.className = 'close';
     this._close.type = 'button';
+    this._close.dataset.focusKey = 'close';
     this._close.title = 'close';
     this._close.setAttribute('aria-label', 'close terminal details');
     this._close.append(iconElement('mdi:close'));
@@ -423,6 +463,7 @@ export class TerminalEntityPopup extends HTMLElement {
       this._logEntries = null;
       this._logError = null;
       this._logTree = null;
+      this._logsSection = null;
       this._logsToggle = null;
       this._logsIcon = null;
       this._body.replaceChildren();
@@ -455,11 +496,21 @@ export class TerminalEntityPopup extends HTMLElement {
   }
 
   updateHass(hass) {
+    const connectionChanged = this._hass?.connection !== hass?.connection;
+    const focusKey = this._captureFocusKey();
+    if (connectionChanged) {
+      ++this._logGeneration;
+      this._logLoading = false;
+      this._logEntries = null;
+      this._logError = null;
+    }
     this._hass = hass;
     if (!this.hidden) {
       this._render();
+      this._restoreFocusKey(focusKey);
       this._updateSegmentCounts();
       this._scheduleSegmentLayout();
+      if (connectionChanged && this._logsOpen) this._loadLogbook();
     }
   }
 
@@ -480,6 +531,7 @@ export class TerminalEntityPopup extends HTMLElement {
     this._logEntries = null;
     this._logError = null;
     this._logTree = null;
+    this._logsSection = null;
     this._logsToggle = null;
     this._logsIcon = null;
     this._body.replaceChildren();
@@ -509,13 +561,14 @@ export class TerminalEntityPopup extends HTMLElement {
     else this.style.removeProperty('--terminal-popup-light-color');
 
     const name = this._config?.name || attributes.friendly_name || this._entityId || 'entity';
-    const popupTitle = this._config?.popup_title || name;
+    const popupTitle = this._config?.popup_title || 'more-info';
     const formattedState = entity
       ? this._hass?.formatEntityState?.(entity) || entity.state
       : 'unavailable';
-    this._dialog.setAttribute('aria-label', `${popupTitle} details`);
+    this._dialog.setAttribute('aria-label', `${name} ${popupTitle}`);
     this._borderTitle.textContent = popupTitle;
     this._entityIcon.icon = this._config?.icon || attributes.icon || this._defaultIcon(domain);
+    this._entityName.textContent = name;
     this._state.textContent = String(formattedState).toLocaleLowerCase();
     this._rangeControls = [];
     this._body.replaceChildren();
@@ -533,9 +586,12 @@ export class TerminalEntityPopup extends HTMLElement {
   _logbookSection() {
     const section = document.createElement('section');
     section.className = 'section logbook-section';
+    section.dataset.open = String(this._logsOpen);
+    this._logsSection = section;
     this._logsToggle = document.createElement('button');
     this._logsToggle.className = 'logs-toggle';
     this._logsToggle.type = 'button';
+    this._logsToggle.dataset.focusKey = 'logs';
     this._logsToggle.setAttribute('aria-controls', 'terminal-popup-logbook');
     this._logsToggle.setAttribute('aria-expanded', String(this._logsOpen));
     const label = document.createElement('span');
@@ -562,11 +618,11 @@ export class TerminalEntityPopup extends HTMLElement {
       this._logsIcon.icon = this._logsOpen ? 'mdi:chevron-up' : 'mdi:chevron-down';
     }
     if (this._logTree) this._logTree.hidden = !this._logsOpen;
+    if (this._logsSection) this._logsSection.dataset.open = String(this._logsOpen);
     if (
       this._logsOpen &&
       !this._logLoading &&
-      this._logEntries === null &&
-      this._logError === null
+      this._logEntries === null
     ) {
       this._loadLogbook();
     } else {
@@ -587,24 +643,31 @@ export class TerminalEntityPopup extends HTMLElement {
     const end = new Date();
     const start = new Date(end.getTime() - 24 * 60 * 60 * 1000);
     const hass = this._hass;
+    const connection = hass.connection;
+    const entityId = this._entityId;
+    const requestIsCurrent = () =>
+      generation === this._logGeneration &&
+      !this.hidden &&
+      this._entityId === entityId &&
+      this._hass?.connection === connection;
     const params = {
       type: 'logbook/get_events',
       start_time: start.toISOString(),
       end_time: end.toISOString(),
-      entity_ids: [this._entityId],
+      entity_ids: [entityId],
     };
     Promise.resolve().then(() => {
-      if (generation !== this._logGeneration || this.hidden) return [];
+      if (!requestIsCurrent()) return [];
       return hass.callWS(params);
     }).then((entries) => {
-      if (generation !== this._logGeneration || this.hidden) return;
+      if (!requestIsCurrent()) return;
       const list = Array.isArray(entries) ? [...entries] : [];
       list.sort((left, right) => this._logTimestamp(right.when) - this._logTimestamp(left.when));
       this._logEntries = list.slice(0, 6);
       this._logLoading = false;
       this._renderLogbook();
     }).catch(() => {
-      if (generation !== this._logGeneration || this.hidden) return;
+      if (!requestIsCurrent()) return;
       this._logLoading = false;
       this._logError = 'logbook unavailable';
       this._renderLogbook();
@@ -697,6 +760,23 @@ export class TerminalEntityPopup extends HTMLElement {
     }
   }
 
+  _captureFocusKey() {
+    const active = this.shadowRoot?.activeElement;
+    if (!active || !this._dialog.contains(active)) return null;
+    if (active === this._dialog) return 'dialog';
+    return active.dataset?.focusKey || 'dialog';
+  }
+
+  _restoreFocusKey(focusKey) {
+    if (!focusKey) return;
+    const target = focusKey === 'dialog'
+      ? this._dialog
+      : [...this.shadowRoot.querySelectorAll('[data-focus-key]')]
+        .find((element) => element.dataset.focusKey === focusKey);
+    const fallback = this._close?.isConnected ? this._close : this._dialog;
+    (target || fallback)?.focus?.();
+  }
+
   _defaultIcon(domain) {
     if (domain === 'light') return 'mdi:lightbulb';
     if (domain === 'cover') return 'mdi:blinds-horizontal';
@@ -758,6 +838,9 @@ export class TerminalEntityPopup extends HTMLElement {
     const actions = document.createElement('div');
     actions.className = 'actions';
     actions.style.setProperty('--terminal-popup-action-count', String(Math.max(1, buttons.length)));
+    buttons.forEach((button, index) => {
+      button.dataset.focusKey = `action:${index}`;
+    });
     actions.append(...buttons);
     return actions;
   }
@@ -783,6 +866,7 @@ export class TerminalEntityPopup extends HTMLElement {
     input.max = String(max);
     input.step = String(step);
     input.disabled = disabled;
+    input.dataset.focusKey = `range:${kind}`;
     input.setAttribute('aria-label', label);
     track.append(segments, input);
     main.append(labelElement, track);

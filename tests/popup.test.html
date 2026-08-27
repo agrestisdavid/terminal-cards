@@ -117,6 +117,7 @@
         const popupShell = popup.shadowRoot.querySelector('.dialog-shell');
         const popupFrame = popup.shadowRoot.querySelector('.dialog-frame');
         const popupTitle = popup.shadowRoot.querySelector('.border-title');
+        const popupEntityName = popup.shadowRoot.querySelector('.entity-name');
         const dialogRect = popupDialog.getBoundingClientRect();
         const titleRect = popupTitle.getBoundingClientRect();
         const shellStyle = getComputedStyle(popupShell);
@@ -141,6 +142,14 @@
           'configured popup title did not override the card name'
         );
         assert(!popupTitle.querySelector('i'), 'popup interpreted its title as HTML');
+        assert(
+          popupEntityName.textContent === '<b>literal card name</b>' && !popupEntityName.querySelector('b'),
+          'popup entity name is missing or interpreted as HTML'
+        );
+        assert(
+          popupEntityName.nextElementSibling?.classList.contains('state'),
+          'entity name is not placed directly above the state'
+        );
         assert(getComputedStyle(popupTitle).fontSize === '22px', 'popup does not use the large TitleCard title');
         assert(
           getComputedStyle(popup.shadowRoot.querySelector('.dialog')).borderTopColor === 'rgb(40, 180, 90)',
@@ -181,7 +190,14 @@
         popup._updateSegmentCounts();
         await wait(10);
 
-        const brightness = popup.shadowRoot.querySelector('input[aria-label="bri"]');
+        let brightness = popup.shadowRoot.querySelector('input[aria-label="bri"]');
+        brightness.focus();
+        popup.updateHass({ ...hass });
+        brightness = popup.shadowRoot.querySelector('input[aria-label="bri"]');
+        assert(
+          popup.shadowRoot.activeElement === brightness,
+          'focused range was lost when the popup refreshed'
+        );
         brightness.value = '42';
         brightness.dispatchEvent(new Event('input', { bubbles: true }));
         brightness.dispatchEvent(new Event('change', { bubbles: true }));
@@ -189,11 +205,18 @@
         assert(calls[0][2].brightness_pct === 42, 'popup brightness payload is wrong');
         assert(calls[0][3].entity_id === 'light.popup', 'popup brightness target is wrong');
 
-        const logsToggle = popup.shadowRoot.querySelector('.logs-toggle');
+        let logsToggle = popup.shadowRoot.querySelector('.logs-toggle');
         assert(logsToggle && logsToggle.getAttribute('aria-expanded') === 'false', 'logs are not collapsed initially');
         logsToggle.click();
         await wait(10);
         assert(logsToggle.getAttribute('aria-expanded') === 'true', 'logs did not expand');
+        const logsWrapper = popup.shadowRoot.querySelector('.logbook-section');
+        assert(logsWrapper.dataset.open === 'true', 'expanded logs wrapper is not marked open');
+        assert(getComputedStyle(logsWrapper).borderTopWidth === '1px', 'expanded logs have no wrapper border');
+        assert(
+          logsWrapper.contains(popup.shadowRoot.querySelector('.log-tree')),
+          'log entries are rendered outside the logs wrapper'
+        );
         assert(wsCalls.length === 1, 'logbook was not loaded exactly once on demand');
         assert(wsCalls[0].type === 'logbook/get_events', 'popup uses the wrong logbook API');
         assert(wsCalls[0].entity_ids[0] === 'light.popup', 'logbook request targets the wrong entity');
@@ -212,6 +235,13 @@
           popup.shadowRoot.querySelector('.log-tree').textContent.includes('light.turn_off'),
           'logbook context line is missing'
         );
+        logsToggle.focus();
+        popup.updateHass({ ...hass });
+        logsToggle = popup.shadowRoot.querySelector('.logs-toggle');
+        assert(
+          popup.shadowRoot.activeElement === logsToggle,
+          'focused Logbook toggle was lost when the popup refreshed'
+        );
         logsToggle.click();
         logsToggle.click();
         await wait(1);
@@ -226,16 +256,22 @@
           name: 'card name fallback',
           hold_action: { action: 'more-info' },
         });
-        const throwingHass = {
+        let retryCalls = 0;
+        const retryHass = {
           ...hass,
-          callWS: () => { throw new Error('simulated synchronous logbook error'); },
+          callWS: () => {
+            retryCalls += 1;
+            if (retryCalls === 1) throw new Error('simulated synchronous logbook error');
+            return Promise.resolve([{ when: 1700000700, state: 'recovered' }]);
+          },
         };
-        card.hass = throwingHass;
+        card.hass = retryHass;
         const beforeKeyboardHold = calls.length;
         main.dispatchEvent(new KeyboardEvent('keydown', { key: ' ', bubbles: true }));
         await wait(550);
         assert(!popup.hidden, 'keyboard hold did not open the popup');
-        assert(popup.shadowRoot.querySelector('.border-title').textContent === 'card name fallback', 'card name popup fallback is wrong');
+        assert(popup.shadowRoot.querySelector('.border-title').textContent === 'more-info', 'default more-info popup title is wrong');
+        assert(popup.shadowRoot.querySelector('.entity-name').textContent === 'card name fallback', 'card name entity fallback is wrong');
         main.dispatchEvent(new KeyboardEvent('keyup', { key: ' ', bubbles: true }));
         assert(calls.length === beforeKeyboardHold, 'keyboard tap fired after a completed hold');
         popup.shadowRoot.querySelector('.logs-toggle').click();
@@ -244,6 +280,47 @@
           popup.shadowRoot.querySelector('.log-status').textContent.includes('logbook unavailable'),
           'synchronous logbook error left the popup loading'
         );
+        const retryToggle = popup.shadowRoot.querySelector('.logs-toggle');
+        retryToggle.click();
+        retryToggle.click();
+        await wait(10);
+        assert(retryCalls === 2, 'collapsing and reopening did not retry a failed Logbook request');
+        assert(
+          popup.shadowRoot.querySelector('.log-value').textContent === 'recovered',
+          'retried Logbook request did not render its result'
+        );
+
+        popup.close();
+        const oldConnection = {};
+        const newConnection = {};
+        let resolveOldRequest;
+        let resolveNewRequest;
+        const oldConnectionHass = {
+          ...hass,
+          connection: oldConnection,
+          callWS: () => new Promise((resolve) => { resolveOldRequest = resolve; }),
+        };
+        const newConnectionHass = {
+          ...hass,
+          connection: newConnection,
+          callWS: () => new Promise((resolve) => { resolveNewRequest = resolve; }),
+        };
+        popup.show(card, oldConnectionHass, { entity: 'light.popup', name: 'reconnect test' });
+        popup.shadowRoot.querySelector('.logs-toggle').click();
+        await wait(1);
+        assert(typeof resolveOldRequest === 'function', 'old-connection Logbook request did not start');
+        popup.updateHass(newConnectionHass);
+        await wait(1);
+        assert(typeof resolveNewRequest === 'function', 'new connection did not restart open Logbook');
+        resolveNewRequest([{ when: 1700000900, state: 'fresh connection' }]);
+        await wait(1);
+        resolveOldRequest([{ when: 1700001000, state: 'stale connection' }]);
+        await wait(1);
+        assert(
+          popup.shadowRoot.querySelector('.log-value').textContent === 'fresh connection',
+          'old-connection Logbook result replaced the current request'
+        );
+        popup.close();
 
         popup.remove();
         assert(popup.hidden, 'removing the popup host did not close it');
@@ -258,7 +335,11 @@
         const recreatedPopup = document.querySelector('terminal-entity-popup');
         assert(recreatedPopup && recreatedPopup !== popup, 'detached popup singleton was not recreated');
         assert(
-          recreatedPopup.shadowRoot.querySelector('.border-title').textContent === 'Popup light',
+          recreatedPopup.shadowRoot.querySelector('.border-title').textContent === 'more-info',
+          'recreated popup did not use the default more-info title'
+        );
+        assert(
+          recreatedPopup.shadowRoot.querySelector('.entity-name').textContent === 'Popup light',
           'entity friendly-name popup fallback is wrong'
         );
 
@@ -271,8 +352,9 @@
         document.querySelector('#result').textContent = [
           'PASS: pointer and keyboard holds open the custom terminal popup',
           'PASS: completed holds suppress tap and native more-info',
-          'PASS: TitleCard-style configurable popup title and capability-aware controls',
-          'PASS: on-demand six-entry logbook tree with time, state and context',
+          'PASS: configurable more-info border title, entity name, state and capability-aware controls',
+          'PASS: on-demand six-entry logbook tree is enclosed by its expanded wrapper',
+          'PASS: focus survives refresh; Logbook retry/reconnect guards reject stale results',
           'PASS: services, Escape, focus restoration and disconnect cleanup',
         ].join('\n');
       }

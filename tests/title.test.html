@@ -15,6 +15,15 @@
       body { background: #11111b; color: #cdd6f4; padding: 24px; }
       terminal-title-card { display: block; width: 520px; }
     </style>
+    <script>
+      customElements.define('ha-markdown', class extends HTMLElement {
+        set content(value) {
+          this._content = value;
+          this.textContent = value;
+        }
+        get content() { return this._content; }
+      });
+    </script>
     <script type="module" src="../dist/terminal-cards.js"></script>
   </head>
   <body>
@@ -26,14 +35,35 @@
 
       async function run() {
         await customElements.whenDefined('terminal-title-card');
+        let templateCallback;
+        let templateParams;
+        let unsubscribeCount = 0;
+        const hass = {
+          user: { name: 'tester' },
+          connection: {
+            subscribeMessage(callback, params) {
+              templateCallback = callback;
+              templateParams = params;
+              return Promise.resolve(() => { unsubscribeCount += 1; });
+            },
+          },
+        };
         const card = document.createElement('terminal-title-card');
         card.setConfig({
           title: '<b>kitchen status</b>',
+          subtitle: '**power:** {{ states("sensor.power") }}',
           font_size: 30,
           title_position: 'right',
           accent_color: [166, 227, 161],
         });
         document.body.prepend(card);
+        card.hass = hass;
+        await Promise.resolve();
+        assert(typeof templateCallback === 'function', 'subtitle template did not subscribe');
+        assert(templateParams.type === 'render_template', 'subtitle uses the wrong template API');
+        const firstTemplateCallback = templateCallback;
+        templateCallback({ result: '**power:** 42 W' });
+        await Promise.resolve();
 
         const frame = card.shadowRoot.querySelector('.frame');
         const title = card.shadowRoot.querySelector('.title');
@@ -50,15 +80,24 @@
         assert(title.dataset.titlePosition === 'right', 'title position is not applied');
         assert(titleStyle.right === '12px', 'right title is not aligned');
         assert(titleRect.top < frameRect.top && titleRect.bottom > frameRect.top, 'title does not cut the border');
+        assert(
+          (titleRect.top + titleRect.bottom) / 2 > frameRect.top,
+          'title was not lowered into the compact border'
+        );
         assert(title.textContent === '<b>kitchen status</b>', 'title was not rendered literally');
         assert(!title.querySelector('b'), 'title interpreted config as HTML');
-        assert(frame.children.length === 1, 'title card contains content besides its title');
+        const subtitle = card.shadowRoot.querySelector('.subtitle');
+        assert(subtitle.content === '**power:** 42 W', 'rendered subtitle was not passed to HA Markdown');
+        assert(subtitle.textContent === '**power:** 42 W', 'subtitle template result is missing');
+        assert(subtitle.hass === hass, 'Home Assistant context was not passed to HA Markdown');
+        assert(frame.children.length === 2, 'title card subtitle container is missing');
         assert(card.getGridOptions().columns === 12, 'title card is not full-width by default');
         assert(card.getCardSize() === 2, 'title card size does not reflect the large font');
 
         const form = card.constructor.getConfigForm();
         const fields = form.schema.flatMap((item) => item.schema || [item]);
         assert(fields.find((field) => field.name === 'title').selector.text, 'native title selector missing');
+        assert(fields.find((field) => field.name === 'subtitle').selector.template, 'native Markdown/template subtitle selector missing');
         const sizeField = fields.find((field) => field.name === 'font_size');
         assert(sizeField.selector.number.min === 14 && sizeField.selector.number.max === 48, 'font-size selector bounds are wrong');
         assert(fields.some((field) => field.name === 'accent_color'), 'title accent selector missing');
@@ -67,6 +106,7 @@
         let invalidTitle = false;
         let invalidSize = false;
         let invalidAccent = false;
+        let invalidSubtitle = false;
         try { document.createElement('terminal-title-card').setConfig({ font_size: 22 }); }
         catch (_error) { invalidTitle = true; }
         try { document.createElement('terminal-title-card').setConfig({ title: 'x', font_size: 80 }); }
@@ -77,19 +117,42 @@
             accent_color: [1, 2, 3, 4],
           });
         } catch (_error) { invalidAccent = true; }
+        try {
+          document.createElement('terminal-title-card').setConfig({ title: 'x', subtitle: 42 });
+        } catch (_error) { invalidSubtitle = true; }
         assert(invalidTitle, 'missing title was accepted');
         assert(invalidSize, 'invalid font size was accepted');
         assert(invalidAccent, 'non-RGB accent array was accepted');
+        assert(invalidSubtitle, 'non-string subtitle was accepted');
         assert(
           window.customCards.some((entry) => entry.type === 'terminal-title-card'),
           'title card picker metadata missing'
         );
 
+        const compact = document.createElement('terminal-title-card');
+        compact.setConfig({ title: 'compact title' });
+        document.body.prepend(compact);
+        assert(compact.getBoundingClientRect().height < 72, 'title-only card is not more compact than before');
+
+        card.setConfig({ title: 'plain markdown', subtitle: '_literal markdown_' });
+        card.hass = hass;
+        await Promise.resolve();
+        assert(card.shadowRoot.querySelector('.subtitle').content === '_literal markdown_', 'plain Markdown subtitle is wrong');
+        firstTemplateCallback({ result: '**stale template result**' });
+        await Promise.resolve();
+        assert(
+          card.shadowRoot.querySelector('.subtitle').content === '_literal markdown_',
+          'stale subtitle template result replaced the current config'
+        );
+        assert(unsubscribeCount === 1, 'template subscription was not cleaned up on config change');
+        card.remove();
+        compact.remove();
+
         document.body.dataset.testStatus = 'PASS';
         document.title = 'PASS terminal-title-card';
         document.querySelector('#result').textContent = [
-          'PASS: title-only frame, square 1px accent border and no glow',
-          'PASS: large configurable border title, alignment and safe text',
+          'PASS: compact square 1px frame, lowered border title and no glow',
+          'PASS: reactive Markdown/template subtitle with subscription cleanup',
           'PASS: native editor schema, validation and picker metadata',
         ].join('\n');
       }

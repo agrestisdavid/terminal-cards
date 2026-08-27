@@ -51,7 +51,6 @@
         const card = document.createElement('terminal-light-card');
         card.setConfig({
           entity: 'light.mobile',
-          popup_title: 'mobile title',
           tap_action: { action: 'more-info' },
         });
         card.hass = hass;
@@ -67,26 +66,43 @@
         const shellRect = shell.getBoundingClientRect();
         const frameRect = frame.getBoundingClientRect();
         const dialogRect = dialog.getBoundingClientRect();
+        const expectedTop = innerHeight * 0.12;
 
         assert(!popup.hidden, 'mobile popup did not open');
-        assert(shellRect.width >= innerWidth - 18, 'mobile popup is not nearly edge-to-edge');
-        assert(shellRect.height >= innerHeight - 18, 'mobile popup does not use the available height');
+        assert(shellRect.width >= innerWidth - 1, 'mobile popup is not edge-to-edge');
+        assert(
+          Math.abs(shellRect.top - expectedTop) < 4,
+          `mobile popup top gap is not 12vh: ${shellRect.top}px instead of ${expectedTop}px`
+        );
+        assert(innerHeight - shellRect.bottom >= 17, 'mobile popup leaves no bottom corner clearance');
+        assert(shellRect.height > innerHeight * 0.8, 'mobile popup does not use the remaining screen height');
         assert(Math.abs(frameRect.height - dialogRect.height) < 0.5, 'mobile dialog does not fill its inner frame');
         assert(getComputedStyle(body).overflowY === 'auto', 'mobile popup body is not independently scrollable');
         assert(getComputedStyle(body).alignContent === 'start', 'mobile popup sections are stretched vertically');
         assert(getComputedStyle(title).fontSize === '18px', 'mobile title does not use its responsive size');
+        assert(title.textContent === 'more-info', 'mobile popup does not use the default more-info title');
+        assert(
+          popup.shadowRoot.querySelector('.entity-name').textContent === 'Mobile popup light',
+          'mobile popup does not show the entity name above the state'
+        );
         assert(getComputedStyle(shell).borderTopWidth === '0px', 'mobile background shell has a border');
         assert(body.getBoundingClientRect().height > innerHeight / 2, 'mobile controls have too little vertical space');
         assert(popup.shadowRoot.querySelectorAll('.range').length === 3, 'mobile popup lost controls');
-        assert(popup.shadowRoot.querySelector('.logs-toggle'), 'mobile popup lost the logs field');
+        const logsToggle = popup.shadowRoot.querySelector('.logs-toggle');
+        assert(logsToggle, 'mobile popup lost the logs field');
+        logsToggle.click();
+        await new Promise((resolve) => setTimeout(resolve, 10));
+        const logsWrapper = popup.shadowRoot.querySelector('.logbook-section');
+        assert(logsWrapper.dataset.open === 'true', 'mobile logs do not expand inside their wrapper');
+        assert(getComputedStyle(logsWrapper).borderBottomWidth === '1px', 'mobile logs wrapper border is missing');
 
         popup.close();
         document.body.dataset.testStatus = 'PASS';
         document.title = 'PASS terminal mobile popup';
         document.querySelector('#result').textContent = [
-          'PASS: mobile popup uses an 8px near-fullscreen layout',
-          'PASS: fixed title/header shell with independently scrollable body',
-          'PASS: responsive controls and logs remain available',
+          'PASS: mobile popup fills the width below a dynamic 12vh top gap',
+          'PASS: bottom corner clearance and independently scrollable body',
+          'PASS: more-info title, entity heading and bordered expanded logs',
         ].join('\n');
       }
 

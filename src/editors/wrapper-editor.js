@@ -14,6 +14,31 @@ const FORM_SCHEMA = [
   {
     type: 'expandable',
     name: '',
+    title: 'Border state',
+    flatten: true,
+    schema: [
+      { name: 'entity', selector: { entity: {} } },
+      { name: 'state_template', selector: { template: {} } },
+      {
+        name: 'state_position',
+        default: 'top-right',
+        selector: {
+          select: {
+            mode: 'dropdown',
+            options: [
+              { value: 'top-left', label: 'Top left' },
+              { value: 'top-right', label: 'Top right' },
+              { value: 'bottom-left', label: 'Bottom left' },
+              { value: 'bottom-right', label: 'Bottom right' },
+            ],
+          },
+        },
+      },
+    ],
+  },
+  {
+    type: 'expandable',
+    name: '',
     title: 'Appearance',
     flatten: true,
     schema: appearanceSchema({ titlePosition: true }),
@@ -144,6 +169,13 @@ export class TerminalCardWrapperEditor extends HTMLElement {
       ...(this._config.title_position === undefined
         ? {}
         : { title_position: this._config.title_position }),
+      ...(this._config.entity === undefined ? {} : { entity: this._config.entity }),
+      ...(this._config.state_template === undefined
+        ? {}
+        : { state_template: this._config.state_template }),
+      ...(this._config.state_position === undefined
+        ? {}
+        : { state_position: this._config.state_position }),
     };
     this._form.schema = FORM_SCHEMA;
     this._form.computeLabel = (schema) => ({
@@ -151,9 +183,20 @@ export class TerminalCardWrapperEditor extends HTMLElement {
       columns: 'Columns',
       accent_color: 'Accent color',
       title_position: 'Border title position',
+      entity: 'State entity',
+      state_template: 'State template',
+      state_position: 'State position',
     })[schema.name] || schema.name;
-    this._form.computeHelper = (schema) =>
-      schema.name === 'columns' ? 'Leave empty for a vertical list.' : undefined;
+    this._form.computeHelper = (schema) => {
+      if (schema.name === 'columns') return 'Leave empty for a vertical list.';
+      if (schema.name === 'entity') {
+        return 'Fallback state shown when no template result is available.';
+      }
+      if (schema.name === 'state_template') {
+        return 'Rendered reactively by Home Assistant and shown in the selected frame corner.';
+      }
+      return undefined;
+    };
     this._form.addEventListener('value-changed', (event) => {
       event.stopPropagation();
       const value = event.detail?.value || {};
@@ -163,7 +206,13 @@ export class TerminalCardWrapperEditor extends HTMLElement {
       } else {
         next.columns = Math.max(1, Number.parseInt(value.columns, 10) || 1);
       }
-      for (const key of ['accent_color', 'title_position']) {
+      for (const key of [
+        'accent_color',
+        'title_position',
+        'entity',
+        'state_template',
+        'state_position',
+      ]) {
         if (value[key] === undefined || value[key] === null || value[key] === '') {
           delete next[key];
         } else {

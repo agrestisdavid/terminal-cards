@@ -86,6 +86,9 @@
         editor.setConfig({
           title: 'lights',
           columns: 2,
+          entity: 'sensor.temp',
+          state_template: '{{ states(config.entity) }} °C',
+          state_position: 'bottom-right',
           cards: [
             { type: 'tile', entity: 'light.desk' },
             { type: 'markdown', content: 'hello' },
@@ -106,6 +109,8 @@
           'wrapper fields do not use HA selectors'
         );
         assert(wrapperForm.computeLabel({ name: 'title' }) === 'Border title', 'HA form label callback missing');
+        assert(wrapperForm.data.entity === 'sensor.temp', 'wrapper state entity was not loaded into the editor');
+        assert(wrapperForm.data.state_position === 'bottom-right', 'wrapper state position was not loaded into the editor');
         wrapperForm.dispatchEvent(
           new CustomEvent('value-changed', {
             bubbles: true,
@@ -128,12 +133,18 @@
                 title: 'new title',
                 accent_color: [166, 227, 161],
                 title_position: 'right',
+                entity: 'sensor.temp',
+                state_template: '{{ states(config.entity) }} °C',
+                state_position: 'bottom-left',
               },
             },
           })
         );
         assert(latest.accent_color[1] === 227, 'wrapper accent color was not updated');
         assert(latest.title_position === 'right', 'wrapper title position was not updated');
+        assert(latest.entity === 'sensor.temp', 'wrapper state entity was not updated');
+        assert(latest.state_template.includes('states'), 'wrapper state template was not updated');
+        assert(latest.state_position === 'bottom-left', 'wrapper state position was not updated');
         assert(editor.shadowRoot.querySelector('ha-tab-group'), 'native HA tab group missing');
         assert(editor.shadowRoot.querySelector('ha-icon-button'), 'native HA icon button missing');
 
@@ -171,6 +182,7 @@
         const titleForm = titleClass.getConfigForm();
         const titleFields = titleForm.schema.flatMap((item) => item.schema || [item]);
         assert(titleFields.find((field) => field.name === 'title').selector.text, 'title card text selector missing');
+        assert(titleFields.find((field) => field.name === 'subtitle').selector.template, 'title card subtitle selector missing');
         assert(titleFields.find((field) => field.name === 'font_size').selector.number, 'title card size selector missing');
         assert(titleFields.some((field) => field.name === 'accent_color'), 'title card accent selector missing');
         assert(titleFields.some((field) => field.name === 'title_position'), 'title card position selector missing');
@@ -220,8 +232,14 @@
           navigationFields.find((field) => field.name === 'state_template').selector.template,
           'navigation state template selector missing'
         );
-        assert(wrapperForm.schema[1].schema.some((field) => field.name === 'accent_color'), 'wrapper accent color missing');
-        assert(wrapperForm.schema[1].schema.some((field) => field.name === 'title_position'), 'wrapper title position missing');
+        const wrapperStateFields = wrapperForm.schema[1].schema;
+        const wrapperAppearanceFields = wrapperForm.schema[2].schema;
+        assert(wrapperStateFields.find((field) => field.name === 'entity').selector.entity, 'wrapper state entity selector missing');
+        assert(wrapperStateFields.find((field) => field.name === 'state_template').selector.template, 'wrapper state template selector missing');
+        const wrapperPosition = wrapperStateFields.find((field) => field.name === 'state_position');
+        assert(wrapperPosition.selector.select.options.length === 4, 'wrapper does not expose all four state corners');
+        assert(wrapperAppearanceFields.some((field) => field.name === 'accent_color'), 'wrapper accent color missing');
+        assert(wrapperAppearanceFields.some((field) => field.name === 'title_position'), 'wrapper title position missing');
 
         document.body.dataset.testStatus = 'PASS';
         document.title = 'PASS terminal-cards editors';
@@ -229,9 +247,9 @@
           'PASS: wrapper fields use native ha-form controls',
           'PASS: native HA tabs, icon buttons, card picker and child editor',
           'PASS: child cards add, update, move and remove',
-          'PASS: title card exposes native title, size and appearance controls',
+          'PASS: title card exposes native title, Markdown/template subtitle, size and appearance controls',
           'PASS: light form uses native expandable controls and actions',
-          'PASS: shutter and navigation forms use native HA selectors',
+          'PASS: wrapper state, shutter and navigation forms use native HA selectors',
         ].join('\n');
       }
 

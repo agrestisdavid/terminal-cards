@@ -222,7 +222,7 @@ export class TerminalShutterCard extends HTMLElement {
       controls_expanded: 'Expand controls by default',
       accent_color: 'Accent color',
       more_icon: 'Controls icon',
-      popup_title: 'Popup title',
+      popup_title: 'Popup border title',
       tap_action: 'Tap action',
       hold_action: 'Hold action',
     };
@@ -298,7 +298,7 @@ export class TerminalShutterCard extends HTMLElement {
         if (schema.name === 'show_position') return 'Shown only when position is supported.';
         if (schema.name === 'show_tilt') return 'Shown only when tilt position is supported.';
         if (schema.name === 'popup_title') {
-          return 'Overrides the card name and entity friendly name in the terminal popup title.';
+          return 'Overrides the default “more-info” title embedded in the popup border.';
         }
         return undefined;
       },

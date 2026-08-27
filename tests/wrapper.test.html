@@ -109,7 +109,19 @@
         rebuildCount += 1;
       });
 
+      let wrapperTemplateCallback;
+      let wrapperTemplateParams;
+      let wrapperTemplateUnsubscribeCount = 0;
       const hass = {
+        user: { name: 'wrapper tester' },
+        formatEntityState: (entity) => entity.state.toUpperCase(),
+        connection: {
+          subscribeMessage(callback, params) {
+            wrapperTemplateCallback = callback;
+            wrapperTemplateParams = params;
+            return Promise.resolve(() => { wrapperTemplateUnsubscribeCount += 1; });
+          },
+        },
         states: {
           'light.desk': {
             state: 'on',
@@ -151,6 +163,9 @@
         title: 'Vertikale Child-Cards',
         title_position: 'right',
         accent_color: [166, 227, 161],
+        entity: 'light.desk',
+        state_template: '{{ states(config.entity) }} W',
+        state_position: 'bottom-right',
         cards: [
           { type: 'mock', title: 'Licht', entity: 'light.desk', state: 'on' },
           { type: 'mock', title: 'Lüfter', entity: 'switch.fan', state: 'off' },
@@ -213,6 +228,16 @@
         ],
       });
 
+      const positionedStates = ['top-left', 'top-right', 'bottom-left', 'bottom-right'].map(
+        (position) => wrapper({
+          title: `State ${position}`,
+          title_position: position === 'top-left' ? 'left' : 'right',
+          entity: 'switch.fan',
+          state_position: position,
+          cards: [],
+        })
+      );
+
       function assert(condition, message) {
         if (!condition) throw new Error(message);
       }
@@ -235,6 +260,12 @@
           'Child-Erstellung hat Timeout erreicht'
         );
 
+        assert(typeof wrapperTemplateCallback === 'function', 'Wrapper-State-Template wurde nicht abonniert');
+        assert(wrapperTemplateParams.type === 'render_template', 'Wrapper nutzt die falsche Template-API');
+        assert(wrapperTemplateParams.entity_ids === 'light.desk', 'Wrapper-Template verfolgt die Entity nicht');
+        wrapperTemplateCallback({ result: '42 W' });
+        await Promise.resolve();
+
         const pane = vertical.shadowRoot.querySelector('.pane');
         const title = vertical.shadowRoot.querySelector('.title');
         const paneStyle = getComputedStyle(pane);
@@ -251,18 +282,25 @@
           'Wrapper besitzt keinen Hover-Akzent-Selektor'
         );
         assert(
-          vertical.shadowRoot.querySelector('style').textContent.includes('.pane:hover > .title'),
-          'Wrapper-Titel übernimmt die Hover-Farbe nicht'
+          vertical.shadowRoot.querySelector('style').textContent.includes('.pane:hover .border-label'),
+          'Wrapper-Rahmenlabels übernehmen die Hover-Farbe nicht'
         );
         assert(
           pane.style.getPropertyValue('--terminal-wrapper-accent') === 'rgb(166 227 161)',
           'Wrapper-Akzentfarbe fehlt'
         );
         assert(title.dataset.titlePosition === 'right', 'Wrapper-Titelposition fehlt');
-        assert(titleStyle.right === '12px', 'Wrapper-Titel sitzt nicht rechts');
-        assert(titleStyle.position === 'absolute', 'Title ist kein Overlay');
+        assert(title.parentElement.dataset.position === 'top-right', 'Wrapper-Titel sitzt nicht rechts oben');
+        assert(getComputedStyle(title.parentElement).right === '12px', 'rechter Wrapper-Slot ist falsch ausgerichtet');
         assert(titleStyle.backgroundColor === paneStyle.backgroundColor, 'Title hat nicht den Pane-Hintergrund');
         assert(titleRect.top < paneRect.top && titleRect.bottom > paneRect.top, 'Title schneidet Rahmenlinie nicht');
+        const borderState = vertical.shadowRoot.querySelector('.state');
+        const stateRect = borderState.getBoundingClientRect();
+        assert(borderState.textContent === '42 w', 'reaktives Wrapper-State-Template wurde nicht gerendert');
+        assert(borderState.dataset.statePosition === 'bottom-right', 'Wrapper-State-Position fehlt');
+        assert(borderState.parentElement.dataset.position === 'bottom-right', 'Wrapper-State sitzt nicht rechts unten');
+        assert(stateRect.top < paneRect.bottom && stateRect.bottom > paneRect.bottom, 'State schneidet untere Rahmenlinie nicht');
+        assert(parseFloat(getComputedStyle(vertical).paddingBottom) >= 8, 'unterer State hat keinen Smartphone-sicheren Außenabstand');
 
         const verticalContainer = vertical.shadowRoot.querySelector('.cards');
         assert(getComputedStyle(verticalContainer).display === 'flex', 'Default ist nicht vertikal/flex');
@@ -315,6 +353,22 @@
           'Sichtbare Terminal Light-Card-Rahmen werden nicht gleich hoch gestreckt'
         );
 
+        positionedStates.forEach((stateWrapper, index) => {
+          const position = ['top-left', 'top-right', 'bottom-left', 'bottom-right'][index];
+          const state = stateWrapper.shadowRoot.querySelector('.state');
+          assert(state.parentElement.dataset.position === position, `State wurde nicht in ${position} platziert`);
+          if (position.startsWith('bottom')) {
+            assert(stateWrapper.dataset.stateEdge === 'bottom', `untere Position ${position} reserviert keinen Außenraum`);
+          }
+        });
+        const collisionSlot = positionedStates[0].shadowRoot.querySelector('.border-slot[data-position="top-left"]');
+        const collisionLabels = [...collisionSlot.querySelectorAll('.border-label')];
+        assert(collisionLabels.length === 2, 'Titel/State-Kollision wurde nicht im gemeinsamen Slot gruppiert');
+        assert(
+          collisionLabels[0].getBoundingClientRect().right <= collisionLabels[1].getBoundingClientRect().left,
+          'Titel und State überlappen in derselben Ecke'
+        );
+
         const emptyPane = empty.shadowRoot.querySelector('.pane');
         assert(emptyPane.getBoundingClientRect().height > 0, 'Leerer Rahmen ist unsichtbar');
         assert(empty.shadowRoot.querySelector('.title').textContent === 'Leerer erlaubter Wrapper', 'Leerer Title fehlt');
@@ -359,6 +413,13 @@
           'Reconnect verwendete freizugebende Child-Instanzen erneut'
         );
         assert(createCount === 12, `Unerwartete Child-Erzeugungszahl: ${createCount}`);
+        vertical.remove();
+        await Promise.resolve();
+        await Promise.resolve();
+        wrapperTemplateCallback({ result: 'stale state' });
+        await Promise.resolve();
+        assert(borderState.textContent === '42 w', 'stales Wrapper-Template renderte nach Disconnect');
+        assert(wrapperTemplateUnsubscribeCount === 1, 'Wrapper-Template wurde beim Disconnect nicht abbestellt');
         assert(
           rebuildCount === 0,
           'Wrapper löste ll-rebuild aus und würde sich in Home Assistant neu erstellen'
@@ -366,6 +427,7 @@
 
         const evidence = [
           'PASS: 1px-Rahmen, quadratische Ecken, Hover-Akzent ohne Glow und Title-Overlay geprüft',
+          'PASS: reaktiver Entity/Template-State in allen vier kollisionsfreien Rahmenecken',
           'PASS: 3 vertikale Child-Cards sichtbar; hass propagiert',
           'PASS: columns=2 ergibt CSS-Grid; einzelne letzte Card spannt über beide Spalten',
           'PASS: echte Light-Cards mit/ohne Controls haben gleich hohe sichtbare Rahmen',

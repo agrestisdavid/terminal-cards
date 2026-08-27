@@ -221,7 +221,7 @@ export class TerminalLightCard extends HTMLElement {
       use_light_color: 'Use current light color',
       accent_color: 'Accent color',
       more_icon: 'Controls icon',
-      popup_title: 'Popup title',
+      popup_title: 'Popup border title',
       show_controls: 'Show controls button',
       controls_expanded: 'Expand controls by default',
       tap_action: 'Tap action',
@@ -311,7 +311,7 @@ export class TerminalLightCard extends HTMLElement {
           return 'Colors the icon and border from the active RGB/HS color or color temperature.';
         }
         if (schema.name === 'popup_title') {
-          return 'Overrides the card name and entity friendly name in the terminal popup title.';
+          return 'Overrides the default “more-info” title embedded in the popup border.';
         }
         return undefined;
       },

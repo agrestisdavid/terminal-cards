@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.5.0 — 2026-08-27
+
+- Rework the mobile entity popup into a full-width bottom sheet below a dynamic 12 vh top gap, with safe-area-aware bottom corner clearance.
+- Use `more-info` as the default TitleCard-style popup border title while keeping `popup_title` available as a visual-editor override.
+- Restore the card/entity name above the formatted popup state.
+- Enclose expanded Logbook entries in their own square terminal frame with `logs` embedded in the border.
+- Make TitleCard more compact and lower its title slightly into the border.
+- Add a reactive `subtitle` field to TitleCard that supports Markdown and Home Assistant templates.
+- Add Wrapper `entity`, `state_template`, and four-corner `state_position` options with collision-safe border labels.
+- Preserve focused popup controls across entity refreshes and guard Logbook retry/reconnect results against stale WebSocket connections.
+
 ## 0.4.0 — 2026-08-27
 
 - Add `custom:terminal-title-card`: a title-only terminal frame with native accent, title-position, and 14-48 px font-size controls.

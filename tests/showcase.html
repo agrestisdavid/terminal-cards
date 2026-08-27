@@ -27,6 +27,12 @@
     </style>
     <script>
       customElements.define(
+        'ha-markdown',
+        class extends HTMLElement {
+          set content(value) { this.textContent = String(value || '').replaceAll('**', ''); }
+        }
+      );
+      customElements.define(
         'ha-icon',
         class extends HTMLElement {
           set icon(value) {
@@ -102,9 +108,11 @@
       const title = document.createElement('terminal-title-card');
       title.setConfig({
         title: 'home status // terminal cards',
+        subtitle: '**system:** {{ states("sensor.camera_count") }}',
         font_size: 28,
         accent_color: [137, 180, 250],
       });
+      title.hass = hass;
       document.querySelector('main').append(title);
 
       const wrapper = document.createElement('terminal-card-wrapper');
@@ -112,6 +120,9 @@
         title: 'lighting',
         title_position: 'right',
         accent_color: [203, 166, 247],
+        entity: 'light.kitchen',
+        state_template: '{{ states(config.entity) }} // 80%',
+        state_position: 'bottom-right',
         columns: 3,
         cards: [
           {
@@ -133,6 +144,8 @@
       controls.setConfig({
         title: 'covers + navigation',
         accent_color: [137, 220, 235],
+        entity: 'cover.office',
+        state_position: 'top-right',
         columns: 2,
         cards: [
           {

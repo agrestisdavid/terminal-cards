@@ -26,15 +26,10 @@ const STYLES = `
       --terminal-wrapper-accent,
       var(--terminal-accent)
     );
-    transition: border-color 120ms ease, box-shadow 120ms ease;
+    transition: border-color 120ms ease;
   }
   .pane:hover, .pane:focus-within {
     border-color: var(--terminal-wrapper-effective-accent);
-    box-shadow: 0 0 8px color-mix(
-      in srgb,
-      var(--terminal-wrapper-effective-accent) 45%,
-      transparent
-    );
   }
   .pane:hover > .title, .pane:focus-within > .title {
     color: var(--terminal-wrapper-effective-accent);

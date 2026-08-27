@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.3.1 — 2026-08-27
+
+- Keep the terminal popup border title fully visible above its scrollable dialog.
+- Replace popup-native sliders with the same responsive segmented Light/Cover controls used by the cards.
+- Remove box-shadow glow from every card, wrapper, and popup while preserving accent borders and focus states.
+- Accent the Navigation Card name on hover/focus like the other interactive cards.
+- Correct Light and popup temperature direction to warm/low Kelvin on the left and cold/high Kelvin on the right.
+- Let Navigation Cards show a formatted entity state or a reactive Home Assistant Jinja template result.
+- Add template subscription generation guards, unsubscribe cleanup, reconnect coverage, and native entity/template editor fields.
+
 ## 0.3.0 — 2026-08-27
 
 - Keep Navigation Card content pinned to the top when adjacent cards expand.

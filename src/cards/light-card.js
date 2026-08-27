@@ -20,14 +20,17 @@ import {
   closeTerminalEntityPopup,
   updateTerminalEntityPopup,
 } from '../shared/popup.js';
+import {
+  hueSegmentColor,
+  SEGMENT_SIZE,
+  segmentCountForWidth,
+  temperatureSegmentColor,
+} from '../shared/segments.js';
 import { TERMINAL_COLORS, TERMINAL_FONT } from '../shared/styles.js';
 
 const TAG = 'terminal-light-card';
 const DEFAULT_TAP_ACTION = { action: 'toggle' };
 const DEFAULT_HOLD_ACTION = { action: 'more-info' };
-const SEGMENT_SIZE = 7;
-const MIN_SEGMENT_GAP = 4;
-const MAX_SEGMENTS = 40;
 
 const STYLES = `
   :host {
@@ -51,7 +54,7 @@ const STYLES = `
     line-height: 1.4;
     --terminal-effective-accent: var(--terminal-accent);
     overflow: hidden;
-    transition: border-color 120ms ease, box-shadow 120ms ease;
+    transition: border-color 120ms ease;
   }
   .card[data-light-color="true"] {
     --terminal-effective-accent: var(--terminal-light-color);
@@ -60,7 +63,6 @@ const STYLES = `
   .card[data-state="unavailable"] { border-color: var(--terminal-error); }
   .card:not([data-state="unavailable"]):hover {
     border-color: var(--terminal-effective-accent);
-    box-shadow: 0 0 8px color-mix(in srgb, var(--terminal-effective-accent) 45%, transparent);
   }
   .card:not([data-state="unavailable"]):hover .icon,
   .card:not([data-state="unavailable"]):hover .name {
@@ -648,13 +650,9 @@ export class TerminalLightCard extends HTMLElement {
         ? 'true'
         : 'false';
       if (control.name === 'hue') {
-        segment.style.background = `hsl(${(index / Math.max(1, count - 1)) * 360} 85% 65%)`;
+        segment.style.background = hueSegmentColor(index, count);
       } else if (control.name === 'temperature') {
-        const progress = index / Math.max(1, count - 1);
-        const red = Math.round(137 + (250 - 137) * progress);
-        const green = Math.round(180 + (179 - 180) * progress);
-        const blue = Math.round(250 + (135 - 250) * progress);
-        segment.style.background = `rgb(${red} ${green} ${blue})`;
+        segment.style.background = temperatureSegmentColor(index, count);
       } else {
         segment.style.removeProperty('background');
       }
@@ -674,13 +672,7 @@ export class TerminalLightCard extends HTMLElement {
       if (control.row.hidden || this._controls.hidden) continue;
       const width = control.track.getBoundingClientRect().width;
       if (width <= 0) continue;
-      const count = Math.max(
-        1,
-        Math.min(
-          MAX_SEGMENTS,
-          Math.floor((width + MIN_SEGMENT_GAP) / (SEGMENT_SIZE + MIN_SEGMENT_GAP))
-        )
-      );
+      const count = segmentCountForWidth(width);
       if (count !== control.segmentElements.length) {
         control.segmentElements = Array.from({ length: count }, () => {
           const segment = document.createElement('span');

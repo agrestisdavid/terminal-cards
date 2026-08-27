@@ -86,6 +86,16 @@
         },
         formatEntityState: (entity) => entity.state,
         callService() {},
+        user: { name: 'preview' },
+        connection: {
+          subscribeMessage(callback) {
+            setTimeout(() => callback({
+              result: '3 cameras online',
+              listeners: { all: false, domains: [], entities: [], time: false },
+            }), 0);
+            return Promise.resolve(() => undefined);
+          },
+        },
       };
 
       await customElements.whenDefined('terminal-card-wrapper');
@@ -126,12 +136,13 @@
             type: 'custom:terminal-navigation-card', name: 'kitchen',
             navigation_path: '/dashboard-test/kitchen', icon: 'mdi:fridge',
             variant: 'continuous', accent_color: [137, 220, 235],
-            more_icon: 'mdi:arrow-right-bold',
+            more_icon: 'mdi:arrow-right-bold', entity: 'cover.office',
           },
           {
             type: 'custom:terminal-navigation-card', name: 'system',
             navigation_path: '/config/dashboard', icon: 'mdi:cog',
-            variant: 'pane', label: 'settings', title_position: 'right',
+            variant: 'pane', title_position: 'right',
+            state_template: '{{ states.sensor.camera_count.state }}',
             accent_color: [166, 227, 161], more_icon: 'mdi:arrow-right-bold',
           },
         ],

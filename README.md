@@ -47,7 +47,7 @@ hold_action:
   action: more-info
 ```
 
-All options are available through Home Assistant-native visual form controls. The entity selector only offers `light.*` entities; action fields use Home Assistant's native action editor. The number of square segments adapts automatically to the rendered card width. With `use_light_color`, the active RGB/HS color or color temperature drives the icon, border, controls icon, brightness segments, and popup accent.
+All options are available through Home Assistant-native visual form controls. The entity selector only offers `light.*` entities; action fields use Home Assistant's native action editor. The number of square segments adapts automatically to the rendered card width. Temperature runs from warm/low Kelvin on the left to cold/high Kelvin on the right. With `use_light_color`, the active RGB/HS color or color temperature drives the icon, border, controls icon, brightness segments, and popup accent.
 
 ### `custom:terminal-shutter-card`
 
@@ -82,16 +82,20 @@ variant: pane # or: continuous
 title_position: right
 accent_color: [137, 220, 235]
 more_icon: mdi:arrow-right-bold
+entity: sensor.kitchen_status
+state_template: "{{ states(config.entity) | upper }}"
 show_path: true
 ```
 
 ## Appearance and terminal popup
 
-Every card supports an optional native RGB color selector through `accent_color: [r, g, b]`. It controls the active border, icons, hover glow, focus state, and controls. Light state color takes precedence when `use_light_color: true`.
+Every card supports an optional native RGB color selector through `accent_color: [r, g, b]`. It controls the active border, icons, hover/focus state, and controls. The design intentionally has no box-shadow glow. Light state color takes precedence when `use_light_color: true`.
 
 Wrapper and pane-style Navigation Cards support `title_position: left|right`. Light, Shutter, and Navigation Cards support `more_icon`; Navigation uses it for the trailing navigation icon. These conventions should also be used by future Terminal Cards.
 
-A `more-info` action now opens the bundle's own terminal-style entity popup instead of Home Assistant's native dialog. The popup contains entity status plus capability-aware Light or Cover controls, supports pointer and keyboard holds, traps focus, closes with Escape/backdrop/close, and returns focus to the card.
+A `more-info` action opens the bundle's own terminal-style entity popup instead of Home Assistant's native dialog. The popup title sits fully above the border without clipping. Its capability-aware Light and Cover ranges use the same responsive square segments as the cards. It supports pointer and keyboard holds, traps focus, closes with Escape/backdrop/close, and returns focus to the card.
+
+Navigation secondary content uses this precedence: a successful reactive `state_template` result, then the formatted `entity` state, then `label`, then the navigation path when `show_path` is enabled. Templates are rendered by Home Assistant's `render_template` WebSocket subscription and update automatically.
 
 ## Installation with HACS
 

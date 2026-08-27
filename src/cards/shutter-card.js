@@ -14,6 +14,10 @@ import {
   closeTerminalEntityPopup,
   updateTerminalEntityPopup,
 } from '../shared/popup.js';
+import {
+  SEGMENT_SIZE,
+  segmentCountForWidth,
+} from '../shared/segments.js';
 import { TERMINAL_COLORS, TERMINAL_FONT } from '../shared/styles.js';
 
 const TAG = 'terminal-shutter-card';
@@ -24,9 +28,6 @@ const SUPPORT_CLOSE = 2;
 const SUPPORT_SET_POSITION = 4;
 const SUPPORT_STOP = 8;
 const SUPPORT_SET_TILT_POSITION = 64;
-const SEGMENT_SIZE = 7;
-const MIN_SEGMENT_GAP = 4;
-const MAX_SEGMENTS = 40;
 
 const STYLES = `
   :host {
@@ -49,7 +50,7 @@ const STYLES = `
     font-size: 13px;
     line-height: 1.4;
     overflow: hidden;
-    transition: border-color 120ms ease, box-shadow 120ms ease;
+    transition: border-color 120ms ease;
   }
   .card[data-state="open"],
   .card[data-state="opening"],
@@ -57,7 +58,6 @@ const STYLES = `
   .card[data-state="unavailable"] { border-color: var(--terminal-error); }
   .card:not([data-state="unavailable"]):hover {
     border-color: var(--terminal-accent);
-    box-shadow: 0 0 8px color-mix(in srgb, var(--terminal-accent) 45%, transparent);
   }
   .card:not([data-state="unavailable"]):hover .icon,
   .card:not([data-state="unavailable"]):hover .name { color: var(--terminal-accent); }
@@ -620,13 +620,7 @@ export class TerminalShutterCard extends HTMLElement {
       if (range.row.hidden || this._controls.hidden) continue;
       const width = range.track.getBoundingClientRect().width;
       if (width <= 0) continue;
-      const count = Math.max(
-        1,
-        Math.min(
-          MAX_SEGMENTS,
-          Math.floor((width + MIN_SEGMENT_GAP) / (SEGMENT_SIZE + MIN_SEGMENT_GAP))
-        )
-      );
+      const count = segmentCountForWidth(width);
       if (count !== range.segmentElements.length) {
         range.segmentElements = Array.from({ length: count }, () => {
           const segment = document.createElement('span');

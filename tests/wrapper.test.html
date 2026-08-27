@@ -238,10 +238,11 @@
         assert(paneStyle.borderTopWidth === '1px', 'Rahmen ist nicht 1px');
         assert(paneStyle.borderTopStyle === 'solid', 'Rahmen ist nicht sichtbar');
         assert(paneStyle.borderRadius === '0px', 'Ecken sind nicht quadratisch');
-        assert(paneStyle.transitionProperty.includes('box-shadow'), 'Wrapper-Glow ist nicht animiert');
+        assert(!paneStyle.transitionProperty.includes('box-shadow'), 'Wrapper animiert weiterhin einen Glow');
+        assert(paneStyle.boxShadow === 'none', 'Wrapper rendert weiterhin einen Glow');
         assert(
           vertical.shadowRoot.querySelector('style').textContent.includes('.pane:hover'),
-          'Wrapper besitzt keinen Hover-Glow-Selektor'
+          'Wrapper besitzt keinen Hover-Akzent-Selektor'
         );
         assert(
           vertical.shadowRoot.querySelector('style').textContent.includes('.pane:hover > .title'),
@@ -347,7 +348,7 @@
         );
 
         const evidence = [
-          'PASS: 1px-Rahmen, quadratische Ecken, Hover-Glow und Title-Overlay geprüft',
+          'PASS: 1px-Rahmen, quadratische Ecken, Hover-Akzent ohne Glow und Title-Overlay geprüft',
           'PASS: 3 vertikale Child-Cards sichtbar; hass propagiert',
           'PASS: columns=2 ergibt CSS-Grid mit gleich hohen Child-Cards je Zeile',
           'PASS: echte Light-Cards mit/ohne Controls haben gleich hohe sichtbare Rahmen',

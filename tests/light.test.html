@@ -184,7 +184,8 @@
           .style.getPropertyValue('--terminal-light-color');
         assert(warmColor.startsWith('rgb('), 'color-temperature feedback is missing');
         assert(warmColor !== 'rgb(10 120 240)', 'temperature feedback reused the RGB color');
-        assert(style.transitionProperty.includes('box-shadow'), 'light hover glow is not animated');
+        assert(!style.transitionProperty.includes('box-shadow'), 'light still transitions a glow');
+        assert(style.boxShadow === 'none', 'light still renders a glow');
 
         const controls = light.shadowRoot.querySelector('.controls');
         const more = light.shadowRoot.querySelector('.more');
@@ -231,6 +232,11 @@
         assert(brightness.querySelector('.control-value').textContent === '50%', 'brightness value is wrong');
         assert(hue.querySelector('.control-value').textContent === '120°', 'hue value is wrong');
         assert(temperature.querySelector('.control-value').textContent === '3500K', 'temperature value is wrong');
+        const temperatureSegments = [...temperature.querySelectorAll('.segment')];
+        const warmSegmentColor = getComputedStyle(temperatureSegments[0]).backgroundColor;
+        const coolSegmentColor = getComputedStyle(temperatureSegments.at(-1)).backgroundColor;
+        assert(warmSegmentColor === 'rgb(250, 179, 135)', 'temperature left side is not warm');
+        assert(coolSegmentColor === 'rgb(137, 180, 250)', 'temperature right side is not cold');
 
         const valueRect = brightness.querySelector('.control-value').getBoundingClientRect();
         const alignedMoreRect = more.getBoundingClientRect();
@@ -307,6 +313,20 @@
         assert(calls[3][2].hs_color[0] === 210 && calls[3][2].hs_color[1] === 60, 'hue payload is wrong');
 
         const temperatureInput = temperature.querySelector('input');
+        temperatureInput.value = temperatureInput.min;
+        temperatureInput.dispatchEvent(new Event('input', { bubbles: true }));
+        assert(
+          temperature.querySelector('.segment[data-selected="true"]') ===
+            temperature.querySelector('.segment'),
+          'minimum warm temperature is not selected on the left'
+        );
+        temperatureInput.value = temperatureInput.max;
+        temperatureInput.dispatchEvent(new Event('input', { bubbles: true }));
+        assert(
+          temperature.querySelector('.segment[data-selected="true"]') ===
+            [...temperature.querySelectorAll('.segment')].at(-1),
+          'maximum cold temperature is not selected on the right'
+        );
         temperatureInput.value = '4200';
         temperatureInput.dispatchEvent(new Event('input', { bubbles: true }));
         temperatureInput.dispatchEvent(new Event('change', { bubbles: true }));

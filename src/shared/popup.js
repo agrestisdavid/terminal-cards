@@ -5,6 +5,12 @@ import {
   lightColorTemperature,
   lightTemperatureBounds,
 } from './light-color.js';
+import {
+  hueSegmentColor,
+  SEGMENT_SIZE,
+  segmentCountForWidth,
+  temperatureSegmentColor,
+} from './segments.js';
 import { TERMINAL_COLORS, TERMINAL_FONT } from './styles.js';
 
 const TAG = 'terminal-entity-popup';
@@ -33,7 +39,7 @@ const STYLES = `
     inset: 0;
     background: rgb(0 0 0 / 62%);
   }
-  .dialog {
+  .dialog-frame {
     --terminal-popup-effective-accent: var(
       --terminal-popup-light-color,
       var(--terminal-accent)
@@ -43,15 +49,19 @@ const STYLES = `
     width: min(480px, calc(100vw - 32px));
     max-height: calc(100vh - 32px);
     margin-top: 8px;
+    overflow: visible;
+  }
+  .dialog {
+    position: relative;
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    max-height: inherit;
     border: 1px solid var(--terminal-popup-effective-accent);
     border-radius: 0;
     background: var(--terminal-background);
-    box-shadow: 0 0 18px color-mix(
-      in srgb,
-      var(--terminal-popup-effective-accent) 38%,
-      transparent
-    );
-    overflow: auto;
+    overflow: hidden;
     outline: none;
   }
   .border-title {
@@ -122,7 +132,10 @@ const STYLES = `
   .body {
     display: grid;
     gap: 16px;
+    min-height: 0;
+    max-height: calc(100vh - 130px);
     padding: 4px 14px 14px;
+    overflow: auto;
   }
   .section { display: grid; gap: 8px; }
   .section-title {
@@ -153,25 +166,76 @@ const STYLES = `
   .action:disabled { cursor: not-allowed; opacity: .45; }
   .range {
     display: grid;
-    grid-template-columns: 38px minmax(0, 1fr) 46px;
+    grid-template-columns: minmax(0, 1fr) 34px;
+    align-items: center;
+    gap: 14px;
+    min-width: 0;
+  }
+  .range-main {
+    display: grid;
+    grid-template-columns: 32px minmax(0, 1fr);
     align-items: center;
     gap: 8px;
+    min-width: 0;
   }
   .range-label, .range-value { color: var(--terminal-dim); font-size: 11px; }
   .range-value { text-align: right; }
-  input[type="range"] {
+  .track {
+    position: relative;
+    display: flex;
+    align-items: center;
+    min-width: 0;
+    height: 20px;
+  }
+  .track:focus-within {
+    outline: 1px solid var(--terminal-popup-effective-accent);
+    outline-offset: 2px;
+  }
+  .track[data-disabled="true"] { cursor: not-allowed; opacity: .55; }
+  .segments {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
     width: 100%;
+    min-width: 0;
+    pointer-events: none;
+  }
+  .segment {
+    box-sizing: border-box;
+    flex: 0 0 ${SEGMENT_SIZE}px;
+    width: ${SEGMENT_SIZE}px;
+    height: ${SEGMENT_SIZE}px;
+    border: 0;
+    background: var(--terminal-dim);
+    opacity: .42;
+  }
+  .range[data-kind="brightness"] .segment[data-active="true"],
+  .range[data-kind="position"] .segment[data-active="true"],
+  .range[data-kind="tilt"] .segment[data-active="true"] {
+    background: var(--terminal-popup-effective-accent);
+    opacity: 1;
+  }
+  .range[data-kind="hue"] .segment[data-selected="true"],
+  .range[data-kind="temperature"] .segment[data-selected="true"] {
+    border: 1px solid var(--terminal-popup-effective-accent);
+    opacity: 1;
+  }
+  input[type="range"] {
+    appearance: none;
+    -webkit-appearance: none;
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
     margin: 0;
-    accent-color: var(--terminal-popup-effective-accent);
+    opacity: 0;
     cursor: pointer;
   }
-  input[type="range"]:focus-visible {
-    outline: 1px solid var(--terminal-popup-effective-accent);
-    outline-offset: 3px;
-  }
+  input[type="range"]:disabled { cursor: not-allowed; }
   @media (max-width: 420px) {
     :host { padding: 8px; }
-    .dialog { width: calc(100vw - 16px); max-height: calc(100vh - 16px); }
+    .dialog-frame { width: calc(100vw - 16px); max-height: calc(100vh - 16px); }
+    .body { max-height: calc(100vh - 114px); }
   }
 `;
 
@@ -193,12 +257,19 @@ export class TerminalEntityPopup extends HTMLElement {
     this._entityId = null;
     this._trigger = null;
     this._returnFocus = null;
+    this._rangeControls = [];
+    this._layoutFrame = null;
+    this._resizeObserver = typeof ResizeObserver === 'function'
+      ? new ResizeObserver(() => this._updateSegmentCounts())
+      : null;
 
     const root = this.attachShadow({ mode: 'open' });
     const style = document.createElement('style');
     style.textContent = STYLES;
     this._backdrop = document.createElement('div');
     this._backdrop.className = 'backdrop';
+    this._dialogFrame = document.createElement('div');
+    this._dialogFrame.className = 'dialog-frame';
     this._dialog = document.createElement('section');
     this._dialog.className = 'dialog';
     this._dialog.setAttribute('role', 'dialog');
@@ -226,12 +297,25 @@ export class TerminalEntityPopup extends HTMLElement {
     this._header.append(this._entityIcon, this._headerText, this._close);
     this._body = document.createElement('div');
     this._body.className = 'body';
-    this._dialog.append(this._borderTitle, this._header, this._body);
-    root.append(style, this._backdrop, this._dialog);
+    this._dialog.append(this._header, this._body);
+    this._dialogFrame.append(this._borderTitle, this._dialog);
+    root.append(style, this._backdrop, this._dialogFrame);
 
     this._close.addEventListener('click', () => this.close());
     this._backdrop.addEventListener('click', () => this.close());
     this.addEventListener('keydown', (event) => this._handleKeydown(event));
+  }
+
+  connectedCallback() {
+    this._resizeObserver?.observe(this._dialog);
+  }
+
+  disconnectedCallback() {
+    this._resizeObserver?.disconnect();
+    if (this._layoutFrame !== null) {
+      cancelAnimationFrame(this._layoutFrame);
+      this._layoutFrame = null;
+    }
   }
 
   show(trigger, hass, config) {
@@ -242,6 +326,8 @@ export class TerminalEntityPopup extends HTMLElement {
     this._entityId = config.entity;
     this._render();
     this.hidden = false;
+    this._updateSegmentCounts();
+    this._scheduleSegmentLayout();
     requestAnimationFrame(() => {
       if (!this.hidden) this._close.focus();
     });
@@ -249,7 +335,11 @@ export class TerminalEntityPopup extends HTMLElement {
 
   updateHass(hass) {
     this._hass = hass;
-    if (!this.hidden) this._render();
+    if (!this.hidden) {
+      this._render();
+      this._updateSegmentCounts();
+      this._scheduleSegmentLayout();
+    }
   }
 
   close(trigger = null) {
@@ -262,7 +352,12 @@ export class TerminalEntityPopup extends HTMLElement {
     this._entityId = null;
     this._trigger = null;
     this._returnFocus = null;
+    this._rangeControls = [];
     this._body.replaceChildren();
+    if (this._layoutFrame !== null) {
+      cancelAnimationFrame(this._layoutFrame);
+      this._layoutFrame = null;
+    }
     if (focusTarget?.isConnected && typeof focusTarget.focus === 'function') {
       focusTarget.focus();
     }
@@ -293,6 +388,7 @@ export class TerminalEntityPopup extends HTMLElement {
     this._entityIcon.icon = this._config?.icon || attributes.icon || this._defaultIcon(domain);
     this._name.textContent = name;
     this._state.textContent = String(formattedState).toLocaleLowerCase();
+    this._rangeControls = [];
     this._body.replaceChildren();
     this._body.append(this._detailsSection(entity, attributes, domain));
 
@@ -369,29 +465,114 @@ export class TerminalEntityPopup extends HTMLElement {
     return actions;
   }
 
-  _range(label, value, min, max, step, callback, disabled = false, suffix = '%') {
-    const row = document.createElement('label');
+  _range(kind, label, value, min, max, step, callback, disabled = false, suffix = '%') {
+    const row = document.createElement('div');
     row.className = 'range';
+    row.dataset.kind = kind;
+    const main = document.createElement('label');
+    main.className = 'range-main';
     const labelElement = document.createElement('span');
     labelElement.className = 'range-label';
     labelElement.textContent = label;
+    const track = document.createElement('span');
+    track.className = 'track';
+    track.dataset.disabled = disabled ? 'true' : 'false';
+    const segments = document.createElement('span');
+    segments.className = 'segments';
+    segments.setAttribute('aria-hidden', 'true');
     const input = document.createElement('input');
     input.type = 'range';
     input.min = String(min);
     input.max = String(max);
     input.step = String(step);
-    input.value = String(value);
     input.disabled = disabled;
     input.setAttribute('aria-label', label);
+    track.append(segments, input);
+    main.append(labelElement, track);
     const valueElement = document.createElement('span');
     valueElement.className = 'range-value';
-    valueElement.textContent = `${value}${suffix}`;
+    row.append(main, valueElement);
+
+    const control = {
+      kind,
+      row,
+      track,
+      segments,
+      input,
+      value: valueElement,
+      min,
+      max,
+      suffix,
+      currentValue: min,
+      segmentElements: [],
+    };
     input.addEventListener('input', () => {
-      valueElement.textContent = `${input.value}${suffix}`;
+      this._renderRange(control, Number(input.value));
     });
     input.addEventListener('change', () => callback(Number(input.value)));
-    row.append(labelElement, input, valueElement);
+    this._rangeControls.push(control);
+    this._renderRange(control, value);
     return row;
+  }
+
+  _renderRange(control, value) {
+    const normalized = Math.max(
+      control.min,
+      Math.min(control.max, Math.round(Number(value) || control.min))
+    );
+    control.currentValue = normalized;
+    control.input.value = String(normalized);
+    control.value.textContent = `${normalized}${control.suffix}`;
+    this._paintRange(control);
+  }
+
+  _paintRange(control) {
+    const count = control.segmentElements.length;
+    if (!count) return;
+    const range = Math.max(1, control.max - control.min);
+    const ratio = (control.currentValue - control.min) / range;
+    const activeSegments = Math.ceil(ratio * count);
+    const selectedSegment = Math.min(
+      count - 1,
+      Math.max(0, Math.round(ratio * (count - 1)))
+    );
+    control.segmentElements.forEach((segment, index) => {
+      const fill = ['brightness', 'position', 'tilt'].includes(control.kind);
+      segment.dataset.active = fill && index < activeSegments ? 'true' : 'false';
+      segment.dataset.selected = !fill && index === selectedSegment ? 'true' : 'false';
+      if (control.kind === 'hue') {
+        segment.style.background = hueSegmentColor(index, count);
+      } else if (control.kind === 'temperature') {
+        segment.style.background = temperatureSegmentColor(index, count);
+      } else {
+        segment.style.removeProperty('background');
+      }
+    });
+  }
+
+  _scheduleSegmentLayout() {
+    if (this._layoutFrame !== null) return;
+    this._layoutFrame = requestAnimationFrame(() => {
+      this._layoutFrame = null;
+      this._updateSegmentCounts();
+    });
+  }
+
+  _updateSegmentCounts() {
+    if (this.hidden) return;
+    for (const control of this._rangeControls) {
+      const count = segmentCountForWidth(control.track.getBoundingClientRect().width);
+      if (!count) continue;
+      if (count !== control.segmentElements.length) {
+        control.segmentElements = Array.from({ length: count }, () => {
+          const segment = document.createElement('span');
+          segment.className = 'segment';
+          return segment;
+        });
+        control.segments.replaceChildren(...control.segmentElements);
+      }
+      this._paintRange(control);
+    }
   }
 
   _lightControls(entity, attributes, unavailable) {
@@ -414,7 +595,7 @@ export class TerminalEntityPopup extends HTMLElement {
       const brightness = entity?.state === 'on'
         ? percentage((Number(attributes.brightness) / 255) * 100)
         : 0;
-      section.append(this._range('bri', brightness, 0, 100, 1, (value) => {
+      section.append(this._range('brightness', 'bri', brightness, 0, 100, 1, (value) => {
         this._callService(
           'light',
           value === 0 ? 'turn_off' : 'turn_on',
@@ -424,7 +605,7 @@ export class TerminalEntityPopup extends HTMLElement {
     }
     if (supportsHue) {
       const hue = percentage(attributes.hs_color?.[0], 360);
-      section.append(this._range('hue', hue, 0, 360, 1, (value) => {
+      section.append(this._range('hue', 'hue', hue, 0, 360, 1, (value) => {
         const saturation = percentage(attributes.hs_color?.[1] || 100);
         this._callService('light', 'turn_on', { hs_color: [value, saturation] });
       }, unavailable, '°'));
@@ -433,6 +614,7 @@ export class TerminalEntityPopup extends HTMLElement {
       const bounds = lightTemperatureBounds(attributes);
       const temperature = lightColorTemperature(attributes, bounds);
       section.append(this._range(
+        'temperature',
         'temp',
         temperature,
         bounds.min,
@@ -478,6 +660,7 @@ export class TerminalEntityPopup extends HTMLElement {
     if (commandButtons.length) section.append(this._actions(commandButtons));
     if (supports(SUPPORT_SET_POSITION)) {
       section.append(this._range(
+        'position',
         'pos',
         percentage(attributes.current_position),
         0,
@@ -489,6 +672,7 @@ export class TerminalEntityPopup extends HTMLElement {
     }
     if (supports(SUPPORT_SET_TILT_POSITION)) {
       section.append(this._range(
+        'tilt',
         'tilt',
         percentage(attributes.current_tilt_position),
         0,

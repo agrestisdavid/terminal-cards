@@ -201,6 +201,14 @@
         assert(navigationFields.some((field) => field.name === 'accent_color'), 'navigation accent color missing');
         assert(navigationFields.some((field) => field.name === 'title_position'), 'navigation title position missing');
         assert(navigationFields.some((field) => field.name === 'more_icon'), 'navigation icon option missing');
+        assert(
+          navigationFields.find((field) => field.name === 'entity').selector.entity,
+          'navigation state entity selector missing'
+        );
+        assert(
+          navigationFields.find((field) => field.name === 'state_template').selector.template,
+          'navigation state template selector missing'
+        );
         assert(wrapperForm.schema[1].schema.some((field) => field.name === 'accent_color'), 'wrapper accent color missing');
         assert(wrapperForm.schema[1].schema.some((field) => field.name === 'title_position'), 'wrapper title position missing');
 

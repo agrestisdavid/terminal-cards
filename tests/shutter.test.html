@@ -95,7 +95,8 @@
         const card = blind.shadowRoot.querySelector('.card');
         const cardStyle = getComputedStyle(card);
         assert(cardStyle.borderRadius === '0px', 'shutter corners are not square');
-        assert(cardStyle.transitionProperty.includes('box-shadow'), 'shutter hover glow is missing');
+        assert(!cardStyle.transitionProperty.includes('box-shadow'), 'shutter still transitions a glow');
+        assert(cardStyle.boxShadow === 'none', 'shutter still renders a glow');
         assert(card.dataset.state === 'open', 'cover state data is wrong');
         assert(blind.shadowRoot.querySelector('.state').textContent === 'open', 'cover state is not lowercase');
         assert(blind.shadowRoot.querySelector('.name').textContent === 'living blind', 'cover name missing');
@@ -111,6 +112,15 @@
         assert(
           popupEntity?.textContent === 'cover.blind',
           `terminal popup targets the wrong cover: ${popup._body?.innerHTML}`
+        );
+        await new Promise((resolve) => requestAnimationFrame(resolve));
+        assert(
+          popup.shadowRoot.querySelector('[data-kind="position"] .segment'),
+          'popup cover position does not use segmented controls'
+        );
+        assert(
+          popup.shadowRoot.querySelector('[data-kind="tilt"] .segment'),
+          'popup cover tilt does not use segmented controls'
         );
         popup.shadowRoot.querySelector('.close').click();
         assert(popup.hidden, 'terminal popup did not close');
@@ -225,7 +235,7 @@
         document.body.dataset.testStatus = 'PASS';
         document.title = 'PASS terminal-shutter-card';
         document.querySelector('#result').textContent = [
-          'PASS: square shutter card with hover glow and controls toggle',
+          'PASS: square shutter card with hover accent, no glow and controls toggle',
           'PASS: capability-aware open, stop, close, position and tilt',
           'PASS: responsive non-overlapping position segments',
           'PASS: unavailable handling, picker metadata and native form',

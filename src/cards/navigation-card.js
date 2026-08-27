@@ -32,11 +32,10 @@ const STYLES = `
     font-family: ${TERMINAL_FONT};
     font-size: 13px;
     line-height: 1.4;
-    transition: border-color 120ms ease, box-shadow 120ms ease;
+    transition: border-color 120ms ease;
   }
   .card:hover, .card:focus-within {
     border-color: var(--terminal-accent);
-    box-shadow: 0 0 8px color-mix(in srgb, var(--terminal-accent) 45%, transparent);
   }
   .card:hover .border-title, .card:focus-within .border-title {
     color: var(--terminal-accent);
@@ -83,8 +82,9 @@ const STYLES = `
   }
   .icon { width: 30px; height: 30px; }
   .arrow { width: 20px; height: 20px; }
-  .card:hover .icon, .card:hover .arrow,
-  .card:focus-within .icon, .card:focus-within .arrow { color: var(--terminal-accent); }
+  .card:hover .icon, .card:hover .name, .card:hover .arrow,
+  .card:focus-within .icon, .card:focus-within .name,
+  .card:focus-within .arrow { color: var(--terminal-accent); }
   .text { flex: 1 1 auto; min-width: 0; pointer-events: none; }
   .name, .secondary {
     overflow: hidden;
@@ -105,6 +105,8 @@ export class TerminalNavigationCard extends HTMLElement {
       variant: 'Border style',
       label: 'Secondary label',
       show_path: 'Show navigation path',
+      entity: 'State entity',
+      state_template: 'State template',
       accent_color: 'Accent color',
       title_position: 'Border title position',
       more_icon: 'Navigation icon',
@@ -139,10 +141,13 @@ export class TerminalNavigationCard extends HTMLElement {
           },
         },
         {
-          type: 'grid',
+          type: 'expandable',
           name: '',
+          title: 'Secondary content',
           flatten: true,
           schema: [
+            { name: 'entity', selector: { entity: {} } },
+            { name: 'state_template', selector: { template: {} } },
             { name: 'label', selector: { text: {} } },
             { name: 'show_path', default: true, selector: { boolean: {} } },
           ],
@@ -156,10 +161,18 @@ export class TerminalNavigationCard extends HTMLElement {
         },
       ],
       computeLabel: (schema) => labels[schema.name] || schema.name,
-      computeHelper: (schema) =>
-        schema.name === 'label'
-          ? 'Overrides the displayed navigation path.'
-          : undefined,
+      computeHelper: (schema) => {
+        if (schema.name === 'state_template') {
+          return 'Rendered reactively by Home Assistant. Template output overrides the entity state.';
+        }
+        if (schema.name === 'entity') {
+          return 'Shows the formatted entity state when no template result is available.';
+        }
+        if (schema.name === 'label') {
+          return 'Fallback shown before the navigation path.';
+        }
+        return undefined;
+      },
     };
   }
 
@@ -176,6 +189,13 @@ export class TerminalNavigationCard extends HTMLElement {
   constructor() {
     super();
     this._config = null;
+    this._hass = null;
+    this._templateValue = undefined;
+    this._templateError = null;
+    this._templateSubscription = null;
+    this._templateConnection = null;
+    this._templateText = null;
+    this._templateGeneration = 0;
 
     const root = this.attachShadow({ mode: 'open' });
     const style = document.createElement('style');
@@ -213,6 +233,15 @@ export class TerminalNavigationCard extends HTMLElement {
     });
   }
 
+  connectedCallback() {
+    this._ensureTemplateSubscription();
+  }
+
+  disconnectedCallback() {
+    this._teardownTemplateSubscription();
+    this._hass = null;
+  }
+
   setConfig(config) {
     if (!config?.name || typeof config.name !== 'string' || !config.name.trim()) {
       throw new Error('terminal-navigation-card: "name" is required');
@@ -231,13 +260,34 @@ export class TerminalNavigationCard extends HTMLElement {
     if (config.variant !== undefined && !VARIANTS.has(config.variant)) {
       throw new Error('terminal-navigation-card: "variant" must be continuous or pane');
     }
+    if (
+      config.entity !== undefined &&
+      (typeof config.entity !== 'string' || !config.entity.trim())
+    ) {
+      throw new Error('terminal-navigation-card: "entity" must be a non-empty entity id');
+    }
+    if (
+      config.state_template !== undefined &&
+      typeof config.state_template !== 'string'
+    ) {
+      throw new Error('terminal-navigation-card: "state_template" must be a string');
+    }
     validateAppearance(config, 'terminal-navigation-card', { titlePosition: true });
+    this._teardownTemplateSubscription();
     this._config = { ...config };
+    this._templateValue = undefined;
+    this._templateError = null;
     this._render();
+    this._ensureTemplateSubscription();
   }
 
-  set hass(_hass) {
-    // Navigation cards do not depend on entity state.
+  set hass(hass) {
+    const connectionChanged = this._hass?.connection !== hass?.connection;
+    this._hass = hass;
+    this._render();
+    if (connectionChanged || this._templateSubscription === null) {
+      this._ensureTemplateSubscription();
+    }
   }
 
   getCardSize() {
@@ -264,10 +314,102 @@ export class TerminalNavigationCard extends HTMLElement {
     this._name.textContent = name;
     this._icon.icon = this._config.icon || 'mdi:arrow-right';
     this._arrow.icon = this._config.more_icon || 'mdi:chevron-right';
-    const secondary = this._config.label ||
-      (this._config.show_path === false ? '' : this._config.navigation_path);
-    this._secondary.hidden = !secondary;
+    const secondary = this._secondaryContent();
+    this._secondary.hidden = secondary === '';
     this._secondary.textContent = secondary;
+  }
+
+  _secondaryContent() {
+    if (this._templateValue !== undefined) return this._templateValue;
+    if (this._config.entity) {
+      const entity = this._hass?.states?.[this._config.entity];
+      if (entity) {
+        return String(this._hass?.formatEntityState?.(entity) || entity.state)
+          .toLocaleLowerCase();
+      }
+      return 'unavailable';
+    }
+    if (this._config.label) return this._config.label;
+    return this._config.show_path === false ? '' : this._config.navigation_path;
+  }
+
+  _ensureTemplateSubscription() {
+    const template = typeof this._config?.state_template === 'string'
+      ? this._config.state_template
+      : '';
+    const connection = this._hass?.connection;
+    if (!this.isConnected || !template.trim() || !connection?.subscribeMessage) return;
+    if (
+      this._templateSubscription !== null &&
+      this._templateConnection === connection &&
+      this._templateText === template
+    ) {
+      return;
+    }
+
+    this._teardownTemplateSubscription();
+    const generation = ++this._templateGeneration;
+    this._templateConnection = connection;
+    this._templateText = template;
+    const params = {
+      type: 'render_template',
+      template,
+      variables: {
+        config: this._config,
+        user: this._hass?.user?.name,
+      },
+      strict: true,
+      report_errors: true,
+      ...(this._config.entity ? { entity_ids: this._config.entity } : {}),
+    };
+
+    try {
+      const subscription = connection.subscribeMessage((message) => {
+        if (
+          generation !== this._templateGeneration ||
+          this._templateConnection !== connection ||
+          this._templateText !== template
+        ) {
+          return;
+        }
+        if (message && typeof message.error === 'string') {
+          this._templateError = message;
+          return;
+        }
+        if (message && typeof message.result === 'string') {
+          this._templateValue = message.result;
+          this._templateError = null;
+          this._render();
+        }
+      }, params);
+      this._templateSubscription = Promise.resolve(subscription);
+      this._templateSubscription.catch(() => {
+        if (generation !== this._templateGeneration) return;
+        this._templateError = { error: 'template unavailable', level: 'ERROR' };
+        this._templateSubscription = null;
+        this._render();
+      });
+    } catch (_error) {
+      if (generation !== this._templateGeneration) return;
+      this._templateError = { error: 'template unavailable', level: 'ERROR' };
+      this._templateSubscription = null;
+      this._render();
+    }
+  }
+
+  _teardownTemplateSubscription() {
+    ++this._templateGeneration;
+    const subscription = this._templateSubscription;
+    this._templateSubscription = null;
+    this._templateConnection = null;
+    this._templateText = null;
+    if (subscription) {
+      Promise.resolve(subscription)
+        .then((unsubscribe) => {
+          if (typeof unsubscribe === 'function') unsubscribe();
+        })
+        .catch(() => undefined);
+    }
   }
 
   _navigate() {

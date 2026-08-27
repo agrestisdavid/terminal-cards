@@ -334,15 +334,17 @@ const STYLES = `
     :host {
       box-sizing: border-box;
       padding: max(12vh, calc(env(safe-area-inset-top) + 12px)) 0
-        max(18px, calc(env(safe-area-inset-bottom) + 8px));
+        max(5vh, calc(env(safe-area-inset-bottom) + 8px));
       padding-top: max(12dvh, calc(env(safe-area-inset-top) + 12px));
+      padding-bottom: max(5dvh, calc(env(safe-area-inset-bottom) + 8px));
       place-items: stretch;
     }
+    .backdrop { background: #fff; }
     .dialog-shell {
       width: 100vw;
       height: 100%;
       max-height: none;
-      padding: 14px 0 0;
+      padding: 0;
     }
     .dialog-frame, .dialog { height: 100%; max-height: none; }
     .border-title {

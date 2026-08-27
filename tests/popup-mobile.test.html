@@ -67,6 +67,7 @@
         const frameRect = frame.getBoundingClientRect();
         const dialogRect = dialog.getBoundingClientRect();
         const expectedTop = innerHeight * 0.12;
+        const expectedBottom = innerHeight * 0.05;
 
         assert(!popup.hidden, 'mobile popup did not open');
         assert(shellRect.width >= innerWidth - 1, 'mobile popup is not edge-to-edge');
@@ -74,8 +75,12 @@
           Math.abs(shellRect.top - expectedTop) < 4,
           `mobile popup top gap is not 12vh: ${shellRect.top}px instead of ${expectedTop}px`
         );
-        assert(innerHeight - shellRect.bottom >= 17, 'mobile popup leaves no bottom corner clearance');
+        assert(
+          Math.abs(innerHeight - shellRect.bottom - expectedBottom) < 4,
+          `mobile popup bottom gap is not 5vh: ${innerHeight - shellRect.bottom}px instead of ${expectedBottom}px`
+        );
         assert(shellRect.height > innerHeight * 0.8, 'mobile popup does not use the remaining screen height');
+        assert(Math.abs(dialogRect.top - shellRect.top) < 0.5, 'accent border is not directly inside the outer area');
         assert(Math.abs(frameRect.height - dialogRect.height) < 0.5, 'mobile dialog does not fill its inner frame');
         assert(getComputedStyle(body).overflowY === 'auto', 'mobile popup body is not independently scrollable');
         assert(getComputedStyle(body).alignContent === 'start', 'mobile popup sections are stretched vertically');
@@ -86,6 +91,11 @@
           'mobile popup does not show the entity name above the state'
         );
         assert(getComputedStyle(shell).borderTopWidth === '0px', 'mobile background shell has a border');
+        assert(getComputedStyle(shell).paddingTop === '0px', 'dark shell spacing remains outside the accent border');
+        assert(
+          getComputedStyle(popup.shadowRoot.querySelector('.backdrop')).backgroundColor === 'rgb(255, 255, 255)',
+          'mobile outer area is not white'
+        );
         assert(body.getBoundingClientRect().height > innerHeight / 2, 'mobile controls have too little vertical space');
         assert(popup.shadowRoot.querySelectorAll('.range').length === 3, 'mobile popup lost controls');
         const logsToggle = popup.shadowRoot.querySelector('.logs-toggle');
@@ -100,8 +110,8 @@
         document.body.dataset.testStatus = 'PASS';
         document.title = 'PASS terminal mobile popup';
         document.querySelector('#result').textContent = [
-          'PASS: mobile popup fills the width below a dynamic 12vh top gap',
-          'PASS: bottom corner clearance and independently scrollable body',
+          'PASS: white outer area leads directly into accent border and card surface',
+          'PASS: full-width popup uses 12vh top and 5vh bottom clearance',
           'PASS: more-info title, entity heading and bordered expanded logs',
         ].join('\n');
       }

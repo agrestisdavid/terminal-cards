@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.5.1 — 2026-08-27
+
+- Make the mobile popup layering explicit: white outer area, accent border, then card surface.
+- Remove the dark shell gap above the accent border and reserve exactly 5 vh of white bottom clearance, with safe-area fallback.
+
 ## 0.5.0 — 2026-08-27
 
 - Rework the mobile entity popup into a full-width bottom sheet below a dynamic 12 vh top gap, with safe-area-aware bottom corner clearance.

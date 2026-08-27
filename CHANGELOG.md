@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.6.0 — 2026-08-27
+
+- Match the mobile popup's bottom outer spacing to its 12 vh top spacing while preserving the 8 px side gaps and safe-area fallback.
+- Keep the expanded Logbook dropdown icon aligned at the far right of its frame.
+- Render service-backed Logbook events with `domain.service · on|off` on the second tree line instead of duplicating the state on the first line.
+- Refresh an open Logbook automatically after the selected entity changes, with a 500 ms debounce and existing stale-connection guards.
+
 ## 0.5.2 — 2026-08-27
 
 - Add an 8 px mobile gap between the popup accent border and both screen edges.

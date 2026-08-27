@@ -34,6 +34,7 @@
         { when: 1700000500, state: 'on', name: 'Popup light' },
         { when: 1700000600, state: 'off', name: 'Popup light', context_service: 'light.turn_off' },
       ];
+      let activeLogbookEntries = logbookEntries;
       const hass = {
         states: {
           'light.popup': {
@@ -57,7 +58,7 @@
         callService: (...args) => calls.push(args),
         callWS: (params) => {
           wsCalls.push(params);
-          return Promise.resolve(logbookEntries);
+          return Promise.resolve(activeLogbookEntries);
         },
       };
 
@@ -224,7 +225,8 @@
         assert(Math.abs(logbookWindow - 24 * 60 * 60 * 1000) < 1000, 'logbook request is not limited to 24 hours');
         const logLines = [...popup.shadowRoot.querySelectorAll('.log-line[role="listitem"]')];
         assert(logLines.length === 6, 'popup does not limit the logbook tree to six changes');
-        assert(logLines[0].querySelector('.log-value').textContent === 'off', 'newest logbook state is not first');
+        assert(logLines[0].querySelector('.log-value').textContent === '', 'service state was duplicated in the first log line');
+        assert(logLines[1].querySelector('.log-value').textContent === 'on', 'newest non-service logbook state is not ordered correctly');
         assert(logLines[0].querySelector('.log-branch').textContent === '├─', 'logbook tree start branch is wrong');
         assert(logLines.at(-1).querySelector('.log-branch').textContent === '└─', 'logbook tree end branch is wrong');
         assert(
@@ -232,8 +234,8 @@
           'numeric/ISO log timestamps do not expose machine-readable datetimes'
         );
         assert(
-          popup.shadowRoot.querySelector('.log-tree').textContent.includes('light.turn_off'),
-          'logbook context line is missing'
+          popup.shadowRoot.querySelector('.log-tree').textContent.includes('light.turn_off · off'),
+          'logbook service/state context line is missing'
         );
         logsToggle.focus();
         popup.updateHass({ ...hass });
@@ -246,6 +248,26 @@
         logsToggle.click();
         await wait(1);
         assert(wsCalls.length === 1, 'cached logbook was fetched again');
+
+        activeLogbookEntries = [
+          { when: 1700000800, state: 'off', context_service: 'toggle' },
+          ...logbookEntries,
+        ];
+        const liveEntity = {
+          ...hass.states['light.popup'],
+          state: 'off',
+          last_updated: '2026-08-27T17:30:00.000Z',
+        };
+        popup.updateHass({
+          ...hass,
+          states: { ...hass.states, 'light.popup': liveEntity },
+        });
+        await wait(650);
+        assert(wsCalls.length === 2, 'open Logbook did not refresh after the entity changed');
+        assert(
+          popup.shadowRoot.querySelector('.log-line.log-context .log-value').textContent === 'light.toggle · off',
+          'live Logbook did not render service and on/off state together on the second line'
+        );
 
         popup.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
         assert(popup.hidden, 'Escape did not close the popup');
@@ -353,8 +375,8 @@
           'PASS: pointer and keyboard holds open the custom terminal popup',
           'PASS: completed holds suppress tap and native more-info',
           'PASS: configurable more-info border title, entity name, state and capability-aware controls',
-          'PASS: on-demand six-entry logbook tree is enclosed by its expanded wrapper',
-          'PASS: focus survives refresh; Logbook retry/reconnect guards reject stale results',
+          'PASS: six-entry Logbook tree shows service · on/off in its expanded wrapper',
+          'PASS: open Logbook refreshes live while retry/reconnect guards reject stale results',
           'PASS: services, Escape, focus restoration and disconnect cleanup',
         ].join('\n');
       }

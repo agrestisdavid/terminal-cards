@@ -225,17 +225,28 @@ const STYLES = `
   .logbook-section[data-open="true"] .logs-toggle {
     position: absolute;
     top: 0;
+    right: 10px;
     left: 10px;
     width: auto;
-    min-height: 0;
-    padding: 0 8px;
+    min-height: 18px;
+    padding: 0;
     transform: translateY(-50%);
+    background: transparent;
+  }
+  .logbook-section[data-open="true"] .logs-label {
+    padding: 0 8px;
     background: var(--terminal-background);
   }
   .logs-toggle ha-icon {
     width: 18px;
     height: 18px;
     --mdc-icon-size: 18px;
+  }
+  .logbook-section[data-open="true"] .logs-toggle ha-icon {
+    box-sizing: content-box;
+    margin-left: auto;
+    padding: 0 4px;
+    background: var(--terminal-background);
   }
   .log-tree {
     display: grid;
@@ -334,9 +345,9 @@ const STYLES = `
     :host {
       box-sizing: border-box;
       padding: max(12vh, calc(env(safe-area-inset-top) + 12px)) 8px
-        max(5vh, calc(env(safe-area-inset-bottom) + 8px));
+        max(12vh, calc(env(safe-area-inset-bottom) + 8px));
       padding-top: max(12dvh, calc(env(safe-area-inset-top) + 12px));
-      padding-bottom: max(5dvh, calc(env(safe-area-inset-bottom) + 8px));
+      padding-bottom: max(12dvh, calc(env(safe-area-inset-bottom) + 8px));
       place-items: stretch;
     }
     .backdrop { background: var(--terminal-background); }
@@ -387,6 +398,7 @@ export class TerminalEntityPopup extends HTMLElement {
     this._rangeControls = [];
     this._layoutFrame = null;
     this._logGeneration = 0;
+    this._logRefreshTimer = null;
     this._logsOpen = false;
     this._logLoading = false;
     this._logEntries = null;
@@ -451,6 +463,7 @@ export class TerminalEntityPopup extends HTMLElement {
   }
 
   disconnectedCallback() {
+    this._cancelLogbookRefresh();
     if (!this.hidden) {
       this.close();
     } else {
@@ -478,6 +491,7 @@ export class TerminalEntityPopup extends HTMLElement {
   }
 
   show(trigger, hass, config) {
+    this._cancelLogbookRefresh();
     ++this._logGeneration;
     this._trigger = trigger;
     this._returnFocus = trigger?.shadowRoot?.activeElement || trigger;
@@ -498,9 +512,13 @@ export class TerminalEntityPopup extends HTMLElement {
   }
 
   updateHass(hass) {
+    const previousEntity = this._entity();
+    const nextEntity = hass?.states?.[this._entityId] || null;
+    const entityChanged = previousEntity !== nextEntity;
     const connectionChanged = this._hass?.connection !== hass?.connection;
     const focusKey = this._captureFocusKey();
     if (connectionChanged) {
+      this._cancelLogbookRefresh();
       ++this._logGeneration;
       this._logLoading = false;
       this._logEntries = null;
@@ -513,6 +531,7 @@ export class TerminalEntityPopup extends HTMLElement {
       this._updateSegmentCounts();
       this._scheduleSegmentLayout();
       if (connectionChanged && this._logsOpen) this._loadLogbook();
+      else if (entityChanged && this._logsOpen) this._scheduleLogbookRefresh();
     }
   }
 
@@ -527,6 +546,7 @@ export class TerminalEntityPopup extends HTMLElement {
     this._trigger = null;
     this._returnFocus = null;
     this._rangeControls = [];
+    this._cancelLogbookRefresh();
     ++this._logGeneration;
     this._logsOpen = false;
     this._logLoading = false;
@@ -597,6 +617,7 @@ export class TerminalEntityPopup extends HTMLElement {
     this._logsToggle.setAttribute('aria-controls', 'terminal-popup-logbook');
     this._logsToggle.setAttribute('aria-expanded', String(this._logsOpen));
     const label = document.createElement('span');
+    label.className = 'logs-label';
     label.textContent = 'logs';
     this._logsIcon = iconElement(
       this._logsOpen ? 'mdi:chevron-up' : 'mdi:chevron-down'
@@ -621,6 +642,7 @@ export class TerminalEntityPopup extends HTMLElement {
     }
     if (this._logTree) this._logTree.hidden = !this._logsOpen;
     if (this._logsSection) this._logsSection.dataset.open = String(this._logsOpen);
+    if (!this._logsOpen) this._cancelLogbookRefresh();
     if (
       this._logsOpen &&
       !this._logLoading &&
@@ -629,6 +651,21 @@ export class TerminalEntityPopup extends HTMLElement {
       this._loadLogbook();
     } else {
       this._renderLogbook();
+    }
+  }
+
+  _scheduleLogbookRefresh() {
+    this._cancelLogbookRefresh();
+    this._logRefreshTimer = setTimeout(() => {
+      this._logRefreshTimer = null;
+      if (!this.hidden && this._logsOpen) this._loadLogbook();
+    }, 500);
+  }
+
+  _cancelLogbookRefresh() {
+    if (this._logRefreshTimer !== null) {
+      clearTimeout(this._logRefreshTimer);
+      this._logRefreshTimer = null;
     }
   }
 
@@ -709,16 +746,29 @@ export class TerminalEntityPopup extends HTMLElement {
       const timestamp = this._logTimestamp(entry.when);
       if (Number.isFinite(timestamp)) time.dateTime = new Date(timestamp).toISOString();
       time.textContent = this._formatLogTime(timestamp);
+      const stateValue = entry.state === undefined
+        ? null
+        : String(entry.state).toLocaleLowerCase();
+      const rawService = entry.context_service;
+      const service = rawService
+        ? String(rawService).includes('.')
+          ? String(rawService)
+          : `${this._entityId?.split('.', 1)[0] || 'homeassistant'}.${rawService}`
+        : null;
       const value = document.createElement('span');
       value.className = 'log-value';
-      value.textContent = String(
-        entry.state ?? entry.message ?? entry.context_message ?? 'changed'
-      ).toLocaleLowerCase();
+      value.textContent = service
+        ? ''
+        : String(
+          entry.state ?? entry.message ?? entry.context_message ?? 'changed'
+        ).toLocaleLowerCase();
       line.append(branch, time, value);
       this._logTree.append(line);
 
-      const context = entry.source || entry.context_name || entry.context_service ||
-        entry.context_message || (entry.state === undefined ? null : entry.message);
+      const context = service
+        ? `${service}${stateValue ? ` · ${stateValue}` : ''}`
+        : entry.source || entry.context_name || entry.context_message ||
+          (entry.state === undefined ? null : entry.message);
       if (context) {
         const contextLine = document.createElement('div');
         contextLine.className = 'log-line log-context';

@@ -67,7 +67,7 @@
         const frameRect = frame.getBoundingClientRect();
         const dialogRect = dialog.getBoundingClientRect();
         const expectedTop = innerHeight * 0.12;
-        const expectedBottom = innerHeight * 0.05;
+        const expectedBottom = innerHeight * 0.12;
 
         assert(!popup.hidden, 'mobile popup did not open');
         assert(
@@ -82,9 +82,9 @@
         );
         assert(
           Math.abs(innerHeight - shellRect.bottom - expectedBottom) < 4,
-          `mobile popup bottom gap is not 5vh: ${innerHeight - shellRect.bottom}px instead of ${expectedBottom}px`
+          `mobile popup bottom gap is not 12vh: ${innerHeight - shellRect.bottom}px instead of ${expectedBottom}px`
         );
-        assert(shellRect.height > innerHeight * 0.8, 'mobile popup does not use the remaining screen height');
+        assert(shellRect.height > innerHeight * 0.74, 'mobile popup does not use the remaining screen height');
         assert(Math.abs(dialogRect.top - shellRect.top) < 0.5, 'accent border is not directly inside the outer area');
         assert(Math.abs(frameRect.height - dialogRect.height) < 0.5, 'mobile dialog does not fill its inner frame');
         assert(getComputedStyle(body).overflowY === 'auto', 'mobile popup body is not independently scrollable');
@@ -110,13 +110,19 @@
         const logsWrapper = popup.shadowRoot.querySelector('.logbook-section');
         assert(logsWrapper.dataset.open === 'true', 'mobile logs do not expand inside their wrapper');
         assert(getComputedStyle(logsWrapper).borderBottomWidth === '1px', 'mobile logs wrapper border is missing');
+        const logsIconRect = logsToggle.querySelector('ha-icon').getBoundingClientRect();
+        const logsWrapperRect = logsWrapper.getBoundingClientRect();
+        assert(
+          logsWrapperRect.right - logsIconRect.right <= 15,
+          'expanded logs dropdown icon is not aligned on the right'
+        );
 
         popup.close();
         document.body.dataset.testStatus = 'PASS';
         document.title = 'PASS terminal mobile popup';
         document.querySelector('#result').textContent = [
           'PASS: card-background outer area leads directly into accent border and card surface',
-          'PASS: popup uses 8px sides, 12vh top and 5vh bottom clearance',
+          'PASS: popup uses 8px sides and matching 12vh top/bottom clearance',
           'PASS: more-info title, entity heading and bordered expanded logs',
         ].join('\n');
       }

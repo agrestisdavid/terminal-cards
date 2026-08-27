@@ -13,6 +13,8 @@ Frames arbitrary Lovelace child cards with a terminal-style title embedded in it
 ```yaml
 type: custom:terminal-card-wrapper
 title: kitchen
+title_position: right
+accent_color: [137, 180, 250]
 columns: 2
 cards:
   - type: tile
@@ -35,6 +37,8 @@ show_brightness: true
 show_hue: true
 show_color_temp: true
 use_light_color: true
+accent_color: [137, 180, 250]
+more_icon: mdi:tune-variant
 show_controls: true
 controls_expanded: false
 tap_action:
@@ -43,7 +47,7 @@ hold_action:
   action: more-info
 ```
 
-All options are available through Home Assistant-native visual form controls. The entity selector only offers `light.*` entities; action fields use Home Assistant's native action editor. The number of square segments adapts automatically to the rendered card width. With `use_light_color`, the active RGB/HS color or color temperature drives the icon and border color.
+All options are available through Home Assistant-native visual form controls. The entity selector only offers `light.*` entities; action fields use Home Assistant's native action editor. The number of square segments adapts automatically to the rendered card width. With `use_light_color`, the active RGB/HS color or color temperature drives the icon, border, controls icon, brightness segments, and popup accent.
 
 ### `custom:terminal-shutter-card`
 
@@ -58,7 +62,11 @@ show_state: true
 show_controls: true
 show_position: true
 show_tilt: true
+accent_color: [249, 226, 175]
+more_icon: mdi:menu
 controls_expanded: false
+hold_action:
+  action: more-info
 ```
 
 ### `custom:terminal-navigation-card`
@@ -70,9 +78,20 @@ type: custom:terminal-navigation-card
 name: kitchen
 navigation_path: /dashboard-test/kitchen
 icon: mdi:fridge
-variant: continuous # or: pane
+variant: pane # or: continuous
+title_position: right
+accent_color: [137, 220, 235]
+more_icon: mdi:arrow-right-bold
 show_path: true
 ```
+
+## Appearance and terminal popup
+
+Every card supports an optional native RGB color selector through `accent_color: [r, g, b]`. It controls the active border, icons, hover glow, focus state, and controls. Light state color takes precedence when `use_light_color: true`.
+
+Wrapper and pane-style Navigation Cards support `title_position: left|right`. Light, Shutter, and Navigation Cards support `more_icon`; Navigation uses it for the trailing navigation icon. These conventions should also be used by future Terminal Cards.
+
+A `more-info` action now opens the bundle's own terminal-style entity popup instead of Home Assistant's native dialog. The popup contains entity status plus capability-aware Light or Cover controls, supports pointer and keyboard holds, traps focus, closes with Escape/backdrop/close, and returns focus to the card.
 
 ## Installation with HACS
 

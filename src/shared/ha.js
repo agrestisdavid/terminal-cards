@@ -1,3 +1,5 @@
+import { showTerminalEntityPopup } from './popup.js';
+
 export const DOCUMENTATION_URL =
   'https://github.com/agrestisdavid/terminal-cards#readme';
 
@@ -44,7 +46,7 @@ export function executeAction(element, hass, config, actionConfig) {
     return;
   }
   if (action === 'more-info') {
-    fireMoreInfo(element, entityId);
+    showTerminalEntityPopup(element, hass, config);
     return;
   }
   if (action === 'navigate' && actionConfig.navigation_path) {

@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.3.0 — 2026-08-27
+
+- Keep Navigation Card content pinned to the top when adjacent cards expand.
+- Stretch capability-aware shutter command buttons across the full available width.
+- Apply active light color to the controls icon and brightness segments.
+- Color the Wrapper border title together with its hover/focus glow.
+- Add native per-card RGB accent selection to Wrapper, Light, Shutter, and Navigation Cards.
+- Add left/right border-title placement to Wrapper and pane-style Navigation Cards.
+- Add configurable controls/navigation icons to Light, Shutter, and Navigation Cards.
+- Replace native More Info actions with an accessible terminal-style entity popup containing status and capability-aware Light/Cover controls.
+- Add pointer/keyboard hold, Escape/backdrop close, focus restoration, and popup lifecycle cleanup.
+
 ## 0.2.0 — 2026-08-27
 
 - Add `custom:terminal-shutter-card` for capability-aware cover control: open, stop, close, position, and tilt.

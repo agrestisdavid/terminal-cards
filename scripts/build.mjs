@@ -26,6 +26,7 @@ for (const element of [
   'terminal-light-card',
   'terminal-shutter-card',
   'terminal-navigation-card',
+  'terminal-entity-popup',
 ]) {
   if (!output.includes(element)) {
     throw new Error(`Build output is missing ${element}`);

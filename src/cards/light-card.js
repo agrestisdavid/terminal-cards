@@ -4,12 +4,27 @@ import {
   executeAction,
   registerCard,
 } from '../shared/ha.js';
+import {
+  appearanceSchema,
+  applyAccentColor,
+  DEFAULT_MORE_ICON,
+  validateAppearance,
+} from '../shared/appearance.js';
+import {
+  activeLightColor,
+  COLOR_MODES,
+  lightColorTemperature,
+  lightTemperatureBounds,
+} from '../shared/light-color.js';
+import {
+  closeTerminalEntityPopup,
+  updateTerminalEntityPopup,
+} from '../shared/popup.js';
 import { TERMINAL_COLORS, TERMINAL_FONT } from '../shared/styles.js';
 
 const TAG = 'terminal-light-card';
 const DEFAULT_TAP_ACTION = { action: 'toggle' };
 const DEFAULT_HOLD_ACTION = { action: 'more-info' };
-const COLOR_MODES = new Set(['hs', 'xy', 'rgb', 'rgbw', 'rgbww']);
 const SEGMENT_SIZE = 7;
 const MIN_SEGMENT_GAP = 4;
 const MAX_SEGMENTS = 40;
@@ -34,24 +49,23 @@ const STYLES = `
     font-family: ${TERMINAL_FONT};
     font-size: 13px;
     line-height: 1.4;
+    --terminal-effective-accent: var(--terminal-accent);
     overflow: hidden;
     transition: border-color 120ms ease, box-shadow 120ms ease;
   }
-  .card[data-state="on"] { border-color: var(--terminal-accent); }
-  .card[data-state="unavailable"] { border-color: var(--terminal-error); }
-  .card[data-light-color="true"] { border-color: var(--terminal-light-color); }
-  .card[data-state="on"][data-light-color="true"] .icon { color: var(--terminal-light-color); }
-  .card:not([data-state="unavailable"]):hover {
-    border-color: var(--terminal-accent);
-    box-shadow: 0 0 8px color-mix(in srgb, var(--terminal-accent) 45%, transparent);
+  .card[data-light-color="true"] {
+    --terminal-effective-accent: var(--terminal-light-color);
   }
-  .card[data-light-color="true"]:hover {
-    border-color: var(--terminal-light-color);
-    box-shadow: 0 0 8px color-mix(in srgb, var(--terminal-light-color) 45%, transparent);
+  .card[data-state="on"] { border-color: var(--terminal-effective-accent); }
+  .card[data-state="unavailable"] { border-color: var(--terminal-error); }
+  .card:not([data-state="unavailable"]):hover {
+    border-color: var(--terminal-effective-accent);
+    box-shadow: 0 0 8px color-mix(in srgb, var(--terminal-effective-accent) 45%, transparent);
   }
   .card:not([data-state="unavailable"]):hover .icon,
-  .card:not([data-state="unavailable"]):hover .name { color: var(--terminal-accent); }
-  .card[data-light-color="true"]:hover .icon { color: var(--terminal-light-color); }
+  .card:not([data-state="unavailable"]):hover .name {
+    color: var(--terminal-effective-accent);
+  }
   .main {
     box-sizing: border-box;
     display: flex;
@@ -64,7 +78,7 @@ const STYLES = `
     user-select: none;
     -webkit-tap-highlight-color: transparent;
   }
-  .main:focus-visible { outline: 1px solid var(--terminal-accent); outline-offset: -3px; }
+  .main:focus-visible { outline: 1px solid var(--terminal-effective-accent); outline-offset: -3px; }
   .icon {
     flex: 0 0 auto;
     width: 30px;
@@ -72,7 +86,7 @@ const STYLES = `
     color: var(--terminal-dim);
     pointer-events: none;
   }
-  .card[data-state="on"] .icon { color: var(--terminal-accent); }
+  .card[data-state="on"] .icon { color: var(--terminal-effective-accent); }
   .card[data-state="unavailable"] .icon { color: var(--terminal-error); }
   .text { flex: 1 1 auto; min-width: 0; pointer-events: none; }
   .name, .state {
@@ -102,7 +116,7 @@ const STYLES = `
   .more[hidden] { display: none; }
   .more:hover, .more:focus-visible, .more[aria-expanded="true"] {
     border-color: currentColor;
-    color: var(--terminal-accent);
+    color: var(--terminal-effective-accent);
     outline: none;
   }
   .more ha-icon {
@@ -148,7 +162,7 @@ const STYLES = `
     height: 20px;
   }
   .track:focus-within {
-    outline: 1px solid var(--terminal-accent);
+    outline: 1px solid var(--terminal-effective-accent);
     outline-offset: 2px;
   }
   .track[data-disabled="true"] { cursor: not-allowed; opacity: .55; }
@@ -170,7 +184,7 @@ const STYLES = `
     opacity: .42;
   }
   .control[data-control="brightness"] .segment[data-active="true"] {
-    background: var(--terminal-accent);
+    background: var(--terminal-effective-accent);
     opacity: 1;
   }
   .control:not([data-control="brightness"]) .segment { opacity: .42; }
@@ -203,6 +217,8 @@ export class TerminalLightCard extends HTMLElement {
       show_hue: 'Show hue',
       show_color_temp: 'Show color temperature',
       use_light_color: 'Use current light color',
+      accent_color: 'Accent color',
+      more_icon: 'Controls icon',
       show_controls: 'Show controls button',
       controls_expanded: 'Expand controls by default',
       tap_action: 'Tap action',
@@ -242,6 +258,13 @@ export class TerminalLightCard extends HTMLElement {
             { name: 'show_controls', default: true, selector: { boolean: {} } },
             { name: 'controls_expanded', default: false, selector: { boolean: {} } },
           ],
+        },
+        {
+          type: 'expandable',
+          name: '',
+          title: 'Appearance',
+          flatten: true,
+          schema: appearanceSchema({ moreIcon: true }),
         },
         {
           type: 'expandable',
@@ -341,9 +364,9 @@ export class TerminalLightCard extends HTMLElement {
     this._more.title = 'Toggle light controls';
     this._more.setAttribute('aria-label', 'Toggle light controls');
     this._more.setAttribute('aria-controls', 'terminal-light-controls');
-    const moreIcon = document.createElement('ha-icon');
-    moreIcon.icon = 'mdi:dots-vertical';
-    this._more.append(moreIcon);
+    this._moreIcon = document.createElement('ha-icon');
+    this._moreIcon.icon = DEFAULT_MORE_ICON;
+    this._more.append(this._moreIcon);
     this._main.append(this._icon, this._text, this._more);
 
     this._controls = document.createElement('div');
@@ -358,13 +381,20 @@ export class TerminalLightCard extends HTMLElement {
 
     this._main.addEventListener('click', () => this._tap());
     this._main.addEventListener('keydown', (event) => {
-      if (
-        event.target === this._main &&
-        (event.key === 'Enter' || event.key === ' ')
-      ) {
+      if (event.target !== this._main) return;
+      if (event.key === 'Enter') {
         event.preventDefault();
         this._tap();
+      } else if (event.key === ' ' && !event.repeat) {
+        event.preventDefault();
+        this._startHold();
       }
+    });
+    this._main.addEventListener('keyup', (event) => {
+      if (event.target !== this._main || event.key !== ' ') return;
+      event.preventDefault();
+      this._cancelHold();
+      this._tap();
     });
     this._main.addEventListener('pointerdown', () => this._startHold());
     for (const eventName of ['pointerup', 'pointercancel', 'pointerleave']) {
@@ -384,6 +414,7 @@ export class TerminalLightCard extends HTMLElement {
 
   disconnectedCallback() {
     this._cancelHold();
+    closeTerminalEntityPopup(this);
     this._resizeObserver?.disconnect();
     if (this._segmentLayoutFrame !== null) {
       cancelAnimationFrame(this._segmentLayoutFrame);
@@ -393,12 +424,14 @@ export class TerminalLightCard extends HTMLElement {
   }
 
   setConfig(config) {
+    closeTerminalEntityPopup(this);
     if (!config?.entity || typeof config.entity !== 'string') {
       throw new Error('terminal-light-card: "entity" is required');
     }
     if (!config.entity.startsWith('light.')) {
       throw new Error('terminal-light-card: "entity" must be a light');
     }
+    validateAppearance(config, 'terminal-light-card');
     const previousDefault = this._config?.controls_expanded;
     this._config = { ...config };
     if (previousDefault !== config.controls_expanded) {
@@ -409,6 +442,7 @@ export class TerminalLightCard extends HTMLElement {
 
   set hass(hass) {
     this._hass = hass;
+    updateTerminalEntityPopup(hass);
     this._render();
   }
 
@@ -513,54 +547,9 @@ export class TerminalLightCard extends HTMLElement {
     return names;
   }
 
-  _temperatureBounds(attributes) {
-    const min = Number(attributes.min_color_temp_kelvin) ||
-      (Number(attributes.max_mireds) ? Math.round(1000000 / Number(attributes.max_mireds)) : 2000);
-    const max = Number(attributes.max_color_temp_kelvin) ||
-      (Number(attributes.min_mireds) ? Math.round(1000000 / Number(attributes.min_mireds)) : 6500);
-    return { min: Math.min(min, max), max: Math.max(min, max) };
-  }
-
-  _lightColor(attributes, state, temperatureBounds, colorTemperature) {
-    if (this._config?.use_light_color !== true || state !== 'on') return null;
-    const colorMode = attributes.color_mode;
-    if (colorMode === 'color_temp') {
-      return this._temperatureColor(colorTemperature, temperatureBounds);
-    }
-    if (COLOR_MODES.has(colorMode)) {
-      const rgb = attributes.rgb_color;
-      if (Array.isArray(rgb) && rgb.length >= 3) {
-        const values = rgb.slice(0, 3).map((value) =>
-          Math.max(0, Math.min(255, Math.round(Number(value) || 0)))
-        );
-        return `rgb(${values.join(' ')})`;
-      }
-      const hs = attributes.hs_color;
-      if (Array.isArray(hs) && hs.length >= 2) {
-        const hue = Math.max(0, Math.min(360, Number(hs[0]) || 0));
-        const saturation = Math.max(0, Math.min(100, Number(hs[1]) || 0));
-        return `hsl(${hue} ${saturation}% 60%)`;
-      }
-    }
-    if (this._supportsColorTemperature() && Number(attributes.color_temp_kelvin)) {
-      return this._temperatureColor(colorTemperature, temperatureBounds);
-    }
-    return null;
-  }
-
-  _temperatureColor(value, bounds) {
-    const range = Math.max(1, bounds.max - bounds.min);
-    const progress = Math.max(0, Math.min(1, (value - bounds.min) / range));
-    const warm = [255, 147, 44];
-    const cool = [202, 218, 255];
-    const color = warm.map((channel, index) =>
-      Math.round(channel + (cool[index] - channel) * progress)
-    );
-    return `rgb(${color.join(' ')})`;
-  }
-
   _render() {
     if (!this._config) return;
+    applyAccentColor(this, this._config.accent_color);
     const entity = this._entity();
     const state = this._dataState();
     const unavailable = state === 'unavailable';
@@ -570,24 +559,9 @@ export class TerminalLightCard extends HTMLElement {
       ? Math.max(1, Math.min(100, rawBrightness))
       : 0;
     const hue = Math.max(0, Math.min(360, Number(attributes.hs_color?.[0]) || 0));
-    const temperatureBounds = this._temperatureBounds(attributes);
-    const colorTemperature = Math.max(
-      temperatureBounds.min,
-      Math.min(
-        temperatureBounds.max,
-        Number(attributes.color_temp_kelvin) ||
-          (Number(attributes.color_temp)
-            ? Math.round(1000000 / Number(attributes.color_temp))
-            : Math.round((temperatureBounds.min + temperatureBounds.max) / 2))
-      )
-    );
-
-    const lightColor = this._lightColor(
-      attributes,
-      state,
-      temperatureBounds,
-      colorTemperature
-    );
+    const temperatureBounds = lightTemperatureBounds(attributes);
+    const colorTemperature = lightColorTemperature(attributes, temperatureBounds);
+    const lightColor = activeLightColor(entity, this._config.use_light_color === true);
     this._card.dataset.state = state;
     this._card.dataset.lightColor = lightColor ? 'true' : 'false';
     if (lightColor) this._card.style.setProperty('--terminal-light-color', lightColor);
@@ -597,6 +571,7 @@ export class TerminalLightCard extends HTMLElement {
       this._config.name || attributes.friendly_name || this._config.entity
     );
     this._icon.icon = this._config.icon || attributes.icon || 'mdi:lightbulb';
+    this._moreIcon.icon = this._config.more_icon || DEFAULT_MORE_ICON;
     this._name.textContent = this._config.name || attributes.friendly_name || this._config.entity;
     this._state.hidden = this._config.show_state === false;
     const formattedState = entity

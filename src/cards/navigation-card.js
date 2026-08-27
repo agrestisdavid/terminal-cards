@@ -1,4 +1,9 @@
 import { DOCUMENTATION_URL, defineElement, registerCard } from '../shared/ha.js';
+import {
+  appearanceSchema,
+  applyAccentColor,
+  validateAppearance,
+} from '../shared/appearance.js';
 import { TERMINAL_COLORS, TERMINAL_FONT } from '../shared/styles.js';
 
 const TAG = 'terminal-navigation-card';
@@ -33,6 +38,9 @@ const STYLES = `
     border-color: var(--terminal-accent);
     box-shadow: 0 0 8px color-mix(in srgb, var(--terminal-accent) 45%, transparent);
   }
+  .card:hover .border-title, .card:focus-within .border-title {
+    color: var(--terminal-accent);
+  }
   .border-title {
     position: absolute;
     top: 0;
@@ -49,11 +57,15 @@ const STYLES = `
     font: 12px/1.4 ${TERMINAL_FONT};
     pointer-events: none;
   }
+  .border-title[data-title-position="right"] {
+    right: 12px;
+    left: auto;
+  }
   .border-title[hidden] { display: none; }
   .main {
     box-sizing: border-box;
     display: flex;
-    flex: 1 1 auto;
+    flex: 0 0 auto;
     align-items: center;
     gap: 14px;
     min-height: 72px;
@@ -93,6 +105,9 @@ export class TerminalNavigationCard extends HTMLElement {
       variant: 'Border style',
       label: 'Secondary label',
       show_path: 'Show navigation path',
+      accent_color: 'Accent color',
+      title_position: 'Border title position',
+      more_icon: 'Navigation icon',
     };
     return {
       schema: [
@@ -131,6 +146,13 @@ export class TerminalNavigationCard extends HTMLElement {
             { name: 'label', selector: { text: {} } },
             { name: 'show_path', default: true, selector: { boolean: {} } },
           ],
+        },
+        {
+          type: 'expandable',
+          name: '',
+          title: 'Appearance',
+          flatten: true,
+          schema: appearanceSchema({ titlePosition: true, moreIcon: true }),
         },
       ],
       computeLabel: (schema) => labels[schema.name] || schema.name,
@@ -209,6 +231,7 @@ export class TerminalNavigationCard extends HTMLElement {
     if (config.variant !== undefined && !VARIANTS.has(config.variant)) {
       throw new Error('terminal-navigation-card: "variant" must be continuous or pane');
     }
+    validateAppearance(config, 'terminal-navigation-card', { titlePosition: true });
     this._config = { ...config };
     this._render();
   }
@@ -227,6 +250,7 @@ export class TerminalNavigationCard extends HTMLElement {
 
   _render() {
     if (!this._config) return;
+    applyAccentColor(this, this._config.accent_color);
     const variant = this._config.variant || 'continuous';
     const pane = variant === 'pane';
     const name = this._config.name.trim();
@@ -234,10 +258,12 @@ export class TerminalNavigationCard extends HTMLElement {
     this._card.dataset.variant = variant;
     this._card.setAttribute('aria-label', `Navigate to ${name}`);
     this._borderTitle.hidden = !pane;
+    this._borderTitle.dataset.titlePosition = this._config.title_position || 'left';
     this._borderTitle.textContent = name;
     this._name.hidden = pane;
     this._name.textContent = name;
     this._icon.icon = this._config.icon || 'mdi:arrow-right';
+    this._arrow.icon = this._config.more_icon || 'mdi:chevron-right';
     const secondary = this._config.label ||
       (this._config.show_path === false ? '' : this._config.navigation_path);
     this._secondary.hidden = !secondary;

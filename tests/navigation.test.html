@@ -45,6 +45,9 @@
         icon: 'mdi:cog',
         variant: 'pane',
         label: 'settings',
+        title_position: 'right',
+        accent_color: [137, 220, 235],
+        more_icon: 'mdi:arrow-right-bold',
       });
       const equalGrid = document.createElement('div');
       equalGrid.id = 'equal-grid';
@@ -58,6 +61,7 @@
         navigation_path: '/lovelace',
         variant: 'pane',
       });
+      equalGrid.style.height = '220px';
       equalGrid.append(gridContinuous, gridPane);
       document.querySelector('#cards').append(equalGrid);
 
@@ -89,9 +93,19 @@
         const titleRect = title.getBoundingClientRect();
         assert(paneCard.dataset.variant === 'pane', 'pane variant missing');
         assert(!title.hidden && title.textContent === 'system', 'pane border title missing');
+        assert(title.dataset.titlePosition === 'right', 'pane title position is missing');
+        assert(getComputedStyle(title).right === '12px', 'pane title is not positioned right');
+        assert(
+          pane.style.getPropertyValue('--terminal-card-accent') === 'rgb(137 220 235)',
+          'navigation accent color is missing'
+        );
         assert(titleRect.top < paneRect.top && titleRect.bottom > paneRect.top, 'pane title does not cut border');
         assert(pane.shadowRoot.querySelector('.name').hidden, 'pane repeats name in content');
         assert(pane.shadowRoot.querySelector('.secondary').textContent === 'settings', 'pane label missing');
+        assert(
+          pane.shadowRoot.querySelector('.arrow').icon === 'mdi:arrow-right-bold',
+          'custom navigation icon is missing'
+        );
 
         const continuousGridRect = gridContinuous.getBoundingClientRect();
         const paneGridRect = gridPane.getBoundingClientRect();
@@ -103,6 +117,13 @@
         assert(
           paneGridCardRect.bottom <= paneGridRect.bottom + 0.5,
           'pane navigation card overflows its stretched grid row'
+        );
+        const gridMainRect = gridContinuous.shadowRoot.querySelector('.main').getBoundingClientRect();
+        const gridCardRect = gridContinuous.shadowRoot.querySelector('.card').getBoundingClientRect();
+        assert(gridMainRect.height <= 73, 'navigation main content stretches vertically');
+        assert(
+          Math.abs(gridMainRect.top - gridCardRect.top) < 1.5,
+          'navigation content is not pinned to the top like light-card content'
         );
 
         const originalPushState = History.prototype.pushState;
@@ -130,6 +151,9 @@
           { name: 'bad variant', navigation_path: '/lovelace', variant: 'round' },
           { name: 'external', navigation_path: 'https://example.com/config' },
           { name: 'protocol relative', navigation_path: '//example.com/config' },
+          { name: 'bad title side', navigation_path: '/lovelace', title_position: 'center' },
+          { name: 'bad color', navigation_path: '/lovelace', accent_color: [999, 0, 0] },
+          { name: 'bad icon', navigation_path: '/lovelace', more_icon: '' },
         ]) {
           try {
             document.createElement('terminal-navigation-card').setConfig(config);
@@ -137,7 +161,7 @@
             invalidConfig += 1;
           }
         }
-        assert(invalidConfig === 5, 'invalid navigation configuration was accepted');
+        assert(invalidConfig === 8, 'invalid navigation configuration was accepted');
         assert(continuous.getCardSize() === 1, 'navigation card size is wrong');
         assert(
           window.customCards.some((entry) => entry.type === 'terminal-navigation-card'),
@@ -149,6 +173,7 @@
         assert(pathField.selector.navigation, 'native navigation selector missing');
         const variantField = fields.find((field) => field.name === 'variant');
         assert(variantField.selector.select.options.length === 2, 'variant selector is incomplete');
+        assert(fields.some((field) => field.name === 'more_icon'), 'navigation icon field missing');
 
         document.body.dataset.testStatus = 'PASS';
         document.title = 'PASS terminal-navigation-card';

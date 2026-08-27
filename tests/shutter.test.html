@@ -78,6 +78,8 @@
         entity: 'cover.blind',
         name: 'living blind',
         icon: 'mdi:blinds-horizontal',
+        accent_color: [249, 226, 175],
+        more_icon: 'mdi:menu',
       });
       const basic = create({ entity: 'cover.basic', controls_expanded: true });
       const offline = create({ entity: 'cover.offline', controls_expanded: true });
@@ -99,20 +101,44 @@
         assert(blind.shadowRoot.querySelector('.name').textContent === 'living blind', 'cover name missing');
         assert(!blind.shadowRoot.querySelector('.title'), 'shutter contains a border title');
 
-        let moreInfoEntity = null;
-        blind.addEventListener('hass-more-info', (event) => {
-          moreInfoEntity = event.detail.entityId;
-        });
+        let nativeMoreInfoCount = 0;
+        blind.addEventListener('hass-more-info', () => { nativeMoreInfoCount += 1; });
         blind.shadowRoot.querySelector('.main').click();
-        assert(moreInfoEntity === 'cover.blind', 'main shutter tap did not open more-info');
+        const popup = document.querySelector('terminal-entity-popup');
+        assert(popup && !popup.hidden, 'main shutter tap did not open the terminal popup');
+        assert(nativeMoreInfoCount === 0, 'shutter still opened native more-info');
+        const popupEntity = popup.shadowRoot.querySelector('.detail-value');
+        assert(
+          popupEntity?.textContent === 'cover.blind',
+          `terminal popup targets the wrong cover: ${popup._body?.innerHTML}`
+        );
+        popup.shadowRoot.querySelector('.close').click();
+        assert(popup.hidden, 'terminal popup did not close');
 
         const expand = blind.shadowRoot.querySelector('.expand');
         const controls = blind.shadowRoot.querySelector('.controls');
         assert(controls.hidden, 'shutter controls are not collapsed by default');
         assert(getComputedStyle(expand).borderRadius === '0px', 'shutter expand button is not square');
+        assert(expand.querySelector('ha-icon').icon === 'mdi:menu', 'custom shutter controls icon is missing');
         expand.click();
         assert(!controls.hidden, 'shutter controls did not expand');
-        assert(moreInfoEntity === 'cover.blind', 'expand button incorrectly opened more-info');
+        assert(
+          blind.style.getPropertyValue('--terminal-card-accent') === 'rgb(249 226 175)',
+          'configured shutter accent color is missing'
+        );
+        const commandButtons = blind.shadowRoot.querySelector('.command-buttons');
+        const commandButtonsRect = commandButtons.getBoundingClientRect();
+        const commandsRect = blind.shadowRoot.querySelector('.commands').getBoundingClientRect();
+        const visibleCommands = [...commandButtons.querySelectorAll('.command:not([hidden])')];
+        assert(
+          Math.abs(commandButtonsRect.width - commandsRect.width) < 0.5,
+          'cover commands do not span the available controls width'
+        );
+        assert(
+          visibleCommands.every((button) => button.getBoundingClientRect().width > 80),
+          'cover command buttons did not share the available width'
+        );
+        assert(popup.hidden, 'expand button incorrectly opened the terminal popup');
         assert(blind.getCardSize() === 3, 'expanded shutter size is wrong');
 
         const position = blind.shadowRoot.querySelector('[data-control="position"]');
@@ -193,6 +219,8 @@
         assert(entityField.selector.entity.filter.domain === 'cover', 'cover selector accepts other domains');
         assert(fields.some((field) => field.name === 'show_position'), 'position form field missing');
         assert(fields.some((field) => field.name === 'show_tilt'), 'tilt form field missing');
+        assert(fields.some((field) => field.name === 'more_icon'), 'shutter controls icon field missing');
+        assert(fields.some((field) => field.name === 'hold_action'), 'shutter hold action field missing');
 
         document.body.dataset.testStatus = 'PASS';
         document.title = 'PASS terminal-shutter-card';

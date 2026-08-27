@@ -4,7 +4,7 @@ import { delimiter, join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { spawnSync } from 'node:child_process';
 
-const tests = ['wrapper', 'light', 'shutter', 'navigation', 'editors'];
+const tests = ['wrapper', 'light', 'shutter', 'navigation', 'popup', 'editors'];
 const candidates = [
   process.env.CHROME_PATH,
   'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',

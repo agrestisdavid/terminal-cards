@@ -1,4 +1,5 @@
 import { DOCUMENTATION_URL, defineElement, registerCard } from '../shared/ha.js';
+import { applyAccentColor, validateAppearance } from '../shared/appearance.js';
 import { TERMINAL_COLORS, TERMINAL_FONT } from '../shared/styles.js';
 
 const TAG = 'terminal-card-wrapper';
@@ -21,11 +22,22 @@ const STYLES = `
     font-family: ${TERMINAL_FONT};
     font-size: 13px;
     line-height: 1.4;
+    --terminal-wrapper-effective-accent: var(
+      --terminal-wrapper-accent,
+      var(--terminal-accent)
+    );
     transition: border-color 120ms ease, box-shadow 120ms ease;
   }
   .pane:hover, .pane:focus-within {
-    border-color: var(--terminal-accent);
-    box-shadow: 0 0 8px color-mix(in srgb, var(--terminal-accent) 45%, transparent);
+    border-color: var(--terminal-wrapper-effective-accent);
+    box-shadow: 0 0 8px color-mix(
+      in srgb,
+      var(--terminal-wrapper-effective-accent) 45%,
+      transparent
+    );
+  }
+  .pane:hover > .title, .pane:focus-within > .title {
+    color: var(--terminal-wrapper-effective-accent);
   }
   .title {
     position: absolute;
@@ -42,6 +54,10 @@ const STYLES = `
     color: var(--terminal-dim);
     font: 12px/1.4 ${TERMINAL_FONT};
     pointer-events: none;
+  }
+  .title[data-title-position="right"] {
+    right: 12px;
+    left: auto;
   }
   .cards {
     display: flex;
@@ -114,12 +130,15 @@ export class TerminalCardWrapper extends HTMLElement {
     ) {
       throw new Error('terminal-card-wrapper: "columns" must be an integer >= 1');
     }
+    validateAppearance(config, 'terminal-card-wrapper', { titlePosition: true });
 
     const generation = ++this._generation;
     this._config = { ...config, cards: [...config.cards] };
     this._cards = [];
     this._creationPromise = null;
     this._title.textContent = config.title;
+    this._title.dataset.titlePosition = config.title_position || 'left';
+    applyAccentColor(this._pane, config.accent_color, '--terminal-wrapper-accent');
     this._pane.setAttribute('aria-label', config.title);
     this._cardContainer.replaceChildren();
 

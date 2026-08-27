@@ -1,12 +1,24 @@
 import {
   DOCUMENTATION_URL,
   defineElement,
-  fireMoreInfo,
+  executeAction,
   registerCard,
 } from '../shared/ha.js';
+import {
+  appearanceSchema,
+  applyAccentColor,
+  DEFAULT_MORE_ICON,
+  validateAppearance,
+} from '../shared/appearance.js';
+import {
+  closeTerminalEntityPopup,
+  updateTerminalEntityPopup,
+} from '../shared/popup.js';
 import { TERMINAL_COLORS, TERMINAL_FONT } from '../shared/styles.js';
 
 const TAG = 'terminal-shutter-card';
+const DEFAULT_TAP_ACTION = { action: 'more-info' };
+const DEFAULT_HOLD_ACTION = { action: 'more-info' };
 const SUPPORT_OPEN = 1;
 const SUPPORT_CLOSE = 2;
 const SUPPORT_SET_POSITION = 4;
@@ -115,13 +127,19 @@ const STYLES = `
     gap: 14px;
     min-width: 0;
   }
-  .command-buttons { display: flex; gap: 8px; }
+  .command-buttons {
+    display: grid;
+    grid-template-columns: repeat(var(--terminal-command-count, 1), minmax(0, 1fr));
+    grid-column: 1 / -1;
+    gap: 8px;
+    width: 100%;
+  }
   .command {
     box-sizing: border-box;
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 34px;
+    width: 100%;
     height: 30px;
     padding: 0;
     border: 1px solid var(--terminal-dim);
@@ -202,6 +220,10 @@ export class TerminalShutterCard extends HTMLElement {
       show_position: 'Show position',
       show_tilt: 'Show tilt position',
       controls_expanded: 'Expand controls by default',
+      accent_color: 'Accent color',
+      more_icon: 'Controls icon',
+      tap_action: 'Tap action',
+      hold_action: 'Hold action',
     };
     return {
       schema: [
@@ -236,6 +258,39 @@ export class TerminalShutterCard extends HTMLElement {
             { name: 'controls_expanded', default: false, selector: { boolean: {} } },
           ],
         },
+        {
+          type: 'expandable',
+          name: '',
+          title: 'Appearance',
+          flatten: true,
+          schema: appearanceSchema({ moreIcon: true }),
+        },
+        {
+          type: 'expandable',
+          name: '',
+          title: 'Actions',
+          flatten: true,
+          schema: [
+            {
+              name: 'tap_action',
+              selector: {
+                ui_action: {
+                  actions: ['more-info', 'navigate', 'url', 'perform-action', 'none'],
+                  default_action: 'more-info',
+                },
+              },
+            },
+            {
+              name: 'hold_action',
+              selector: {
+                ui_action: {
+                  actions: ['more-info', 'navigate', 'url', 'perform-action', 'none'],
+                  default_action: 'more-info',
+                },
+              },
+            },
+          ],
+        },
       ],
       computeLabel: (schema) => labels[schema.name] || schema.name,
       computeHelper: (schema) => {
@@ -263,6 +318,8 @@ export class TerminalShutterCard extends HTMLElement {
     super();
     this._config = null;
     this._hass = null;
+    this._holdTimer = null;
+    this._held = false;
     this._controlsExpanded = false;
     this._layoutFrame = null;
     this._ranges = {};
@@ -294,9 +351,9 @@ export class TerminalShutterCard extends HTMLElement {
     this._expand.title = 'Toggle shutter controls';
     this._expand.setAttribute('aria-label', 'Toggle shutter controls');
     this._expand.setAttribute('aria-controls', 'terminal-shutter-controls');
-    const expandIcon = document.createElement('ha-icon');
-    expandIcon.icon = 'mdi:dots-vertical';
-    this._expand.append(expandIcon);
+    this._expandIcon = document.createElement('ha-icon');
+    this._expandIcon.icon = DEFAULT_MORE_ICON;
+    this._expand.append(this._expandIcon);
     this._main.append(this._icon, this._text, this._expand);
 
     this._controls = document.createElement('div');
@@ -310,20 +367,34 @@ export class TerminalShutterCard extends HTMLElement {
     this._stop = this._commandButton('mdi:stop', 'Stop', 'stop_cover');
     this._close = this._commandButton('mdi:arrow-down', 'Close', 'close_cover');
     this._commandButtons.append(this._open, this._stop, this._close);
-    this._commands.append(this._commandButtons, document.createElement('span'));
+    this._commands.append(this._commandButtons);
     this._controls.append(this._commands);
     this._createRange('position', 'pos', 'set_cover_position', 'position');
     this._createRange('tilt', 'tilt', 'set_cover_tilt_position', 'tilt_position');
     this._card.append(this._main, this._controls);
     root.append(style, this._card);
 
-    this._main.addEventListener('click', () => this._showMoreInfo());
+    this._main.addEventListener('click', () => this._tap());
     this._main.addEventListener('keydown', (event) => {
-      if (event.target === this._main && (event.key === 'Enter' || event.key === ' ')) {
+      if (event.target !== this._main) return;
+      if (event.key === 'Enter') {
         event.preventDefault();
-        this._showMoreInfo();
+        this._tap();
+      } else if (event.key === ' ' && !event.repeat) {
+        event.preventDefault();
+        this._startHold();
       }
     });
+    this._main.addEventListener('keyup', (event) => {
+      if (event.target !== this._main || event.key !== ' ') return;
+      event.preventDefault();
+      this._cancelHold();
+      this._tap();
+    });
+    this._main.addEventListener('pointerdown', () => this._startHold());
+    for (const eventName of ['pointerup', 'pointercancel', 'pointerleave']) {
+      this._main.addEventListener(eventName, () => this._cancelHold());
+    }
     this._expand.addEventListener('pointerdown', (event) => event.stopPropagation());
     this._expand.addEventListener('click', (event) => {
       event.stopPropagation();
@@ -338,6 +409,8 @@ export class TerminalShutterCard extends HTMLElement {
   }
 
   disconnectedCallback() {
+    this._cancelHold();
+    closeTerminalEntityPopup(this);
     this._resizeObserver?.disconnect();
     if (this._layoutFrame !== null) {
       cancelAnimationFrame(this._layoutFrame);
@@ -347,12 +420,14 @@ export class TerminalShutterCard extends HTMLElement {
   }
 
   setConfig(config) {
+    closeTerminalEntityPopup(this);
     if (!config?.entity || typeof config.entity !== 'string') {
       throw new Error('terminal-shutter-card: "entity" is required');
     }
     if (!config.entity.startsWith('cover.')) {
       throw new Error('terminal-shutter-card: "entity" must be a cover');
     }
+    validateAppearance(config, 'terminal-shutter-card');
     const previousDefault = this._config?.controls_expanded;
     this._config = { ...config };
     if (previousDefault !== config.controls_expanded) {
@@ -363,6 +438,7 @@ export class TerminalShutterCard extends HTMLElement {
 
   set hass(hass) {
     this._hass = hass;
+    updateTerminalEntityPopup(hass);
     this._render();
   }
 
@@ -457,6 +533,7 @@ export class TerminalShutterCard extends HTMLElement {
 
   _render() {
     if (!this._config) return;
+    applyAccentColor(this, this._config.accent_color);
     const entity = this._entity();
     const attributes = entity?.attributes || {};
     const state = this._dataState();
@@ -467,6 +544,7 @@ export class TerminalShutterCard extends HTMLElement {
       this._config.name || attributes.friendly_name || this._config.entity
     );
     this._icon.icon = this._config.icon || attributes.icon || 'mdi:blinds-horizontal';
+    this._expandIcon.icon = this._config.more_icon || DEFAULT_MORE_ICON;
     this._name.textContent = this._config.name || attributes.friendly_name || this._config.entity;
     this._state.hidden = this._config.show_state === false;
     const formattedState = entity
@@ -477,7 +555,13 @@ export class TerminalShutterCard extends HTMLElement {
     this._open.hidden = !this._supports(SUPPORT_OPEN);
     this._stop.hidden = !this._supports(SUPPORT_STOP);
     this._close.hidden = !this._supports(SUPPORT_CLOSE);
-    for (const button of [this._open, this._stop, this._close]) button.disabled = unavailable;
+    const visibleCommands = [this._open, this._stop, this._close]
+      .filter((button) => !button.hidden);
+    this._commandButtons.style.setProperty(
+      '--terminal-command-count',
+      String(Math.max(1, visibleCommands.length))
+    );
+    for (const button of visibleCommands) button.disabled = unavailable;
     this._commands.hidden = this._open.hidden && this._stop.hidden && this._close.hidden;
 
     const rawPosition = Number(attributes.current_position);
@@ -555,8 +639,41 @@ export class TerminalShutterCard extends HTMLElement {
     }
   }
 
-  _showMoreInfo() {
-    if (this._config) fireMoreInfo(this, this._config.entity);
+  _tap() {
+    if (!this._hass || !this._config || this._held) {
+      this._held = false;
+      return;
+    }
+    executeAction(
+      this,
+      this._hass,
+      this._config,
+      this._config.tap_action || DEFAULT_TAP_ACTION
+    );
+  }
+
+  _startHold() {
+    this._cancelHold();
+    this._held = false;
+    this._holdTimer = window.setTimeout(() => {
+      this._holdTimer = null;
+      this._held = true;
+      if (this._hass && this._config) {
+        executeAction(
+          this,
+          this._hass,
+          this._config,
+          this._config.hold_action || DEFAULT_HOLD_ACTION
+        );
+      }
+    }, 500);
+  }
+
+  _cancelHold() {
+    if (this._holdTimer !== null) {
+      clearTimeout(this._holdTimer);
+      this._holdTimer = null;
+    }
   }
 
   _callCoverService(service, data = {}) {

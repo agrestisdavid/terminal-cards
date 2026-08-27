@@ -31,7 +31,10 @@
         class extends HTMLElement {
           set icon(value) {
             this._icon = value;
-            this.textContent = value?.includes('dots') ? '⋮' : '◉';
+            if (value?.includes('dots')) this.textContent = '⋮';
+            else if (value?.includes('menu') || value?.includes('tune')) this.textContent = '≡';
+            else if (value?.includes('arrow') || value?.includes('chevron')) this.textContent = '→';
+            else this.textContent = '◉';
             this.style.display = 'grid';
             this.style.placeItems = 'center';
             this.style.fontSize = value?.includes('dots') ? '22px' : '20px';
@@ -89,12 +92,14 @@
       const wrapper = document.createElement('terminal-card-wrapper');
       wrapper.setConfig({
         title: 'lighting',
+        title_position: 'right',
+        accent_color: [203, 166, 247],
         columns: 3,
         cards: [
           {
             type: 'custom:terminal-light-card', entity: 'light.kitchen',
             show_brightness: true, show_hue: true, show_color_temp: true,
-            use_light_color: true, controls_expanded: true,
+            use_light_color: true, more_icon: 'mdi:tune-variant', controls_expanded: true,
           },
           {
             type: 'custom:terminal-light-card', entity: 'light.dining',
@@ -109,21 +114,25 @@
       const controls = document.createElement('terminal-card-wrapper');
       controls.setConfig({
         title: 'covers + navigation',
+        accent_color: [137, 220, 235],
         columns: 3,
         cards: [
           {
             type: 'custom:terminal-shutter-card', entity: 'cover.office',
+            accent_color: [249, 226, 175], more_icon: 'mdi:menu',
             controls_expanded: true,
           },
           {
             type: 'custom:terminal-navigation-card', name: 'kitchen',
             navigation_path: '/dashboard-test/kitchen', icon: 'mdi:fridge',
-            variant: 'continuous',
+            variant: 'continuous', accent_color: [137, 220, 235],
+            more_icon: 'mdi:arrow-right-bold',
           },
           {
             type: 'custom:terminal-navigation-card', name: 'system',
             navigation_path: '/config/dashboard', icon: 'mdi:cog',
-            variant: 'pane', label: 'settings',
+            variant: 'pane', label: 'settings', title_position: 'right',
+            accent_color: [166, 227, 161], more_icon: 'mdi:arrow-right-bold',
           },
         ],
       });

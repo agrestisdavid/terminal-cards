@@ -5,7 +5,7 @@ export const TERMINAL_COLORS = `
   --terminal-background: var(--ha-card-background, var(--card-background-color, #181825));
   --terminal-text: var(--primary-text-color, #cdd6f4);
   --terminal-dim: var(--secondary-text-color, #6c7086);
-  --terminal-accent: var(--accent-color, #89b4fa);
+  --terminal-accent: var(--terminal-card-accent, var(--accent-color, #89b4fa));
   --terminal-error: var(--error-color, #f38ba8);
 `;
 

@@ -119,6 +119,20 @@
           })
         );
         assert(latest.columns === undefined, 'vertical layout was not selected');
+        wrapperForm.dispatchEvent(
+          new CustomEvent('value-changed', {
+            bubbles: true,
+            detail: {
+              value: {
+                title: 'new title',
+                accent_color: [166, 227, 161],
+                title_position: 'right',
+              },
+            },
+          })
+        );
+        assert(latest.accent_color[1] === 227, 'wrapper accent color was not updated');
+        assert(latest.title_position === 'right', 'wrapper title position was not updated');
         assert(editor.shadowRoot.querySelector('ha-tab-group'), 'native HA tab group missing');
         assert(editor.shadowRoot.querySelector('ha-icon-button'), 'native HA icon button missing');
 
@@ -161,7 +175,9 @@
         assert(fields.some((field) => field.name === 'show_hue'), 'light hue option missing');
         assert(fields.some((field) => field.name === 'show_color_temp'), 'light temperature option missing');
         assert(fields.some((field) => field.name === 'show_controls'), 'light controls button option missing');
-        assert(form.schema.filter((field) => field.type === 'expandable').length === 2, 'native expandable groups missing');
+        assert(fields.some((field) => field.name === 'accent_color'), 'light accent color option missing');
+        assert(fields.some((field) => field.name === 'more_icon'), 'light controls icon option missing');
+        assert(form.schema.filter((field) => field.type === 'expandable').length >= 3, 'native expandable groups missing');
         assert(!fields.some((field) => field.name === 'title'), 'light editor contains forbidden title');
         const entityField = fields.find((field) => field.name === 'entity');
         assert(entityField.selector.entity.filter.domain === 'light', 'light selector accepts other domains');
@@ -171,6 +187,9 @@
         const coverEntity = shutterFields.find((field) => field.name === 'entity');
         assert(coverEntity.selector.entity.filter.domain === 'cover', 'shutter selector accepts other domains');
         assert(shutterFields.some((field) => field.name === 'show_tilt'), 'shutter tilt option missing');
+        assert(shutterFields.some((field) => field.name === 'accent_color'), 'shutter accent color missing');
+        assert(shutterFields.some((field) => field.name === 'more_icon'), 'shutter controls icon missing');
+        assert(shutterFields.some((field) => field.name === 'hold_action'), 'shutter hold action missing');
 
         const navigationForm = customElements.get('terminal-navigation-card').getConfigForm();
         const navigationFields = navigationForm.schema.flatMap((item) => item.schema || [item]);
@@ -179,6 +198,11 @@
           'native navigation selector missing'
         );
         assert(navigationFields.some((field) => field.name === 'variant'), 'navigation variant missing');
+        assert(navigationFields.some((field) => field.name === 'accent_color'), 'navigation accent color missing');
+        assert(navigationFields.some((field) => field.name === 'title_position'), 'navigation title position missing');
+        assert(navigationFields.some((field) => field.name === 'more_icon'), 'navigation icon option missing');
+        assert(wrapperForm.schema[1].schema.some((field) => field.name === 'accent_color'), 'wrapper accent color missing');
+        assert(wrapperForm.schema[1].schema.some((field) => field.name === 'title_position'), 'wrapper title position missing');
 
         document.body.dataset.testStatus = 'PASS';
         document.title = 'PASS terminal-cards editors';

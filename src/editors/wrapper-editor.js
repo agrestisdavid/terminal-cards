@@ -1,3 +1,4 @@
+import { appearanceSchema } from '../shared/appearance.js';
 import { defineElement, fireConfigChanged } from '../shared/ha.js';
 
 const TAG = 'terminal-card-wrapper-editor';
@@ -9,6 +10,13 @@ const FORM_SCHEMA = [
       { name: 'title', required: true, selector: { text: {} } },
       { name: 'columns', selector: { number: { min: 1, mode: 'box' } } },
     ],
+  },
+  {
+    type: 'expandable',
+    name: '',
+    title: 'Appearance',
+    flatten: true,
+    schema: appearanceSchema({ titlePosition: true }),
   },
 ];
 
@@ -130,11 +138,19 @@ export class TerminalCardWrapperEditor extends HTMLElement {
     this._form.data = {
       title: this._config.title || '',
       ...(this._config.columns === undefined ? {} : { columns: this._config.columns }),
+      ...(this._config.accent_color === undefined
+        ? {}
+        : { accent_color: this._config.accent_color }),
+      ...(this._config.title_position === undefined
+        ? {}
+        : { title_position: this._config.title_position }),
     };
     this._form.schema = FORM_SCHEMA;
     this._form.computeLabel = (schema) => ({
       title: 'Border title',
       columns: 'Columns',
+      accent_color: 'Accent color',
+      title_position: 'Border title position',
     })[schema.name] || schema.name;
     this._form.computeHelper = (schema) =>
       schema.name === 'columns' ? 'Leave empty for a vertical list.' : undefined;
@@ -146,6 +162,13 @@ export class TerminalCardWrapperEditor extends HTMLElement {
         delete next.columns;
       } else {
         next.columns = Math.max(1, Number.parseInt(value.columns, 10) || 1);
+      }
+      for (const key of ['accent_color', 'title_position']) {
+        if (value[key] === undefined || value[key] === null || value[key] === '') {
+          delete next[key];
+        } else {
+          next[key] = value[key];
+        }
       }
       this._emit(next);
     });

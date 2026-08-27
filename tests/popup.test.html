@@ -1,0 +1,136 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>terminal entity popup test running</title>
+    <style>
+      :root {
+        --card-background-color: #181825;
+        --primary-text-color: #cdd6f4;
+        --secondary-text-color: #6c7086;
+        --accent-color: #89b4fa;
+        --error-color: #f38ba8;
+      }
+      body { background: #11111b; color: #cdd6f4; padding: 24px; }
+      terminal-light-card { display: block; width: 420px; }
+    </style>
+    <script>
+      customElements.define('ha-icon', class extends HTMLElement {});
+    </script>
+    <script type="module" src="../dist/terminal-cards.js"></script>
+  </head>
+  <body>
+    <main id="cards"></main>
+    <pre id="result">WAITING</pre>
+    <script type="module">
+      const calls = [];
+      const hass = {
+        states: {
+          'light.popup': {
+            entity_id: 'light.popup',
+            state: 'on',
+            attributes: {
+              friendly_name: 'Popup light',
+              brightness: 128,
+              color_mode: 'rgb',
+              rgb_color: [40, 180, 90],
+              hs_color: [140, 70],
+              color_temp_kelvin: 3200,
+              min_color_temp_kelvin: 2000,
+              max_color_temp_kelvin: 6500,
+              supported_color_modes: ['rgb', 'color_temp'],
+            },
+          },
+        },
+        formatEntityState: (entity) => entity.state.toUpperCase(),
+        callService: (...args) => calls.push(args),
+      };
+
+      function assert(condition, message) {
+        if (!condition) throw new Error(message);
+      }
+
+      async function wait(milliseconds) {
+        await new Promise((resolve) => setTimeout(resolve, milliseconds));
+      }
+
+      async function run() {
+        await customElements.whenDefined('terminal-light-card');
+        const card = document.createElement('terminal-light-card');
+        card.setConfig({
+          entity: 'light.popup',
+          name: '<b>literal popup light</b>',
+          icon: 'mdi:desk-lamp',
+          use_light_color: true,
+          accent_color: [203, 166, 247],
+        });
+        card.hass = hass;
+        document.querySelector('#cards').append(card);
+        const main = card.shadowRoot.querySelector('.main');
+        main.focus();
+
+        let nativeMoreInfoCount = 0;
+        card.addEventListener('hass-more-info', () => { nativeMoreInfoCount += 1; });
+        main.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }));
+        await wait(550);
+        const popup = document.querySelector('terminal-entity-popup');
+        assert(popup && !popup.hidden, 'pointer hold did not open the terminal popup');
+        main.dispatchEvent(new PointerEvent('pointerup', { bubbles: true }));
+        main.click();
+        assert(calls.length === 0, 'tap action fired after a completed hold');
+        assert(nativeMoreInfoCount === 0, 'hold opened native more-info');
+        assert(popup.shadowRoot.querySelector('.dialog').getAttribute('role') === 'dialog', 'popup lacks dialog role');
+        assert(popup.shadowRoot.querySelector('.dialog').getAttribute('aria-modal') === 'true', 'popup is not modal');
+        assert(
+          popup.shadowRoot.querySelector('.name').textContent === '<b>literal popup light</b>',
+          'popup name was not rendered as literal text'
+        );
+        assert(!popup.shadowRoot.querySelector('.name b'), 'popup interpreted entity name as HTML');
+        assert(
+          getComputedStyle(popup.shadowRoot.querySelector('.dialog')).borderTopColor === 'rgb(40, 180, 90)',
+          'popup does not use the active light color'
+        );
+        assert(popup.shadowRoot.querySelectorAll('.range').length === 3, 'popup light controls are incomplete');
+
+        const brightness = popup.shadowRoot.querySelector('input[aria-label="bri"]');
+        brightness.value = '42';
+        brightness.dispatchEvent(new Event('input', { bubbles: true }));
+        brightness.dispatchEvent(new Event('change', { bubbles: true }));
+        assert(calls[0][0] === 'light' && calls[0][1] === 'turn_on', 'popup brightness service is wrong');
+        assert(calls[0][2].brightness_pct === 42, 'popup brightness payload is wrong');
+        assert(calls[0][3].entity_id === 'light.popup', 'popup brightness target is wrong');
+
+        popup.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+        assert(popup.hidden, 'Escape did not close the popup');
+        assert(card.shadowRoot.activeElement === main, 'popup did not restore focus');
+
+        const beforeKeyboardHold = calls.length;
+        main.dispatchEvent(new KeyboardEvent('keydown', { key: ' ', bubbles: true }));
+        await wait(550);
+        assert(!popup.hidden, 'keyboard hold did not open the popup');
+        main.dispatchEvent(new KeyboardEvent('keyup', { key: ' ', bubbles: true }));
+        assert(calls.length === beforeKeyboardHold, 'keyboard tap fired after a completed hold');
+
+        card.remove();
+        assert(popup.hidden, 'disconnect did not close the card popup');
+        assert(document.querySelectorAll('terminal-entity-popup').length === 1, 'duplicate popup hosts were created');
+
+        document.body.dataset.testStatus = 'PASS';
+        document.title = 'PASS terminal entity popup';
+        document.querySelector('#result').textContent = [
+          'PASS: pointer and keyboard holds open the custom terminal popup',
+          'PASS: completed holds suppress tap and native more-info',
+          'PASS: status and capability-aware light controls render safely',
+          'PASS: services, Escape, focus restoration and disconnect cleanup',
+        ].join('\n');
+      }
+
+      run().catch((error) => {
+        document.body.dataset.testStatus = 'FAIL';
+        document.title = 'FAIL terminal entity popup';
+        document.querySelector('#result').textContent = `FAIL: ${error.stack || error}`;
+        console.error(error);
+      });
+    </script>
+  </body>
+</html>

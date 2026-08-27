@@ -149,6 +149,8 @@
 
       const vertical = wrapper({
         title: 'Vertikale Child-Cards',
+        title_position: 'right',
+        accent_color: [166, 227, 161],
         cards: [
           { type: 'mock', title: 'Licht', entity: 'light.desk', state: 'on' },
           { type: 'mock', title: 'Lüfter', entity: 'switch.fan', state: 'off' },
@@ -241,6 +243,16 @@
           vertical.shadowRoot.querySelector('style').textContent.includes('.pane:hover'),
           'Wrapper besitzt keinen Hover-Glow-Selektor'
         );
+        assert(
+          vertical.shadowRoot.querySelector('style').textContent.includes('.pane:hover > .title'),
+          'Wrapper-Titel übernimmt die Hover-Farbe nicht'
+        );
+        assert(
+          pane.style.getPropertyValue('--terminal-wrapper-accent') === 'rgb(166 227 161)',
+          'Wrapper-Akzentfarbe fehlt'
+        );
+        assert(title.dataset.titlePosition === 'right', 'Wrapper-Titelposition fehlt');
+        assert(titleStyle.right === '12px', 'Wrapper-Titel sitzt nicht rechts');
         assert(titleStyle.position === 'absolute', 'Title ist kein Overlay');
         assert(titleStyle.backgroundColor === paneStyle.backgroundColor, 'Title hat nicht den Pane-Hintergrund');
         assert(titleRect.top < paneRect.top && titleRect.bottom > paneRect.top, 'Title schneidet Rahmenlinie nicht');

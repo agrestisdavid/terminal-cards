@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+## 0.10.0 — 2026-08-28
+
+- Reduce the balanced vertical gap above and below left-positioned TitleCard subtitles, especially with large title sizes.
+- Add Wrapper-style TitleCard border state with entity fallback, reactive template precedence, four-corner positioning, collision-safe labels, and native editor controls.
+- Add `custom:terminal-calendar-card` for one `calendar.*` entity with three upcoming events by default, configurable event count and 30-day search range, optional locations, live WebSocket updates, and native editor controls.
+
 ## 0.9.1 — 2026-08-27
 
 - Align a left-positioned TitleCard subtitle with the title text and balance its vertical spacing between the title and lower border, while preserving the centered right-title layout.

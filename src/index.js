@@ -4,6 +4,7 @@ import './cards/title-card.js';
 import './cards/light-card.js';
 import './cards/switch-card.js';
 import './cards/sensor-card.js';
+import './cards/calendar-card.js';
 import './cards/shutter-card.js';
 import './cards/navigation-card.js';
 

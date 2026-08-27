@@ -38,13 +38,28 @@
         await customElements.whenDefined('terminal-title-card');
         let templateCallback;
         let templateParams;
+        let stateTemplateCallback;
+        let stateTemplateParams;
         let unsubscribeCount = 0;
         const hass = {
           user: { name: 'tester' },
+          states: {
+            'sensor.power': {
+              entity_id: 'sensor.power',
+              state: '42',
+              attributes: { unit_of_measurement: 'W' },
+            },
+          },
+          formatEntityState: () => '42 W',
           connection: {
             subscribeMessage(callback, params) {
-              templateCallback = callback;
-              templateParams = params;
+              if (params.template.includes('border_state')) {
+                stateTemplateCallback = callback;
+                stateTemplateParams = params;
+              } else {
+                templateCallback = callback;
+                templateParams = params;
+              }
               return Promise.resolve(() => { unsubscribeCount += 1; });
             },
           },
@@ -84,7 +99,8 @@
         assert(frameStyle.boxShadow === 'none', 'title card renders a glow');
         assert(titleStyle.fontSize === '30px', 'configurable title size is not applied');
         assert(title.dataset.titlePosition === 'right', 'title position is not applied');
-        assert(titleStyle.right === '12px', 'right title is not aligned');
+        assert(title.parentElement.dataset.position === 'top-right', 'right title is not in the right slot');
+        assert(getComputedStyle(title.parentElement).right === '12px', 'right title is not aligned');
         assert(titleRect.top < frameRect.top && titleRect.bottom > frameRect.top, 'title does not cut the border');
         assert(
           (titleRect.top + titleRect.bottom) / 2 > frameRect.top,
@@ -101,7 +117,7 @@
           Math.abs((subtitleRect.top + subtitleRect.bottom) / 2 - (frameRect.top + frameRect.bottom) / 2) < 1,
           'subtitle is not vertically centered in the title frame'
         );
-        assert(frame.children.length === 2, 'title card subtitle container is missing');
+        assert(frame.children.length === 5, 'title card border slots or subtitle container are missing');
         assert(card.getGridOptions().columns === 12, 'title card is not full-width by default');
         assert(card.getCardSize() === 2, 'title card size does not reflect the large font');
 
@@ -114,6 +130,88 @@
         });
         document.body.prepend(leftCard);
         leftCard.hass = hass;
+
+        const stateCard = document.createElement('terminal-title-card');
+        stateCard.setConfig({
+          title: 'state title',
+          subtitle: 'this is a deliberately long subtitle that wraps across multiple lines without touching the lower border state',
+          entity: 'sensor.power',
+          state_template: '{{ border_state }}',
+          state_position: 'bottom-right',
+          font_size: 48,
+          title_position: 'left',
+        });
+        document.body.prepend(stateCard);
+        stateCard.hass = hass;
+        await Promise.resolve();
+        assert(typeof stateTemplateCallback === 'function', 'border state template did not subscribe');
+        assert(stateTemplateParams.type === 'render_template', 'border state uses the wrong template API');
+        assert(stateTemplateParams.entity_ids === 'sensor.power', 'border state template does not track its entity');
+        const borderState = stateCard.shadowRoot.querySelector('.border-state');
+        assert(borderState.textContent === '42 w', 'border state entity fallback is missing');
+        stateTemplateCallback({ result: 'READY' });
+        await Promise.resolve();
+        assert(borderState.textContent === 'ready', 'reactive border state template result is missing');
+        assert(borderState.parentElement.dataset.position === 'bottom-right', 'border state position is wrong');
+        assert(stateCard.dataset.stateEdge === 'bottom', 'bottom border state has no outer clearance');
+        const stateSubtitleRect = stateCard.shadowRoot.querySelector('.subtitle').getBoundingClientRect();
+        const stateTitleRect = stateCard.shadowRoot.querySelector('.title').getBoundingClientRect();
+        assert(
+          stateSubtitleRect.bottom <= borderState.getBoundingClientRect().top + 0.5,
+          'long subtitle overlaps the lower border state'
+        );
+        assert(
+          Math.abs(
+            (stateSubtitleRect.top - stateTitleRect.bottom) -
+            (borderState.getBoundingClientRect().top - stateSubtitleRect.bottom)
+          ) < 2,
+          'left subtitle is not balanced within the space above its lower border state'
+        );
+
+        const rightStateCard = document.createElement('terminal-title-card');
+        rightStateCard.setConfig({
+          title: 'right state title',
+          subtitle: 'right subtitle remains centered',
+          entity: 'sensor.power',
+          state_position: 'bottom-left',
+          font_size: 30,
+          title_position: 'right',
+        });
+        document.body.prepend(rightStateCard);
+        rightStateCard.hass = hass;
+        const rightStateFrameRect = rightStateCard.shadowRoot.querySelector('.frame').getBoundingClientRect();
+        const rightStateSubtitleRect = rightStateCard.shadowRoot.querySelector('.subtitle').getBoundingClientRect();
+        const rightState = rightStateCard.shadowRoot.querySelector('.border-state');
+        assert(
+          Math.abs(
+            (rightStateSubtitleRect.top + rightStateSubtitleRect.bottom) / 2 -
+            (rightStateFrameRect.top + rightState.getBoundingClientRect().top) / 2
+          ) < 1,
+          'right-title subtitle is not centered in the space above its lower border state'
+        );
+        assert(
+          rightStateSubtitleRect.bottom <= rightState.getBoundingClientRect().top + 0.5,
+          'right-title subtitle overlaps the lower border state'
+        );
+
+        const collisionCard = document.createElement('terminal-title-card');
+        collisionCard.setConfig({
+          title: 'very long title sharing one corner',
+          entity: 'sensor.power',
+          state_position: 'top-left',
+          font_size: 20,
+        });
+        document.body.prepend(collisionCard);
+        collisionCard.hass = hass;
+        const collisionLabels = [...collisionCard.shadowRoot.querySelectorAll(
+          '.border-slot[data-position="top-left"] > *'
+        )];
+        assert(collisionLabels.length === 2, 'title and border state were not grouped in one corner');
+        assert(
+          collisionLabels[0].getBoundingClientRect().right <=
+            collisionLabels[1].getBoundingClientRect().left,
+          'title and border state overlap in the same corner'
+        );
         const leftFrame = leftCard.shadowRoot.querySelector('.frame');
         const leftTitle = leftCard.shadowRoot.querySelector('.title');
         const leftSubtitle = leftCard.shadowRoot.querySelector('.subtitle');
@@ -135,6 +233,10 @@
           `left subtitle gaps differ: title=${titleToSubtitleGap}, bottom=${subtitleToBottomGap}`
         );
         assert(
+          titleToSubtitleGap > 0 && titleToSubtitleGap < 6,
+          `left title-to-subtitle gap is not compact: ${titleToSubtitleGap}`
+        );
+        assert(
           Math.abs((subtitleRect.top + subtitleRect.bottom) / 2 - (frameRect.top + frameRect.bottom) / 2) < 1,
           'right subtitle alignment changed while adjusting the left layout'
         );
@@ -143,6 +245,12 @@
         const fields = form.schema.flatMap((item) => item.schema || [item]);
         assert(fields.find((field) => field.name === 'title').selector.text, 'native title selector missing');
         assert(fields.find((field) => field.name === 'subtitle').selector.template, 'native Markdown/template subtitle selector missing');
+        assert(fields.find((field) => field.name === 'entity').selector.entity, 'title border state entity selector missing');
+        assert(fields.find((field) => field.name === 'state_template').selector.template, 'title border state template selector missing');
+        assert(
+          fields.find((field) => field.name === 'state_position').selector.select.options.length === 4,
+          'title border state does not expose all four corners'
+        );
         const sizeField = fields.find((field) => field.name === 'font_size');
         assert(sizeField.selector.number.min === 14 && sizeField.selector.number.max === 48, 'font-size selector bounds are wrong');
         const accentField = fields.find((field) => field.name === 'accent_color');
@@ -153,6 +261,8 @@
         let invalidSize = false;
         let invalidAccent = false;
         let invalidSubtitle = false;
+        let invalidStateTemplate = false;
+        let invalidStatePosition = false;
         try { document.createElement('terminal-title-card').setConfig({ font_size: 22 }); }
         catch (_error) { invalidTitle = true; }
         try { document.createElement('terminal-title-card').setConfig({ title: 'x', font_size: 80 }); }
@@ -166,10 +276,18 @@
         try {
           document.createElement('terminal-title-card').setConfig({ title: 'x', subtitle: 42 });
         } catch (_error) { invalidSubtitle = true; }
+        try {
+          document.createElement('terminal-title-card').setConfig({ title: 'x', state_template: 42 });
+        } catch (_error) { invalidStateTemplate = true; }
+        try {
+          document.createElement('terminal-title-card').setConfig({ title: 'x', state_position: 'middle' });
+        } catch (_error) { invalidStatePosition = true; }
         assert(invalidTitle, 'missing title was accepted');
         assert(invalidSize, 'invalid font size was accepted');
         assert(invalidAccent, 'custom accent outside the HA theme palette was accepted');
         assert(invalidSubtitle, 'non-string subtitle was accepted');
+        assert(invalidStateTemplate, 'non-string border state template was accepted');
+        assert(invalidStatePosition, 'invalid border state position was accepted');
         assert(
           window.customCards.some((entry) => entry.type === 'terminal-title-card'),
           'title card picker metadata missing'
@@ -200,8 +318,17 @@
         assert(unsubscribeCount === 1, 'template subscription was not cleaned up on config change');
         card.remove();
         leftCard.remove();
+        stateCard.remove();
+        rightStateCard.remove();
+        collisionCard.remove();
         compact.remove();
         legacyAccent.remove();
+        await Promise.resolve();
+        await Promise.resolve();
+        assert(unsubscribeCount === 2, 'title template subscriptions were not cleaned up on disconnect');
+        stateTemplateCallback({ result: 'stale border state' });
+        await Promise.resolve();
+        assert(borderState.textContent === 'ready', 'stale border state rendered after disconnect');
 
         document.body.dataset.testStatus = 'PASS';
         document.title = 'PASS terminal-title-card';
@@ -209,6 +336,7 @@
           'PASS: compact square 1px frame, lowered border title and no glow',
           'PASS: position-aware subtitle inset and balanced left-title spacing',
           'PASS: reactive Markdown/template subtitle with subscription cleanup',
+          'PASS: reactive four-corner border state with entity fallback and cleanup',
           'PASS: native HA theme-color editor, validation and legacy RGB rendering',
         ].join('\n');
       }

@@ -107,6 +107,7 @@
         await customElements.whenDefined('terminal-light-card');
         await customElements.whenDefined('terminal-switch-card');
         await customElements.whenDefined('terminal-sensor-card');
+        await customElements.whenDefined('terminal-calendar-card');
         await customElements.whenDefined('terminal-shutter-card');
         await customElements.whenDefined('terminal-navigation-card');
 
@@ -245,6 +246,12 @@
         const titleFields = titleForm.schema.flatMap((item) => item.schema || [item]);
         assert(titleFields.find((field) => field.name === 'title').selector.text, 'title card text selector missing');
         assert(titleFields.find((field) => field.name === 'subtitle').selector.template, 'title card subtitle selector missing');
+        assert(titleFields.find((field) => field.name === 'entity').selector.entity, 'title border state entity selector missing');
+        assert(titleFields.find((field) => field.name === 'state_template').selector.template, 'title border state template selector missing');
+        assert(
+          titleFields.find((field) => field.name === 'state_position').selector.select.options.length === 4,
+          'title border state does not offer four corners'
+        );
         assert(titleFields.find((field) => field.name === 'font_size').selector.number, 'title card size selector missing');
         const titleAccent = titleFields.find((field) => field.name === 'accent_color');
         assert(titleAccent.selector.ui_color?.default_color === 'accent', 'title card does not use the HA theme color selector');
@@ -293,6 +300,18 @@
         assert(sensorFields.find((field) => field.name === 'off_icon').selector.icon, 'sensor off icon missing');
         assert(sensorFields.find((field) => field.name === 'border_title').selector.text, 'sensor border title missing');
         assert(sensorFields.find((field) => field.name === 'title_position').selector.select, 'sensor border title position missing');
+
+        const calendarForm = customElements.get('terminal-calendar-card').getConfigForm();
+        const calendarFields = calendarForm.schema.flatMap((item) => item.schema || [item]);
+        assert(
+          calendarFields.find((field) => field.name === 'entity').selector.entity.filter.domain === 'calendar',
+          'calendar selector accepts other domains'
+        );
+        assert(calendarFields.find((field) => field.name === 'max_events').selector.number.max === 10, 'calendar event-count option missing');
+        assert(calendarFields.find((field) => field.name === 'days_to_show').selector.number.max === 365, 'calendar search-range option missing');
+        assert(calendarFields.find((field) => field.name === 'show_location').selector.boolean, 'calendar location option missing');
+        assert(calendarFields.find((field) => field.name === 'accent_color').selector.ui_color, 'calendar HA color selector missing');
+        assert(calendarFields.find((field) => field.name === 'title_position').selector.select, 'calendar title position missing');
 
         const shutterForm = customElements.get('terminal-shutter-card').getConfigForm();
         const shutterFields = shutterForm.schema.flatMap((item) => item.schema || [item]);
@@ -358,8 +377,8 @@
           'PASS: wrapper fields use native ha-form controls',
           'PASS: native HA tabs, icon buttons, lazy card picker and child editor',
           'PASS: child cards add, update, move and remove',
-          'PASS: title card exposes native title, Markdown/template subtitle, size and appearance controls',
-          'PASS: light, switch and sensor forms use native entity/action controls',
+          'PASS: title card exposes subtitle, border state, size and appearance controls',
+          'PASS: light, switch, sensor and calendar forms use native controls',
           'PASS: navigation main icon exposes native HA services',
           'PASS: all cards use the native HA theme color selector instead of RGB pickers',
           'PASS: wrapper state, shutter and navigation forms use native HA selectors',

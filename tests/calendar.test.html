@@ -1,0 +1,222 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>terminal-calendar-card test running</title>
+    <style>
+      :root {
+        --card-background-color: #181825;
+        --primary-text-color: #cdd6f4;
+        --secondary-text-color: #6c7086;
+        --accent-color: #89b4fa;
+        --cyan-color: #00bcd4;
+        --error-color: #f38ba8;
+      }
+      body { background: #11111b; color: #cdd6f4; padding: 24px; }
+      terminal-calendar-card { display: block; width: 460px; margin-bottom: 16px; }
+    </style>
+    <script type="module" src="../dist/terminal-cards.js"></script>
+  </head>
+  <body>
+    <main id="cards"></main>
+    <pre id="result">WAITING</pre>
+    <script type="module">
+      const callbacks = [];
+      const params = [];
+      let unsubscribeCount = 0;
+      const connection = {
+        subscribeMessage(callback, request) {
+          callbacks.push(callback);
+          params.push(request);
+          return Promise.resolve(() => { unsubscribeCount += 1; });
+        },
+      };
+      const hass = {
+        locale: { language: 'en-GB' },
+        config: { time_zone: 'America/Los_Angeles' },
+        connection,
+        states: {
+          'calendar.family': {
+            entity_id: 'calendar.family',
+            state: 'off',
+            attributes: { friendly_name: 'Family calendar' },
+          },
+          'calendar.offline': {
+            entity_id: 'calendar.offline',
+            state: 'unavailable',
+            attributes: { friendly_name: 'Offline calendar' },
+          },
+        },
+      };
+
+      function assert(condition, message) {
+        if (!condition) throw new Error(message);
+      }
+
+      const future = (hours) => new Date(Date.now() + hours * 60 * 60 * 1000).toISOString();
+
+      async function run() {
+        await customElements.whenDefined('terminal-calendar-card');
+        const card = document.createElement('terminal-calendar-card');
+        card.setConfig({
+          entity: 'calendar.family',
+          title: 'next events',
+          max_events: 3,
+          days_to_show: 30,
+          accent_color: 'cyan',
+          title_position: 'right',
+        });
+        card.hass = hass;
+        document.querySelector('#cards').append(card);
+        await Promise.resolve();
+
+        assert(callbacks.length === 1, 'calendar event subscription was not created');
+        assert(params[0].type === 'calendar/event/subscribe', 'wrong calendar websocket API');
+        assert(params[0].entity_id === 'calendar.family', 'calendar subscription targets the wrong entity');
+        const requestedDays = (new Date(params[0].end) - new Date(params[0].start)) / 86400000;
+        assert(Math.abs(requestedDays - 30) < 0.01, 'calendar did not request the configured 30-day range');
+
+        callbacks[0]({
+          events: [
+            { summary: 'expired event', start: future(-10) },
+            { summary: 'fourth event', start: future(10), end: future(11), location: 'hidden' },
+            { summary: '<b>first event</b>', start: future(2), end: future(3), location: 'home' },
+            { summary: 'third event', start: future(8), end: future(9) },
+            { summary: 'second event', start: future(5), end: future(6) },
+          ],
+        });
+        await Promise.resolve();
+
+        const frame = card.shadowRoot.querySelector('.card');
+        const title = card.shadowRoot.querySelector('.border-title');
+        const rows = [...card.shadowRoot.querySelectorAll('.event')];
+        assert(getComputedStyle(frame).borderRadius === '0px', 'calendar corners are not square');
+        assert(getComputedStyle(frame).borderTopWidth === '1px', 'calendar border is not 1px');
+        assert(title.textContent === 'next events', 'calendar border title is missing');
+        assert(getComputedStyle(title).right === '12px', 'calendar title cannot be positioned right');
+        assert(rows.length === 3, 'calendar max_events did not limit the list to three');
+        assert(rows[0].querySelector('.summary').textContent === '<b>first event</b>', 'calendar events are not sorted');
+        assert(!rows[0].querySelector('b'), 'calendar summary was interpreted as HTML');
+        assert(rows[1].querySelector('.summary').textContent === 'second event', 'second calendar event is wrong');
+        assert(rows[2].querySelector('.summary').textContent === 'third event', 'third calendar event is wrong');
+        assert(rows[2].querySelector('.branch').textContent === '└─', 'last calendar tree branch is wrong');
+        assert(!card.shadowRoot.querySelector('.location'), 'location is visible without show_location');
+        assert(
+          card.style.getPropertyValue('--terminal-card-accent') === 'var(--cyan-color, #00bcd4)',
+          'calendar accent does not use the HA theme color'
+        );
+
+        const firstCallback = callbacks[0];
+        card.setConfig({
+          entity: 'calendar.family',
+          max_events: 5,
+          days_to_show: 14,
+          show_location: true,
+        });
+        card.hass = hass;
+        await Promise.resolve();
+        await Promise.resolve();
+        assert(callbacks.length === 2, 'calendar config change did not resubscribe');
+        assert(unsubscribeCount === 1, 'old calendar subscription was not cleaned up');
+        firstCallback({ events: [{ summary: 'stale event', start: future(1), end: future(2) }] });
+        assert(!card.shadowRoot.textContent.includes('stale event'), 'stale calendar update was rendered');
+
+        const originalDateNow = Date.now;
+        Date.now = () => Date.parse('2026-01-02T02:00:00Z');
+        callbacks[1]({
+          events: [{
+            summary: 'all day event',
+            start: '2026-01-01',
+            end: '2026-01-02',
+            location: '<office>',
+          }],
+        });
+        await Promise.resolve();
+        Date.now = originalDateNow;
+        assert(card.shadowRoot.querySelector('.when').textContent.includes('all-day'), 'all-day event is not labelled');
+        assert(card.shadowRoot.querySelector('.location').textContent === '<office>', 'event location is missing');
+        assert(!card.shadowRoot.querySelector('.location').querySelector('office'), 'calendar location was interpreted as HTML');
+        assert(card.getCardSize() === 5, 'calendar size does not reflect configured event count');
+        assert(card.getGridOptions().rows === 'auto', 'calendar grid rows are not dynamic');
+
+        const reconnectCallbacks = [];
+        const reconnectConnection = {
+          subscribeMessage(callback, request) {
+            reconnectCallbacks.push(callback);
+            params.push(request);
+            return Promise.resolve(() => { unsubscribeCount += 1; });
+          },
+        };
+        card.hass = { ...hass, connection: reconnectConnection };
+        await Promise.resolve();
+        await Promise.resolve();
+        assert(reconnectCallbacks.length === 1, 'calendar did not resubscribe after connection replacement');
+        assert(unsubscribeCount === 2, 'calendar did not unsubscribe from the replaced connection');
+        callbacks[1]({ events: [{ summary: 'stale connection', start: future(1), end: future(2) }] });
+        assert(!card.shadowRoot.textContent.includes('stale connection'), 'stale connection update was rendered');
+
+        reconnectCallbacks[0]({ events: null });
+        assert(
+          card.shadowRoot.querySelector('.status').textContent === 'calendar events unavailable',
+          'calendar subscription error is not shown'
+        );
+
+        const offline = document.createElement('terminal-calendar-card');
+        offline.setConfig({ entity: 'calendar.offline' });
+        offline.hass = hass;
+        document.querySelector('#cards').append(offline);
+        assert(offline.shadowRoot.querySelector('.card').dataset.state === 'unavailable', 'offline calendar state missing');
+        assert(
+          getComputedStyle(offline.shadowRoot.querySelector('.card')).borderTopColor === 'rgb(243, 139, 168)',
+          'offline calendar does not use the error border'
+        );
+
+        const Card = customElements.get('terminal-calendar-card');
+        const form = Card.getConfigForm();
+        const fields = form.schema.flatMap((item) => item.schema || [item]);
+        assert(fields.find((field) => field.name === 'entity').selector.entity.filter.domain === 'calendar', 'calendar entity selector is not domain-filtered');
+        assert(fields.find((field) => field.name === 'max_events').selector.number.max === 10, 'calendar event-count selector is wrong');
+        assert(fields.find((field) => field.name === 'days_to_show').selector.number.max === 365, 'calendar day selector is wrong');
+        assert(fields.find((field) => field.name === 'show_location').selector.boolean, 'calendar location toggle missing');
+        assert(fields.find((field) => field.name === 'accent_color').selector.ui_color, 'calendar HA color selector missing');
+        assert(fields.find((field) => field.name === 'title_position').selector.select, 'calendar title position selector missing');
+        assert(Card.getStubConfig(hass).entity === 'calendar.family', 'calendar stub did not find a real calendar');
+        assert(window.customCards.some((entry) => entry.type === 'terminal-calendar-card'), 'calendar picker metadata missing');
+
+        for (const invalidConfig of [
+          { entity: 'sensor.temperature' },
+          { entity: 'calendar.family', max_events: 0 },
+          { entity: 'calendar.family', days_to_show: 366 },
+          { entity: 'calendar.family', show_location: 'yes' },
+        ]) {
+          let invalid = false;
+          try { document.createElement('terminal-calendar-card').setConfig(invalidConfig); }
+          catch (_error) { invalid = true; }
+          assert(invalid, `invalid calendar config was accepted: ${JSON.stringify(invalidConfig)}`);
+        }
+
+        card.remove();
+        offline.remove();
+        await Promise.resolve();
+        await Promise.resolve();
+        assert(unsubscribeCount === 4, 'calendar subscriptions were not cleaned up on disconnect');
+
+        document.body.dataset.testStatus = 'PASS';
+        document.title = 'PASS terminal-calendar-card';
+        document.querySelector('#result').textContent = [
+          'PASS: next events sorted, limited and rendered safely',
+          'PASS: all-day time and optional location formatting',
+          'PASS: reactive calendar subscription with stale/disconnect cleanup',
+          'PASS: native calendar editor selectors and validation',
+        ].join('\n');
+      }
+
+      run().catch((error) => {
+        document.body.dataset.testStatus = 'FAIL';
+        document.title = 'FAIL terminal-calendar-card';
+        document.querySelector('#result').textContent = `FAIL: ${error.stack || error}`;
+        console.error(error);
+      });
+    </script>
+  </body>
+</html>

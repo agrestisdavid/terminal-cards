@@ -60,7 +60,7 @@
     <script type="module" src="../dist/terminal-cards.js"></script>
   </head>
   <body>
-    <h1>terminal-cards <span>// title + wrapper + light + switch + sensor + shutter + navigation</span></h1>
+    <h1>terminal-cards <span>// title + wrapper + light + switch + sensor + calendar + shutter + navigation</span></h1>
     <main></main>
     <script type="module">
       const hass = {
@@ -97,16 +97,29 @@
             entity_id: 'sensor.temperature', state: '22.5',
             attributes: { friendly_name: 'living temperature', unit_of_measurement: '°C' },
           },
+          'calendar.family': {
+            entity_id: 'calendar.family', state: 'off',
+            attributes: { friendly_name: 'family calendar' },
+          },
         },
         formatEntityState: (entity) => entity.state,
         callService() {},
         user: { name: 'preview' },
         connection: {
-          subscribeMessage(callback) {
-            setTimeout(() => callback({
-              result: '3 cameras online',
-              listeners: { all: false, domains: [], entities: [], time: false },
-            }), 0);
+          subscribeMessage(callback, params) {
+            if (params?.type === 'calendar/event/subscribe') {
+              const future = (hours) => new Date(Date.now() + hours * 3600000).toISOString();
+              setTimeout(() => callback({ events: [
+                { summary: 'team sync', start: future(18), end: future(19) },
+                { summary: 'dentist', start: future(42), end: future(43) },
+                { summary: 'family dinner', start: future(68), end: future(70) },
+              ] }), 0);
+            } else {
+              setTimeout(() => callback({
+                result: '3 cameras online',
+                listeners: { all: false, domains: [], entities: [], time: false },
+              }), 0);
+            }
             return Promise.resolve(() => undefined);
           },
         },
@@ -117,6 +130,8 @@
       title.setConfig({
         title: 'home status // terminal cards',
         subtitle: '**system:** {{ states("sensor.camera_count") }}',
+        entity: 'sensor.temperature',
+        state_position: 'bottom-right',
         font_size: 28,
         accent_color: 'blue',
       });
@@ -152,7 +167,7 @@
 
       const controls = document.createElement('terminal-card-wrapper');
       controls.setConfig({
-        title: 'covers + entities + navigation',
+        title: 'covers + entities + calendar + navigation',
         accent_color: 'cyan',
         entity: 'cover.office',
         state_position: 'top-right',
@@ -171,6 +186,11 @@
           {
             type: 'custom:terminal-sensor-card', entity: 'sensor.temperature',
             border_title: 'climate', accent_color: 'cyan',
+          },
+          {
+            type: 'custom:terminal-calendar-card', entity: 'calendar.family',
+            title: 'agenda', max_events: 3, days_to_show: 30,
+            accent_color: 'purple',
           },
           {
             type: 'custom:terminal-navigation-card', name: 'kitchen',

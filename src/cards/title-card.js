@@ -14,6 +14,12 @@ import {
 
 const TAG = 'terminal-title-card';
 const TEMPLATE_PATTERN = /{{|{%|{#/;
+const STATE_POSITIONS = new Set([
+  'top-left',
+  'top-right',
+  'bottom-left',
+  'bottom-right',
+]);
 
 const STYLES = `
   :host {
@@ -25,6 +31,7 @@ const STYLES = `
     height: 100%;
     padding-top: calc(var(--terminal-title-font-size) * .48);
   }
+  :host([data-state-edge="bottom"]) { padding-bottom: 8px; }
   .frame {
     position: relative;
     box-sizing: border-box;
@@ -45,16 +52,48 @@ const STYLES = `
   }
   .frame[data-has-subtitle="true"][data-title-position="left"] {
     /* The title's 1.1 line box sits 58% below the border after translateY(-42%). */
+    min-height: max(40px, calc(var(--terminal-title-font-size) * .638 + 24px));
     padding-top: calc(var(--terminal-title-font-size) * .638 + 1px);
   }
-  .title {
+  .border-slot {
     position: absolute;
     z-index: 1;
+    box-sizing: border-box;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    max-width: calc(100% - 24px);
+    pointer-events: none;
+  }
+  .border-slot[data-position="top-left"] {
     top: 0;
     left: 12px;
-    box-sizing: border-box;
     transform: translateY(-42%);
-    max-width: calc(100% - 24px);
+  }
+  .border-slot[data-position="top-right"] {
+    top: 0;
+    right: 12px;
+    justify-content: flex-end;
+    transform: translateY(-42%);
+  }
+  .border-slot[data-position="bottom-left"] {
+    bottom: 0;
+    left: 12px;
+    transform: translateY(50%);
+  }
+  .border-slot[data-position="bottom-right"] {
+    right: 12px;
+    bottom: 0;
+    justify-content: flex-end;
+    transform: translateY(50%);
+  }
+  .frame[data-top-split="true"] .border-slot[data-edge="top"] {
+    max-width: calc(50% - 15px);
+  }
+  .title {
+    box-sizing: border-box;
+    min-width: 0;
+    max-width: 100%;
     padding: 0 8px;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -64,10 +103,24 @@ const STYLES = `
     font: 700 var(--terminal-title-font-size)/1.1 ${TERMINAL_FONT};
     pointer-events: none;
   }
-  .title[data-title-position="right"] {
-    right: 12px;
-    left: auto;
+  .border-state {
+    box-sizing: border-box;
+    min-width: 0;
+    max-width: 100%;
+    padding: 0 8px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    background: var(--terminal-background);
+    color: var(--terminal-dim);
+    font: 12px/1.4 ${TERMINAL_FONT};
+    pointer-events: none;
   }
+  .border-slot > .title:first-child:nth-last-child(2),
+  .border-slot > .title:first-child:nth-last-child(2) ~ .border-state {
+    max-width: calc(50% - 3px);
+  }
+  .border-state[hidden] { display: none; }
   .subtitle {
     box-sizing: border-box;
     display: block;
@@ -84,6 +137,9 @@ const STYLES = `
   .frame[data-has-subtitle="true"][data-title-position="left"] .subtitle {
     padding-left: 20px;
   }
+  .frame[data-has-subtitle="true"][data-state-edge="bottom"] {
+    padding-bottom: 9px;
+  }
   .subtitle[hidden] { display: none; }
 `;
 
@@ -92,6 +148,9 @@ export class TerminalTitleCard extends HTMLElement {
     const labels = {
       title: 'Title',
       subtitle: 'Subtitle (Markdown / template)',
+      entity: 'State entity',
+      state_template: 'State template',
+      state_position: 'State position',
       font_size: 'Title size',
       accent_color: 'Accent color',
       title_position: 'Title position',
@@ -100,6 +159,30 @@ export class TerminalTitleCard extends HTMLElement {
       schema: [
         { name: 'title', required: true, selector: { text: {} } },
         { name: 'subtitle', selector: { template: {} } },
+        {
+          type: 'expandable',
+          name: '',
+          title: 'Border state',
+          flatten: true,
+          schema: [
+            { name: 'entity', selector: { entity: {} } },
+            { name: 'state_template', selector: { template: {} } },
+            {
+              name: 'state_position',
+              selector: {
+                select: {
+                  mode: 'dropdown',
+                  options: [
+                    { value: 'top-left', label: 'Top left' },
+                    { value: 'top-right', label: 'Top right' },
+                    { value: 'bottom-left', label: 'Bottom left' },
+                    { value: 'bottom-right', label: 'Bottom right' },
+                  ],
+                },
+              },
+            },
+          ],
+        },
         {
           name: 'font_size',
           default: DEFAULT_TITLE_FONT_SIZE,
@@ -129,6 +212,12 @@ export class TerminalTitleCard extends HTMLElement {
         if (schema.name === 'subtitle') {
           return 'Supports Markdown and reactive Home Assistant templates.';
         }
+        if (schema.name === 'entity') {
+          return 'Fallback state shown when no template result is available.';
+        }
+        if (schema.name === 'state_template') {
+          return 'Rendered reactively by Home Assistant and embedded in the selected frame corner.';
+        }
         return undefined;
       },
     };
@@ -151,27 +240,47 @@ export class TerminalTitleCard extends HTMLElement {
     this._templateConnection = null;
     this._templateText = null;
     this._templateGeneration = 0;
+    this._stateTemplateValue = undefined;
+    this._stateTemplateError = null;
+    this._stateTemplateSubscription = null;
+    this._stateTemplateConnection = null;
+    this._stateTemplateText = null;
+    this._stateTemplateGeneration = 0;
 
     const root = this.attachShadow({ mode: 'open' });
     const style = document.createElement('style');
     style.textContent = STYLES;
     this._frame = document.createElement('section');
     this._frame.className = 'frame';
+    this._slots = Object.fromEntries(
+      [...STATE_POSITIONS].map((position) => {
+        const slot = document.createElement('div');
+        slot.className = 'border-slot';
+        slot.dataset.position = position;
+        slot.dataset.edge = position.startsWith('top') ? 'top' : 'bottom';
+        return [position, slot];
+      })
+    );
     this._title = document.createElement('div');
     this._title.className = 'title';
+    this._state = document.createElement('div');
+    this._state.className = 'border-state';
+    this._state.hidden = true;
     this._subtitle = document.createElement('ha-markdown');
     this._subtitle.className = 'subtitle';
     this._subtitle.hidden = true;
-    this._frame.append(this._title, this._subtitle);
+    this._frame.append(...Object.values(this._slots), this._subtitle);
     root.append(style, this._frame);
   }
 
   connectedCallback() {
     this._ensureTemplateSubscription();
+    this._ensureStateTemplateSubscription();
   }
 
   disconnectedCallback() {
     this._teardownTemplateSubscription();
+    this._teardownStateTemplateSubscription();
     this._hass = null;
     this._subtitle.hass = null;
   }
@@ -183,6 +292,26 @@ export class TerminalTitleCard extends HTMLElement {
     if (config.subtitle !== undefined && typeof config.subtitle !== 'string') {
       throw new Error('terminal-title-card: "subtitle" must be a string');
     }
+    if (
+      config.entity !== undefined &&
+      (typeof config.entity !== 'string' || !config.entity.trim())
+    ) {
+      throw new Error('terminal-title-card: "entity" must be a non-empty entity id');
+    }
+    if (
+      config.state_template !== undefined &&
+      typeof config.state_template !== 'string'
+    ) {
+      throw new Error('terminal-title-card: "state_template" must be a string');
+    }
+    if (
+      config.state_position !== undefined &&
+      !STATE_POSITIONS.has(config.state_position)
+    ) {
+      throw new Error(
+        'terminal-title-card: "state_position" must be top-left, top-right, bottom-left or bottom-right'
+      );
+    }
     const fontSize = normalizeTitleFontSize(config.font_size);
     if (fontSize === null) {
       throw new Error(
@@ -191,26 +320,34 @@ export class TerminalTitleCard extends HTMLElement {
     }
     validateAppearance(config, 'terminal-title-card', { titlePosition: true });
     this._teardownTemplateSubscription();
+    this._teardownStateTemplateSubscription();
     this._config = { ...config, font_size: fontSize };
     this._templateValue = undefined;
     this._templateError = null;
+    this._stateTemplateValue = undefined;
+    this._stateTemplateError = null;
     this.style.setProperty('--terminal-title-font-size', `${fontSize}px`);
     applyAccentColor(this, config.accent_color);
     this._title.textContent = config.title;
     this._title.dataset.titlePosition = config.title_position || 'left';
     this._frame.dataset.titlePosition = config.title_position || 'left';
-    this._frame.setAttribute('aria-label', config.title);
+    this._renderBorderLabels();
     this._renderSubtitle();
     this._ensureTemplateSubscription();
+    this._ensureStateTemplateSubscription();
   }
 
   set hass(hass) {
     const connectionChanged = this._hass?.connection !== hass?.connection;
     this._hass = hass;
     this._subtitle.hass = hass;
+    this._renderBorderLabels();
     this._renderSubtitle();
     if (connectionChanged || this._templateSubscription === null) {
       this._ensureTemplateSubscription();
+    }
+    if (connectionChanged || this._stateTemplateSubscription === null) {
+      this._ensureStateTemplateSubscription();
     }
   }
 
@@ -224,6 +361,51 @@ export class TerminalTitleCard extends HTMLElement {
 
   getGridOptions() {
     return { columns: 12, rows: 'auto' };
+  }
+
+  _stateContent() {
+    if (this._stateTemplateValue !== undefined) return this._stateTemplateValue;
+    if (this._config?.entity) {
+      const entity = this._hass?.states?.[this._config.entity];
+      if (!entity) return 'unavailable';
+      return String(this._hass?.formatEntityState?.(entity) || entity.state)
+        .toLocaleLowerCase();
+    }
+    return '';
+  }
+
+  _renderBorderLabels() {
+    if (!this._config) return;
+    const titlePosition = this._config.title_position === 'right'
+      ? 'top-right'
+      : 'top-left';
+    const statePosition = this._config.state_position ||
+      (titlePosition === 'top-left' ? 'top-right' : 'top-left');
+    const stateContent = this._stateContent();
+    const showState = Boolean(
+      (this._config.entity || this._config.state_template?.trim()) &&
+      stateContent !== ''
+    );
+
+    this._slots[titlePosition].append(this._title);
+    this._state.textContent = stateContent;
+    this._state.dataset.statePosition = statePosition;
+    this._state.hidden = !showState;
+    if (showState) this._slots[statePosition].append(this._state);
+    else this._state.remove();
+    this._frame.dataset.topSplit = String(
+      showState && titlePosition.startsWith('top') && statePosition.startsWith('top') &&
+      titlePosition !== statePosition
+    );
+    if (showState && statePosition.startsWith('bottom')) {
+      this.dataset.stateEdge = 'bottom';
+      this._frame.dataset.stateEdge = 'bottom';
+    } else {
+      delete this.dataset.stateEdge;
+      delete this._frame.dataset.stateEdge;
+    }
+    const ariaState = showState ? `, ${stateContent}` : '';
+    this._frame.setAttribute('aria-label', `${this._config.title}${ariaState}`);
   }
 
   _renderSubtitle() {
@@ -309,6 +491,93 @@ export class TerminalTitleCard extends HTMLElement {
       this._templateError = { error: 'template unavailable', level: 'ERROR' };
       this._templateSubscription = null;
       this._renderSubtitle();
+    }
+  }
+
+  _ensureStateTemplateSubscription() {
+    const template = typeof this._config?.state_template === 'string'
+      ? this._config.state_template
+      : '';
+    const connection = this._hass?.connection;
+    if (
+      !this.isConnected ||
+      !template.trim() ||
+      !connection?.subscribeMessage
+    ) {
+      return;
+    }
+    if (
+      this._stateTemplateSubscription !== null &&
+      this._stateTemplateConnection === connection &&
+      this._stateTemplateText === template
+    ) {
+      return;
+    }
+
+    this._teardownStateTemplateSubscription();
+    const generation = ++this._stateTemplateGeneration;
+    this._stateTemplateConnection = connection;
+    this._stateTemplateText = template;
+    const params = {
+      type: 'render_template',
+      template,
+      variables: {
+        config: this._config,
+        user: this._hass?.user?.name,
+      },
+      strict: true,
+      report_errors: true,
+      ...(this._config.entity ? { entity_ids: this._config.entity } : {}),
+    };
+
+    try {
+      const subscription = connection.subscribeMessage((message) => {
+        if (
+          generation !== this._stateTemplateGeneration ||
+          this._stateTemplateConnection !== connection ||
+          this._stateTemplateText !== template
+        ) {
+          return;
+        }
+        if (message && typeof message.error === 'string') {
+          this._stateTemplateError = message;
+          this._stateTemplateValue = undefined;
+          this._renderBorderLabels();
+          return;
+        }
+        if (message && message.result !== undefined) {
+          this._stateTemplateValue = String(message.result).toLocaleLowerCase();
+          this._stateTemplateError = null;
+          this._renderBorderLabels();
+        }
+      }, params);
+      this._stateTemplateSubscription = Promise.resolve(subscription);
+      this._stateTemplateSubscription.catch(() => {
+        if (generation !== this._stateTemplateGeneration) return;
+        this._stateTemplateError = { error: 'template unavailable', level: 'ERROR' };
+        this._stateTemplateSubscription = null;
+        this._renderBorderLabels();
+      });
+    } catch (_error) {
+      if (generation !== this._stateTemplateGeneration) return;
+      this._stateTemplateError = { error: 'template unavailable', level: 'ERROR' };
+      this._stateTemplateSubscription = null;
+      this._renderBorderLabels();
+    }
+  }
+
+  _teardownStateTemplateSubscription() {
+    ++this._stateTemplateGeneration;
+    const subscription = this._stateTemplateSubscription;
+    this._stateTemplateSubscription = null;
+    this._stateTemplateConnection = null;
+    this._stateTemplateText = null;
+    if (subscription) {
+      Promise.resolve(subscription)
+        .then((unsubscribe) => {
+          if (typeof unsubscribe === 'function') unsubscribe();
+        })
+        .catch(() => undefined);
     }
   }
 

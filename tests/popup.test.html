@@ -24,6 +24,16 @@
     <pre id="result">WAITING</pre>
     <script type="module">
       const calls = [];
+      const wsCalls = [];
+      const logbookEntries = [
+        { when: 1700000000, state: 'off', name: 'Popup light' },
+        { when: 1700000100, state: 'on', name: 'Popup light', source: 'automation evening' },
+        { when: 1700000200, state: 'off', name: 'Popup light' },
+        { when: 1700000300, state: 'on', name: 'Popup light' },
+        { when: '2023-11-14T22:20:00.000Z', state: 'off', name: 'Popup light' },
+        { when: 1700000500, state: 'on', name: 'Popup light' },
+        { when: 1700000600, state: 'off', name: 'Popup light', context_service: 'light.turn_off' },
+      ];
       const hass = {
         states: {
           'light.popup': {
@@ -42,8 +52,13 @@
             },
           },
         },
+        locale: { language: 'en' },
         formatEntityState: (entity) => entity.state.toUpperCase(),
         callService: (...args) => calls.push(args),
+        callWS: (params) => {
+          wsCalls.push(params);
+          return Promise.resolve(logbookEntries);
+        },
       };
 
       function assert(condition, message) {
@@ -56,10 +71,28 @@
 
       async function run() {
         await customElements.whenDefined('terminal-light-card');
+        let invalidLightPopupTitle = false;
+        let invalidShutterPopupTitle = false;
+        try {
+          document.createElement('terminal-light-card').setConfig({
+            entity: 'light.popup',
+            popup_title: ' ',
+          });
+        } catch (_error) { invalidLightPopupTitle = true; }
+        try {
+          document.createElement('terminal-shutter-card').setConfig({
+            entity: 'cover.popup',
+            popup_title: 42,
+          });
+        } catch (_error) { invalidShutterPopupTitle = true; }
+        assert(invalidLightPopupTitle, 'blank Light popup title was accepted');
+        assert(invalidShutterPopupTitle, 'non-string Shutter popup title was accepted');
+
         const card = document.createElement('terminal-light-card');
         card.setConfig({
           entity: 'light.popup',
-          name: '<b>literal popup light</b>',
+          name: '<b>literal card name</b>',
+          popup_title: '<i>literal popup title</i>',
           icon: 'mdi:desk-lamp',
           use_light_color: true,
           accent_color: [203, 166, 247],
@@ -104,10 +137,11 @@
         );
         assert(getComputedStyle(popupDialog).boxShadow === 'none', 'popup still renders a glow');
         assert(
-          popup.shadowRoot.querySelector('.name').textContent === '<b>literal popup light</b>',
-          'popup name was not rendered as literal text'
+          popupTitle.textContent === '<i>literal popup title</i>',
+          'configured popup title did not override the card name'
         );
-        assert(!popup.shadowRoot.querySelector('.name b'), 'popup interpreted entity name as HTML');
+        assert(!popupTitle.querySelector('i'), 'popup interpreted its title as HTML');
+        assert(getComputedStyle(popupTitle).fontSize === '22px', 'popup does not use the large TitleCard title');
         assert(
           getComputedStyle(popup.shadowRoot.querySelector('.dialog')).borderTopColor === 'rgb(40, 180, 90)',
           'popup does not use the active light color'
@@ -155,19 +189,81 @@
         assert(calls[0][2].brightness_pct === 42, 'popup brightness payload is wrong');
         assert(calls[0][3].entity_id === 'light.popup', 'popup brightness target is wrong');
 
+        const logsToggle = popup.shadowRoot.querySelector('.logs-toggle');
+        assert(logsToggle && logsToggle.getAttribute('aria-expanded') === 'false', 'logs are not collapsed initially');
+        logsToggle.click();
+        await wait(10);
+        assert(logsToggle.getAttribute('aria-expanded') === 'true', 'logs did not expand');
+        assert(wsCalls.length === 1, 'logbook was not loaded exactly once on demand');
+        assert(wsCalls[0].type === 'logbook/get_events', 'popup uses the wrong logbook API');
+        assert(wsCalls[0].entity_ids[0] === 'light.popup', 'logbook request targets the wrong entity');
+        const logbookWindow = Date.parse(wsCalls[0].end_time) - Date.parse(wsCalls[0].start_time);
+        assert(Math.abs(logbookWindow - 24 * 60 * 60 * 1000) < 1000, 'logbook request is not limited to 24 hours');
+        const logLines = [...popup.shadowRoot.querySelectorAll('.log-line[role="listitem"]')];
+        assert(logLines.length === 6, 'popup does not limit the logbook tree to six changes');
+        assert(logLines[0].querySelector('.log-value').textContent === 'off', 'newest logbook state is not first');
+        assert(logLines[0].querySelector('.log-branch').textContent === '├─', 'logbook tree start branch is wrong');
+        assert(logLines.at(-1).querySelector('.log-branch').textContent === '└─', 'logbook tree end branch is wrong');
+        assert(
+          logLines.every((line) => line.querySelector('time').dateTime),
+          'numeric/ISO log timestamps do not expose machine-readable datetimes'
+        );
+        assert(
+          popup.shadowRoot.querySelector('.log-tree').textContent.includes('light.turn_off'),
+          'logbook context line is missing'
+        );
+        logsToggle.click();
+        logsToggle.click();
+        await wait(1);
+        assert(wsCalls.length === 1, 'cached logbook was fetched again');
+
         popup.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
         assert(popup.hidden, 'Escape did not close the popup');
         assert(card.shadowRoot.activeElement === main, 'popup did not restore focus');
 
+        card.setConfig({
+          entity: 'light.popup',
+          name: 'card name fallback',
+          hold_action: { action: 'more-info' },
+        });
+        const throwingHass = {
+          ...hass,
+          callWS: () => { throw new Error('simulated synchronous logbook error'); },
+        };
+        card.hass = throwingHass;
         const beforeKeyboardHold = calls.length;
         main.dispatchEvent(new KeyboardEvent('keydown', { key: ' ', bubbles: true }));
         await wait(550);
         assert(!popup.hidden, 'keyboard hold did not open the popup');
+        assert(popup.shadowRoot.querySelector('.border-title').textContent === 'card name fallback', 'card name popup fallback is wrong');
         main.dispatchEvent(new KeyboardEvent('keyup', { key: ' ', bubbles: true }));
         assert(calls.length === beforeKeyboardHold, 'keyboard tap fired after a completed hold');
+        popup.shadowRoot.querySelector('.logs-toggle').click();
+        await wait(10);
+        assert(
+          popup.shadowRoot.querySelector('.log-status').textContent.includes('logbook unavailable'),
+          'synchronous logbook error left the popup loading'
+        );
+
+        popup.remove();
+        assert(popup.hidden, 'removing the popup host did not close it');
+        assert(popup._hass === null && popup._config === null && popup._trigger === null, 'popup host disconnect retained session references');
+        assert(popup._body.children.length === 0 && popup._rangeControls.length === 0, 'popup host disconnect retained rendered controls');
+
+        card.setConfig({ entity: 'light.popup', hold_action: { action: 'more-info' } });
+        card.hass = hass;
+        main.dispatchEvent(new KeyboardEvent('keydown', { key: ' ', bubbles: true }));
+        await wait(550);
+        main.dispatchEvent(new KeyboardEvent('keyup', { key: ' ', bubbles: true }));
+        const recreatedPopup = document.querySelector('terminal-entity-popup');
+        assert(recreatedPopup && recreatedPopup !== popup, 'detached popup singleton was not recreated');
+        assert(
+          recreatedPopup.shadowRoot.querySelector('.border-title').textContent === 'Popup light',
+          'entity friendly-name popup fallback is wrong'
+        );
 
         card.remove();
-        assert(popup.hidden, 'disconnect did not close the card popup');
+        assert(recreatedPopup.hidden, 'disconnect did not close the card popup');
         assert(document.querySelectorAll('terminal-entity-popup').length === 1, 'duplicate popup hosts were created');
 
         document.body.dataset.testStatus = 'PASS';
@@ -175,7 +271,8 @@
         document.querySelector('#result').textContent = [
           'PASS: pointer and keyboard holds open the custom terminal popup',
           'PASS: completed holds suppress tap and native more-info',
-          'PASS: status and capability-aware light controls render safely',
+          'PASS: TitleCard-style configurable popup title and capability-aware controls',
+          'PASS: on-demand six-entry logbook tree with time, state and context',
           'PASS: services, Escape, focus restoration and disconnect cleanup',
         ].join('\n');
       }

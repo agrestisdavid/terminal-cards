@@ -176,6 +176,12 @@
             state: 'off',
             sizeReject: true,
           },
+          {
+            type: 'mock',
+            title: 'Letzte volle Zeile',
+            content: 'Beide Spalten',
+            state: 'on',
+          },
         ],
       });
       grid.hass = hass;
@@ -223,7 +229,7 @@
         await waitFor(
           () =>
             vertical._cards.length === 3 &&
-            grid._cards.length === 2 &&
+            grid._cards.length === 3 &&
             equalLights._cards.length === 2 &&
             lifecycle._cards.length === 2,
           'Child-Erstellung hat Timeout erreicht'
@@ -268,8 +274,8 @@
         const gridColumns = getComputedStyle(gridContainer).gridTemplateColumns.split(' ');
         assert(getComputedStyle(gridContainer).display === 'grid', 'columns aktiviert kein Grid');
         assert(gridColumns.length === 2, `Erwartete 2 Spalten, gefunden: ${gridColumns.join(' ')}`);
-        assert(gridContainer.children.length === 2, 'Grid-Child-Cards fehlen');
-        const [leftGridCard, rightGridCard] = [...gridContainer.children];
+        assert(gridContainer.children.length === 3, 'Grid-Child-Cards fehlen');
+        const [leftGridCard, rightGridCard, fullWidthGridCard] = [...gridContainer.children];
         assert(
           Math.abs(leftGridCard.getBoundingClientRect().height - rightGridCard.getBoundingClientRect().height) < 0.5,
           'Child-Cards derselben Grid-Zeile sind nicht gleich hoch'
@@ -280,6 +286,17 @@
             rightGridCard.shadowRoot.querySelector('.card').getBoundingClientRect().height
           ) < 0.5,
           'Child-Card-Rahmen derselben Grid-Zeile werden nicht gestreckt'
+        );
+        assert(
+          Math.abs(
+            fullWidthGridCard.getBoundingClientRect().width -
+            gridContainer.getBoundingClientRect().width
+          ) < 0.5,
+          'Einzelne letzte Grid-Card nutzt nicht die volle Zeilenbreite'
+        );
+        assert(
+          gridContainer.dataset.singleLastRow === 'true',
+          'Wrapper markiert die einzelne letzte Grid-Zeile nicht'
         );
         assert(grid.shadowRoot.querySelector('.title').textContent === 'Zweispaltiges Grid', 'Race hat alte Config gewonnen');
 
@@ -305,7 +322,7 @@
 
         const earlyVerticalSize = await vertical.earlyCardSize;
         assert(earlyVerticalSize === 3, `Frühes getCardSize blieb bei ${earlyVerticalSize} statt 3`);
-        assert((await grid.getCardSize()) === 1, 'Abgelehnte Child-Size fiel nicht auf 1 zurück');
+        assert((await grid.getCardSize()) === 2, 'Grid-Zeilengröße berücksichtigt die volle letzte Zeile nicht');
         assert((await equalLights.getCardSize()) === 2, 'Light-Card-Zeilengröße verwendet nicht das höchste Child');
         assert(vertical.getCardSize() === 3, 'Dynamische Card-Size ist falsch');
         assert(grid.getGridOptions().rows === 'auto', 'Grid rows sind nicht dynamisch');
@@ -341,7 +358,7 @@
           lifecycle._cards.every((card) => !initialLifecycleCards.includes(card)),
           'Reconnect verwendete freizugebende Child-Instanzen erneut'
         );
-        assert(createCount === 11, `Unerwartete Child-Erzeugungszahl: ${createCount}`);
+        assert(createCount === 12, `Unerwartete Child-Erzeugungszahl: ${createCount}`);
         assert(
           rebuildCount === 0,
           'Wrapper löste ll-rebuild aus und würde sich in Home Assistant neu erstellen'
@@ -350,7 +367,7 @@
         const evidence = [
           'PASS: 1px-Rahmen, quadratische Ecken, Hover-Akzent ohne Glow und Title-Overlay geprüft',
           'PASS: 3 vertikale Child-Cards sichtbar; hass propagiert',
-          'PASS: columns=2 ergibt CSS-Grid mit gleich hohen Child-Cards je Zeile',
+          'PASS: columns=2 ergibt CSS-Grid; einzelne letzte Card spannt über beide Spalten',
           'PASS: echte Light-Cards mit/ohne Controls haben gleich hohe sichtbare Rahmen',
           'PASS: cards=[] ergibt sichtbaren Rahmen + Title ohne Children',
           'PASS: Generation-Guard verwirft überholte setConfig-Erstellung',

@@ -2,7 +2,7 @@ export const DEFAULT_MORE_ICON = 'mdi:dots-vertical';
 export const TITLE_POSITIONS = new Set(['left', 'right']);
 
 export function normalizeAccentColor(value) {
-  if (!Array.isArray(value) || value.length < 3) return null;
+  if (!Array.isArray(value) || value.length !== 3) return null;
   const channels = value.slice(0, 3).map(Number);
   if (channels.some((channel) => !Number.isFinite(channel) || channel < 0 || channel > 255)) {
     return null;
@@ -10,7 +10,11 @@ export function normalizeAccentColor(value) {
   return `rgb(${channels.map(Math.round).join(' ')})`;
 }
 
-export function validateAppearance(config, cardName, { titlePosition = false } = {}) {
+export function validateAppearance(
+  config,
+  cardName,
+  { titlePosition = false, popupTitle = false } = {}
+) {
   if (config.accent_color !== undefined && normalizeAccentColor(config.accent_color) === null) {
     throw new Error(`${cardName}: "accent_color" must be an RGB color`);
   }
@@ -27,6 +31,13 @@ export function validateAppearance(config, cardName, { titlePosition = false } =
   ) {
     throw new Error(`${cardName}: "more_icon" must be a non-empty icon name`);
   }
+  if (
+    popupTitle &&
+    config.popup_title !== undefined &&
+    (typeof config.popup_title !== 'string' || !config.popup_title.trim())
+  ) {
+    throw new Error(`${cardName}: "popup_title" must be a non-empty title`);
+  }
 }
 
 export function applyAccentColor(element, value, variable = '--terminal-card-accent') {
@@ -36,7 +47,9 @@ export function applyAccentColor(element, value, variable = '--terminal-card-acc
   return color;
 }
 
-export function appearanceSchema({ titlePosition = false, moreIcon = false } = {}) {
+export function appearanceSchema(
+  { titlePosition = false, moreIcon = false, popupTitle = false } = {}
+) {
   const schema = [
     { name: 'accent_color', selector: { color_rgb: {} } },
   ];
@@ -57,6 +70,9 @@ export function appearanceSchema({ titlePosition = false, moreIcon = false } = {
   }
   if (moreIcon) {
     schema.push({ name: 'more_icon', selector: { icon: {} } });
+  }
+  if (popupTitle) {
+    schema.push({ name: 'popup_title', selector: { text: {} } });
   }
   return schema;
 }

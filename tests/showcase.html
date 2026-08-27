@@ -23,7 +23,7 @@
       h1 { margin: 0 0 30px; color: #89b4fa; font-size: 20px; font-weight: 700; }
       h1 span { color: #6c7086; font-weight: 400; }
       main { display: grid; gap: 24px; }
-      terminal-card-wrapper { max-width: 1000px; }
+      terminal-title-card, terminal-card-wrapper { max-width: 1000px; }
     </style>
     <script>
       customElements.define(
@@ -54,7 +54,7 @@
     <script type="module" src="../dist/terminal-cards.js"></script>
   </head>
   <body>
-    <h1>terminal-cards <span>// wrapper + light + shutter + navigation</span></h1>
+    <h1>terminal-cards <span>// title + wrapper + light + shutter + navigation</span></h1>
     <main></main>
     <script type="module">
       const hass = {
@@ -99,6 +99,14 @@
       };
 
       await customElements.whenDefined('terminal-card-wrapper');
+      const title = document.createElement('terminal-title-card');
+      title.setConfig({
+        title: 'home status // terminal cards',
+        font_size: 28,
+        accent_color: [137, 180, 250],
+      });
+      document.querySelector('main').append(title);
+
       const wrapper = document.createElement('terminal-card-wrapper');
       wrapper.setConfig({
         title: 'lighting',
@@ -125,7 +133,7 @@
       controls.setConfig({
         title: 'covers + navigation',
         accent_color: [137, 220, 235],
-        columns: 3,
+        columns: 2,
         cards: [
           {
             type: 'custom:terminal-shutter-card', entity: 'cover.office',

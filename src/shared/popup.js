@@ -12,6 +12,7 @@ import {
   temperatureSegmentColor,
 } from './segments.js';
 import { TERMINAL_COLORS, TERMINAL_FONT } from './styles.js';
+import { DEFAULT_TITLE_FONT_SIZE } from './title.js';
 
 const TAG = 'terminal-entity-popup';
 const SUPPORT_OPEN = 1;
@@ -49,7 +50,7 @@ const STYLES = `
     box-sizing: border-box;
     width: min(480px, calc(100vw - 32px));
     max-height: calc(100vh - 32px);
-    padding: 8px;
+    padding: 14px 8px 8px;
     border: 0;
     background: var(--terminal-background);
     overflow: visible;
@@ -58,7 +59,7 @@ const STYLES = `
     position: relative;
     box-sizing: border-box;
     width: 100%;
-    max-height: calc(100vh - 48px);
+    max-height: calc(100vh - 54px);
     overflow: visible;
   }
   .dialog {
@@ -89,31 +90,31 @@ const STYLES = `
     white-space: nowrap;
     background: var(--terminal-background);
     color: var(--terminal-popup-effective-accent);
-    font: 600 12px/1.4 ${TERMINAL_FONT};
+    font: 700 ${DEFAULT_TITLE_FONT_SIZE}px/1.2 ${TERMINAL_FONT};
   }
   .header {
     box-sizing: border-box;
     display: flex;
     align-items: center;
     gap: 14px;
-    min-height: 82px;
-    padding: 18px 14px 10px;
+    min-height: 64px;
+    padding: 18px 14px 8px;
   }
   .entity-icon {
     flex: 0 0 auto;
-    width: 34px;
-    height: 34px;
+    width: 32px;
+    height: 32px;
     color: var(--terminal-popup-effective-accent);
-    --mdc-icon-size: 34px;
+    --mdc-icon-size: 32px;
   }
   .header-text { flex: 1 1 auto; min-width: 0; }
-  .name, .state {
+  .state {
     overflow: hidden;
+    color: var(--terminal-dim);
+    font-size: 13px;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
-  .name { font-weight: 600; }
-  .state { color: var(--terminal-dim); font-size: 12px; }
   .close, .action {
     box-sizing: border-box;
     display: flex;
@@ -143,9 +144,11 @@ const STYLES = `
   }
   .body {
     display: grid;
+    flex: 1 1 auto;
+    align-content: start;
     gap: 16px;
     min-height: 0;
-    max-height: calc(100vh - 130px);
+    max-height: calc(100vh - 112px);
     padding: 4px 14px 14px;
     overflow: auto;
   }
@@ -175,6 +178,56 @@ const STYLES = `
     gap: 8px;
   }
   .action { width: 100%; gap: 7px; }
+  .logs-toggle {
+    box-sizing: border-box;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    min-height: 36px;
+    padding: 0 10px;
+    border: 1px solid var(--terminal-dim);
+    border-radius: 0;
+    background: transparent;
+    color: var(--terminal-dim);
+    font: 600 11px ${TERMINAL_FONT};
+    cursor: pointer;
+  }
+  .logs-toggle:hover, .logs-toggle:focus-visible,
+  .logs-toggle[aria-expanded="true"] {
+    border-color: var(--terminal-popup-effective-accent);
+    color: var(--terminal-popup-effective-accent);
+    outline: none;
+  }
+  .logs-toggle ha-icon {
+    width: 18px;
+    height: 18px;
+    --mdc-icon-size: 18px;
+  }
+  .log-tree {
+    display: grid;
+    gap: 6px;
+    padding: 2px 0 0;
+    font-size: 11px;
+  }
+  .log-tree[hidden] { display: none; }
+  .log-line {
+    display: grid;
+    grid-template-columns: max-content max-content minmax(0, 1fr);
+    gap: 7px;
+    min-width: 0;
+  }
+  .log-branch { color: var(--terminal-popup-effective-accent); white-space: pre; }
+  .log-time { color: var(--terminal-dim); white-space: nowrap; }
+  .log-value {
+    min-width: 0;
+    overflow: hidden;
+    color: var(--terminal-text);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .log-context { color: var(--terminal-dim); }
+  .log-status { color: var(--terminal-dim); white-space: pre-wrap; }
   .action:disabled { cursor: not-allowed; opacity: .45; }
   .range {
     display: grid;
@@ -244,11 +297,34 @@ const STYLES = `
     cursor: pointer;
   }
   input[type="range"]:disabled { cursor: not-allowed; }
-  @media (max-width: 420px) {
-    :host { padding: 8px; }
-    .dialog-shell { width: calc(100vw - 16px); max-height: calc(100vh - 16px); }
-    .dialog-frame { max-height: calc(100vh - 32px); }
-    .body { max-height: calc(100vh - 114px); }
+  @media (max-width: 600px) {
+    :host {
+      padding: 8px;
+      place-items: stretch;
+    }
+    .dialog-shell {
+      width: calc(100vw - 16px);
+      height: calc(100vh - 16px);
+      height: calc(100dvh - 16px);
+      max-height: none;
+    }
+    .dialog-frame, .dialog { height: 100%; max-height: none; }
+    .border-title {
+      max-width: calc(100% - 64px);
+      font-size: 18px;
+    }
+    .header { min-height: 58px; padding: 16px 10px 6px; }
+    .entity-icon { width: 28px; height: 28px; --mdc-icon-size: 28px; }
+    .close { flex-basis: 34px; width: 34px; min-width: 34px; }
+    .body {
+      max-height: none;
+      padding: 4px 10px max(12px, env(safe-area-inset-bottom));
+      overscroll-behavior: contain;
+    }
+    .details { gap: 6px 10px; }
+    .range { grid-template-columns: minmax(0, 1fr) 38px; gap: 8px; }
+    .range-main { grid-template-columns: 30px minmax(0, 1fr); gap: 6px; }
+    .actions { gap: 6px; }
   }
 `;
 
@@ -272,6 +348,14 @@ export class TerminalEntityPopup extends HTMLElement {
     this._returnFocus = null;
     this._rangeControls = [];
     this._layoutFrame = null;
+    this._logGeneration = 0;
+    this._logsOpen = false;
+    this._logLoading = false;
+    this._logEntries = null;
+    this._logError = null;
+    this._logTree = null;
+    this._logsToggle = null;
+    this._logsIcon = null;
     this._resizeObserver = typeof ResizeObserver === 'function'
       ? new ResizeObserver(() => this._updateSegmentCounts())
       : null;
@@ -298,11 +382,9 @@ export class TerminalEntityPopup extends HTMLElement {
     this._entityIcon.className = 'entity-icon';
     this._headerText = document.createElement('div');
     this._headerText.className = 'header-text';
-    this._name = document.createElement('div');
-    this._name.className = 'name';
     this._state = document.createElement('div');
     this._state.className = 'state';
-    this._headerText.append(this._name, this._state);
+    this._headerText.append(this._state);
     this._close = document.createElement('button');
     this._close.className = 'close';
     this._close.type = 'button';
@@ -327,6 +409,24 @@ export class TerminalEntityPopup extends HTMLElement {
   }
 
   disconnectedCallback() {
+    if (!this.hidden) {
+      this.close();
+    } else {
+      ++this._logGeneration;
+      this._hass = null;
+      this._config = null;
+      this._entityId = null;
+      this._trigger = null;
+      this._returnFocus = null;
+      this._rangeControls = [];
+      this._logLoading = false;
+      this._logEntries = null;
+      this._logError = null;
+      this._logTree = null;
+      this._logsToggle = null;
+      this._logsIcon = null;
+      this._body.replaceChildren();
+    }
     this._resizeObserver?.disconnect();
     if (this._layoutFrame !== null) {
       cancelAnimationFrame(this._layoutFrame);
@@ -335,11 +435,16 @@ export class TerminalEntityPopup extends HTMLElement {
   }
 
   show(trigger, hass, config) {
+    ++this._logGeneration;
     this._trigger = trigger;
     this._returnFocus = trigger?.shadowRoot?.activeElement || trigger;
     this._hass = hass;
     this._config = { ...config };
     this._entityId = config.entity;
+    this._logsOpen = false;
+    this._logLoading = false;
+    this._logEntries = null;
+    this._logError = null;
     this._render();
     this.hidden = false;
     this._updateSegmentCounts();
@@ -369,6 +474,14 @@ export class TerminalEntityPopup extends HTMLElement {
     this._trigger = null;
     this._returnFocus = null;
     this._rangeControls = [];
+    ++this._logGeneration;
+    this._logsOpen = false;
+    this._logLoading = false;
+    this._logEntries = null;
+    this._logError = null;
+    this._logTree = null;
+    this._logsToggle = null;
+    this._logsIcon = null;
     this._body.replaceChildren();
     if (this._layoutFrame !== null) {
       cancelAnimationFrame(this._layoutFrame);
@@ -396,13 +509,13 @@ export class TerminalEntityPopup extends HTMLElement {
     else this.style.removeProperty('--terminal-popup-light-color');
 
     const name = this._config?.name || attributes.friendly_name || this._entityId || 'entity';
+    const popupTitle = this._config?.popup_title || name;
     const formattedState = entity
       ? this._hass?.formatEntityState?.(entity) || entity.state
       : 'unavailable';
-    this._dialog.setAttribute('aria-label', `${name} details`);
-    this._borderTitle.textContent = 'entity details';
+    this._dialog.setAttribute('aria-label', `${popupTitle} details`);
+    this._borderTitle.textContent = popupTitle;
     this._entityIcon.icon = this._config?.icon || attributes.icon || this._defaultIcon(domain);
-    this._name.textContent = name;
     this._state.textContent = String(formattedState).toLocaleLowerCase();
     this._rangeControls = [];
     this._body.replaceChildren();
@@ -414,6 +527,174 @@ export class TerminalEntityPopup extends HTMLElement {
         ? this._coverControls(attributes, unavailable)
         : null;
     if (controls) this._body.append(controls);
+    this._body.append(this._logbookSection());
+  }
+
+  _logbookSection() {
+    const section = document.createElement('section');
+    section.className = 'section logbook-section';
+    this._logsToggle = document.createElement('button');
+    this._logsToggle.className = 'logs-toggle';
+    this._logsToggle.type = 'button';
+    this._logsToggle.setAttribute('aria-controls', 'terminal-popup-logbook');
+    this._logsToggle.setAttribute('aria-expanded', String(this._logsOpen));
+    const label = document.createElement('span');
+    label.textContent = 'logs';
+    this._logsIcon = iconElement(
+      this._logsOpen ? 'mdi:chevron-up' : 'mdi:chevron-down'
+    );
+    this._logsToggle.append(label, this._logsIcon);
+    this._logTree = document.createElement('div');
+    this._logTree.id = 'terminal-popup-logbook';
+    this._logTree.className = 'log-tree';
+    this._logTree.setAttribute('role', 'list');
+    this._logTree.hidden = !this._logsOpen;
+    this._logsToggle.addEventListener('click', () => this._toggleLogbook());
+    section.append(this._logsToggle, this._logTree);
+    this._renderLogbook();
+    return section;
+  }
+
+  _toggleLogbook() {
+    this._logsOpen = !this._logsOpen;
+    this._logsToggle?.setAttribute('aria-expanded', String(this._logsOpen));
+    if (this._logsIcon) {
+      this._logsIcon.icon = this._logsOpen ? 'mdi:chevron-up' : 'mdi:chevron-down';
+    }
+    if (this._logTree) this._logTree.hidden = !this._logsOpen;
+    if (
+      this._logsOpen &&
+      !this._logLoading &&
+      this._logEntries === null &&
+      this._logError === null
+    ) {
+      this._loadLogbook();
+    } else {
+      this._renderLogbook();
+    }
+  }
+
+  _loadLogbook() {
+    if (!this._hass?.callWS || !this._entityId) {
+      this._logError = 'logbook unavailable';
+      this._renderLogbook();
+      return;
+    }
+    const generation = ++this._logGeneration;
+    this._logLoading = true;
+    this._logError = null;
+    this._renderLogbook();
+    const end = new Date();
+    const start = new Date(end.getTime() - 24 * 60 * 60 * 1000);
+    const hass = this._hass;
+    const params = {
+      type: 'logbook/get_events',
+      start_time: start.toISOString(),
+      end_time: end.toISOString(),
+      entity_ids: [this._entityId],
+    };
+    Promise.resolve().then(() => {
+      if (generation !== this._logGeneration || this.hidden) return [];
+      return hass.callWS(params);
+    }).then((entries) => {
+      if (generation !== this._logGeneration || this.hidden) return;
+      const list = Array.isArray(entries) ? [...entries] : [];
+      list.sort((left, right) => this._logTimestamp(right.when) - this._logTimestamp(left.when));
+      this._logEntries = list.slice(0, 6);
+      this._logLoading = false;
+      this._renderLogbook();
+    }).catch(() => {
+      if (generation !== this._logGeneration || this.hidden) return;
+      this._logLoading = false;
+      this._logError = 'logbook unavailable';
+      this._renderLogbook();
+    });
+  }
+
+  _renderLogbook() {
+    if (!this._logTree) return;
+    this._logTree.replaceChildren();
+    if (this._logLoading) {
+      this._logTree.append(this._logStatus('│ loading…'));
+      return;
+    }
+    if (this._logError) {
+      this._logTree.append(this._logStatus(`└─ ${this._logError}`));
+      return;
+    }
+    if (this._logEntries === null) {
+      this._logTree.append(this._logStatus('└─ open to load recent changes'));
+      return;
+    }
+    if (!this._logEntries.length) {
+      this._logTree.append(this._logStatus('└─ no changes in the last 24 hours'));
+      return;
+    }
+
+    this._logEntries.forEach((entry, index) => {
+      const last = index === this._logEntries.length - 1;
+      const line = document.createElement('div');
+      line.className = 'log-line';
+      line.setAttribute('role', 'listitem');
+      const branch = document.createElement('span');
+      branch.className = 'log-branch';
+      branch.textContent = last ? '└─' : '├─';
+      const time = document.createElement('time');
+      time.className = 'log-time';
+      const timestamp = this._logTimestamp(entry.when);
+      if (Number.isFinite(timestamp)) time.dateTime = new Date(timestamp).toISOString();
+      time.textContent = this._formatLogTime(timestamp);
+      const value = document.createElement('span');
+      value.className = 'log-value';
+      value.textContent = String(
+        entry.state ?? entry.message ?? entry.context_message ?? 'changed'
+      ).toLocaleLowerCase();
+      line.append(branch, time, value);
+      this._logTree.append(line);
+
+      const context = entry.source || entry.context_name || entry.context_service ||
+        entry.context_message || (entry.state === undefined ? null : entry.message);
+      if (context) {
+        const contextLine = document.createElement('div');
+        contextLine.className = 'log-line log-context';
+        const contextBranch = document.createElement('span');
+        contextBranch.className = 'log-branch';
+        contextBranch.textContent = last ? '  └─' : '│ └─';
+        const spacer = document.createElement('span');
+        const contextValue = document.createElement('span');
+        contextValue.className = 'log-value log-context';
+        contextValue.textContent = String(context).toLocaleLowerCase();
+        contextLine.append(contextBranch, spacer, contextValue);
+        this._logTree.append(contextLine);
+      }
+    });
+  }
+
+  _logStatus(text) {
+    const status = document.createElement('div');
+    status.className = 'log-status';
+    status.textContent = text;
+    return status;
+  }
+
+  _logTimestamp(value) {
+    if (typeof value === 'number') return value * 1000;
+    return Date.parse(value);
+  }
+
+  _formatLogTime(timestamp) {
+    if (!Number.isFinite(timestamp)) return '--.-- --:--';
+    try {
+      return new Intl.DateTimeFormat(this._hass?.locale?.language, {
+        day: '2-digit',
+        month: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+      }).format(new Date(timestamp));
+    } catch (_error) {
+      return new Date(timestamp).toLocaleString();
+    }
   }
 
   _defaultIcon(domain) {

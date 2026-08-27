@@ -23,6 +23,7 @@ await build({
 const output = await readFile(outfile, 'utf8');
 for (const element of [
   'terminal-card-wrapper',
+  'terminal-title-card',
   'terminal-light-card',
   'terminal-shutter-card',
   'terminal-navigation-card',

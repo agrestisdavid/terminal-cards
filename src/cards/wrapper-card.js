@@ -74,6 +74,9 @@ const STYLES = `
     align-self: stretch;
     height: 100%;
   }
+  .cards[data-layout="grid"][data-single-last-row="true"] > :last-child {
+    grid-column: 1 / -1;
+  }
   .error {
     color: var(--terminal-error);
     overflow-wrap: anywhere;
@@ -139,9 +142,13 @@ export class TerminalCardWrapper extends HTMLElement {
 
     if (config.columns === undefined) {
       this._cardContainer.dataset.layout = 'vertical';
+      delete this._cardContainer.dataset.singleLastRow;
       this._cardContainer.style.removeProperty('--terminal-wrapper-columns');
     } else {
       this._cardContainer.dataset.layout = 'grid';
+      this._cardContainer.dataset.singleLastRow = String(
+        config.columns > 1 && config.cards.length % config.columns === 1
+      );
       this._cardContainer.style.setProperty(
         '--terminal-wrapper-columns',
         String(config.columns)

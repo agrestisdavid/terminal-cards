@@ -221,6 +221,7 @@ export class TerminalLightCard extends HTMLElement {
       use_light_color: 'Use current light color',
       accent_color: 'Accent color',
       more_icon: 'Controls icon',
+      popup_title: 'Popup title',
       show_controls: 'Show controls button',
       controls_expanded: 'Expand controls by default',
       tap_action: 'Tap action',
@@ -266,7 +267,7 @@ export class TerminalLightCard extends HTMLElement {
           name: '',
           title: 'Appearance',
           flatten: true,
-          schema: appearanceSchema({ moreIcon: true }),
+          schema: appearanceSchema({ moreIcon: true, popupTitle: true }),
         },
         {
           type: 'expandable',
@@ -308,6 +309,9 @@ export class TerminalLightCard extends HTMLElement {
         }
         if (schema.name === 'use_light_color') {
           return 'Colors the icon and border from the active RGB/HS color or color temperature.';
+        }
+        if (schema.name === 'popup_title') {
+          return 'Overrides the card name and entity friendly name in the terminal popup title.';
         }
         return undefined;
       },
@@ -433,7 +437,7 @@ export class TerminalLightCard extends HTMLElement {
     if (!config.entity.startsWith('light.')) {
       throw new Error('terminal-light-card: "entity" must be a light');
     }
-    validateAppearance(config, 'terminal-light-card');
+    validateAppearance(config, 'terminal-light-card', { popupTitle: true });
     const previousDefault = this._config?.controls_expanded;
     this._config = { ...config };
     if (previousDefault !== config.controls_expanded) {

@@ -8,7 +8,7 @@ Terminal-style Lovelace cards for Home Assistant, inspired by Herdr panes: squar
 
 ### `custom:terminal-card-wrapper`
 
-Frames arbitrary Lovelace child cards with a terminal-style title embedded in its top border. Child cards are vertical by default; set `columns` for a grid. Children in the same grid row stretch to an equal height. The native-style visual editor can add, configure, reorder, and remove child cards without YAML.
+Frames arbitrary Lovelace child cards with a terminal-style title embedded in its top border. Child cards are vertical by default; set `columns` for a grid. Children in the same grid row stretch to an equal height. When the final grid row contains only one card, that card automatically spans the complete row. The native-style visual editor can add, configure, reorder, and remove child cards without YAML.
 
 ```yaml
 type: custom:terminal-card-wrapper
@@ -21,6 +21,18 @@ cards:
     entity: light.kitchen
   - type: tile
     entity: sensor.kitchen_temperature
+```
+
+### `custom:terminal-title-card`
+
+A title-only terminal frame for dashboard sections. Its large title remains embedded in the upper border and can be positioned left or right. Font size is configurable from 14 to 48 px through the native visual editor.
+
+```yaml
+type: custom:terminal-title-card
+title: home status
+font_size: 28
+title_position: left
+accent_color: [137, 180, 250]
 ```
 
 ### `custom:terminal-light-card`
@@ -39,6 +51,7 @@ show_color_temp: true
 use_light_color: true
 accent_color: [137, 180, 250]
 more_icon: mdi:tune-variant
+popup_title: kitchen ceiling
 show_controls: true
 controls_expanded: false
 tap_action:
@@ -64,6 +77,7 @@ show_position: true
 show_tilt: true
 accent_color: [249, 226, 175]
 more_icon: mdi:menu
+popup_title: office blind
 controls_expanded: false
 hold_action:
   action: more-info
@@ -91,9 +105,11 @@ show_path: true
 
 Every card supports an optional native RGB color selector through `accent_color: [r, g, b]`. It controls the active border, icons, hover/focus state, and controls. The design intentionally has no box-shadow glow. Light state color takes precedence when `use_light_color: true`.
 
-Wrapper and pane-style Navigation Cards support `title_position: left|right`. Light, Shutter, and Navigation Cards support `more_icon`; Navigation uses it for the trailing navigation icon. These conventions should also be used by future Terminal Cards.
+Wrapper, Title, and pane-style Navigation Cards support `title_position: left|right`. Light, Shutter, and Navigation Cards support `more_icon`; Navigation uses it for the trailing navigation icon. These conventions should also be used by future Terminal Cards.
 
-A `more-info` action opens the bundle's own terminal-style entity popup instead of Home Assistant's native dialog. A borderless terminal-background shell surrounds the bordered dialog, and the popup title is stacked fully above its border without clipping. Its capability-aware Light and Cover ranges use the same responsive square segments as the cards. It supports pointer and keyboard holds, traps focus, closes with Escape/backdrop/close, and returns focus to the card.
+A `more-info` action opens the bundle's own terminal-style entity popup instead of Home Assistant's native dialog. A borderless terminal-background shell surrounds the bordered dialog. Its larger TitleCard-style border title uses `popup_title`, then the card `name`, then the entity friendly name. On mobile the popup becomes an 8 px near-fullscreen surface with a fixed title/header and independently scrolling content. Capability-aware Light and Cover ranges use the same responsive square segments as the cards.
+
+The collapsed `logs` field loads on demand and displays up to six entity changes from Home Assistant's last 24 hours of Logbook data. Entries use a Pi-inspired terminal tree with timestamps, state/message, and available context. The popup also supports pointer and keyboard holds, traps focus, closes with Escape/backdrop/close, and returns focus to the card.
 
 Navigation secondary content uses this precedence: a successful reactive `state_template` result, then the formatted `entity` state, then `label`, then the navigation path when `show_path` is enabled. Templates are rendered by Home Assistant's `render_template` WebSocket subscription and update automatically.
 
@@ -104,7 +120,7 @@ Navigation secondary content uses this precedence: a successful reactive `state_
 3. Install **Terminal Cards**.
 4. Hard-refresh Home Assistant (`Ctrl+Shift+R`).
 
-HACS loads the release asset `terminal-cards.js`; no inline `data:` resource is needed. All four cards appear in Home Assistant's card picker and provide graphical configuration.
+HACS loads the release asset `terminal-cards.js`; no inline `data:` resource is needed. All five cards appear in Home Assistant's card picker and provide graphical configuration.
 
 ## Development
 

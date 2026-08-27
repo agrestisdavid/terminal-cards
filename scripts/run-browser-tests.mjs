@@ -4,7 +4,16 @@ import { delimiter, join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { spawnSync } from 'node:child_process';
 
-const tests = ['wrapper', 'light', 'shutter', 'navigation', 'popup', 'editors'];
+const tests = [
+  'wrapper',
+  'title',
+  'light',
+  'shutter',
+  'navigation',
+  'popup',
+  'popup-mobile',
+  'editors',
+];
 const candidates = [
   process.env.CHROME_PATH,
   'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
@@ -43,6 +52,7 @@ try {
         '--no-sandbox',
         '--allow-file-access-from-files',
         '--run-all-compositor-stages-before-draw',
+        test === 'popup-mobile' ? '--window-size=500,844' : '--window-size=800,600',
         '--virtual-time-budget=6000',
         `--user-data-dir=${userDataDir}`,
         '--dump-dom',

@@ -68,6 +68,7 @@
 
       async function run() {
         await customElements.whenDefined('terminal-card-wrapper-editor');
+        await customElements.whenDefined('terminal-title-card');
         await customElements.whenDefined('terminal-light-card');
         await customElements.whenDefined('terminal-shutter-card');
         await customElements.whenDefined('terminal-navigation-card');
@@ -166,6 +167,14 @@
         assert(wrapperClass.getConfigElement().localName === 'terminal-card-wrapper-editor', 'wrapper editor hook missing');
         assert(Array.isArray(wrapperClass.getStubConfig().cards), 'wrapper stub cards missing');
 
+        const titleClass = customElements.get('terminal-title-card');
+        const titleForm = titleClass.getConfigForm();
+        const titleFields = titleForm.schema.flatMap((item) => item.schema || [item]);
+        assert(titleFields.find((field) => field.name === 'title').selector.text, 'title card text selector missing');
+        assert(titleFields.find((field) => field.name === 'font_size').selector.number, 'title card size selector missing');
+        assert(titleFields.some((field) => field.name === 'accent_color'), 'title card accent selector missing');
+        assert(titleFields.some((field) => field.name === 'title_position'), 'title card position selector missing');
+
         const lightClass = customElements.get('terminal-light-card');
         const form = lightClass.getConfigForm();
         const fields = form.schema.flatMap((item) => item.schema || [item]);
@@ -177,6 +186,7 @@
         assert(fields.some((field) => field.name === 'show_controls'), 'light controls button option missing');
         assert(fields.some((field) => field.name === 'accent_color'), 'light accent color option missing');
         assert(fields.some((field) => field.name === 'more_icon'), 'light controls icon option missing');
+        assert(fields.find((field) => field.name === 'popup_title').selector.text, 'light popup title selector missing');
         assert(form.schema.filter((field) => field.type === 'expandable').length >= 3, 'native expandable groups missing');
         assert(!fields.some((field) => field.name === 'title'), 'light editor contains forbidden title');
         const entityField = fields.find((field) => field.name === 'entity');
@@ -189,6 +199,7 @@
         assert(shutterFields.some((field) => field.name === 'show_tilt'), 'shutter tilt option missing');
         assert(shutterFields.some((field) => field.name === 'accent_color'), 'shutter accent color missing');
         assert(shutterFields.some((field) => field.name === 'more_icon'), 'shutter controls icon missing');
+        assert(shutterFields.find((field) => field.name === 'popup_title').selector.text, 'shutter popup title selector missing');
         assert(shutterFields.some((field) => field.name === 'hold_action'), 'shutter hold action missing');
 
         const navigationForm = customElements.get('terminal-navigation-card').getConfigForm();
@@ -218,6 +229,7 @@
           'PASS: wrapper fields use native ha-form controls',
           'PASS: native HA tabs, icon buttons, card picker and child editor',
           'PASS: child cards add, update, move and remove',
+          'PASS: title card exposes native title, size and appearance controls',
           'PASS: light form uses native expandable controls and actions',
           'PASS: shutter and navigation forms use native HA selectors',
         ].join('\n');

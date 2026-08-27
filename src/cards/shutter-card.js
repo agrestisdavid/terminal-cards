@@ -222,6 +222,7 @@ export class TerminalShutterCard extends HTMLElement {
       controls_expanded: 'Expand controls by default',
       accent_color: 'Accent color',
       more_icon: 'Controls icon',
+      popup_title: 'Popup title',
       tap_action: 'Tap action',
       hold_action: 'Hold action',
     };
@@ -263,7 +264,7 @@ export class TerminalShutterCard extends HTMLElement {
           name: '',
           title: 'Appearance',
           flatten: true,
-          schema: appearanceSchema({ moreIcon: true }),
+          schema: appearanceSchema({ moreIcon: true, popupTitle: true }),
         },
         {
           type: 'expandable',
@@ -296,6 +297,9 @@ export class TerminalShutterCard extends HTMLElement {
       computeHelper: (schema) => {
         if (schema.name === 'show_position') return 'Shown only when position is supported.';
         if (schema.name === 'show_tilt') return 'Shown only when tilt position is supported.';
+        if (schema.name === 'popup_title') {
+          return 'Overrides the card name and entity friendly name in the terminal popup title.';
+        }
         return undefined;
       },
     };
@@ -427,7 +431,7 @@ export class TerminalShutterCard extends HTMLElement {
     if (!config.entity.startsWith('cover.')) {
       throw new Error('terminal-shutter-card: "entity" must be a cover');
     }
-    validateAppearance(config, 'terminal-shutter-card');
+    validateAppearance(config, 'terminal-shutter-card', { popupTitle: true });
     const previousDefault = this._config?.controls_expanded;
     this._config = { ...config };
     if (previousDefault !== config.controls_expanded) {

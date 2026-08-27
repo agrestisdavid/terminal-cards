@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>terminal mobile popup test running</title>
+    <style>
+      :root {
+        --card-background-color: #181825;
+        --primary-text-color: #cdd6f4;
+        --secondary-text-color: #6c7086;
+        --accent-color: #89b4fa;
+        --error-color: #f38ba8;
+      }
+      body { margin: 0; background: #11111b; color: #cdd6f4; }
+      terminal-light-card { display: block; width: 100%; }
+    </style>
+    <script>customElements.define('ha-icon', class extends HTMLElement {});</script>
+    <script type="module" src="../dist/terminal-cards.js"></script>
+  </head>
+  <body>
+    <pre id="result">WAITING</pre>
+    <script type="module">
+      function assert(condition, message) {
+        if (!condition) throw new Error(message);
+      }
+
+      async function run() {
+        await customElements.whenDefined('terminal-light-card');
+        assert(innerWidth <= 600, `mobile viewport was not applied: ${innerWidth}px`);
+        const hass = {
+          states: {
+            'light.mobile': {
+              entity_id: 'light.mobile',
+              state: 'on',
+              attributes: {
+                friendly_name: 'Mobile popup light',
+                brightness: 180,
+                hs_color: [210, 70],
+                color_temp_kelvin: 3500,
+                min_color_temp_kelvin: 2000,
+                max_color_temp_kelvin: 6500,
+                supported_color_modes: ['hs', 'color_temp'],
+              },
+            },
+          },
+          formatEntityState: () => 'ON',
+          callService() {},
+          callWS: () => Promise.resolve([]),
+        };
+        const card = document.createElement('terminal-light-card');
+        card.setConfig({
+          entity: 'light.mobile',
+          popup_title: 'mobile title',
+          tap_action: { action: 'more-info' },
+        });
+        card.hass = hass;
+        document.body.prepend(card);
+        card.shadowRoot.querySelector('.main').click();
+
+        const popup = document.querySelector('terminal-entity-popup');
+        const shell = popup.shadowRoot.querySelector('.dialog-shell');
+        const frame = popup.shadowRoot.querySelector('.dialog-frame');
+        const dialog = popup.shadowRoot.querySelector('.dialog');
+        const body = popup.shadowRoot.querySelector('.body');
+        const title = popup.shadowRoot.querySelector('.border-title');
+        const shellRect = shell.getBoundingClientRect();
+        const frameRect = frame.getBoundingClientRect();
+        const dialogRect = dialog.getBoundingClientRect();
+
+        assert(!popup.hidden, 'mobile popup did not open');
+        assert(shellRect.width >= innerWidth - 18, 'mobile popup is not nearly edge-to-edge');
+        assert(shellRect.height >= innerHeight - 18, 'mobile popup does not use the available height');
+        assert(Math.abs(frameRect.height - dialogRect.height) < 0.5, 'mobile dialog does not fill its inner frame');
+        assert(getComputedStyle(body).overflowY === 'auto', 'mobile popup body is not independently scrollable');
+        assert(getComputedStyle(body).alignContent === 'start', 'mobile popup sections are stretched vertically');
+        assert(getComputedStyle(title).fontSize === '18px', 'mobile title does not use its responsive size');
+        assert(getComputedStyle(shell).borderTopWidth === '0px', 'mobile background shell has a border');
+        assert(body.getBoundingClientRect().height > innerHeight / 2, 'mobile controls have too little vertical space');
+        assert(popup.shadowRoot.querySelectorAll('.range').length === 3, 'mobile popup lost controls');
+        assert(popup.shadowRoot.querySelector('.logs-toggle'), 'mobile popup lost the logs field');
+
+        popup.close();
+        document.body.dataset.testStatus = 'PASS';
+        document.title = 'PASS terminal mobile popup';
+        document.querySelector('#result').textContent = [
+          'PASS: mobile popup uses an 8px near-fullscreen layout',
+          'PASS: fixed title/header shell with independently scrollable body',
+          'PASS: responsive controls and logs remain available',
+        ].join('\n');
+      }
+
+      run().catch((error) => {
+        document.body.dataset.testStatus = 'FAIL';
+        document.title = 'FAIL terminal mobile popup';
+        document.querySelector('#result').textContent = `FAIL: ${error.stack || error}`;
+        console.error(error);
+      });
+    </script>
+  </body>
+</html>

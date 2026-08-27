@@ -333,15 +333,15 @@ const STYLES = `
   @media (max-width: 600px) {
     :host {
       box-sizing: border-box;
-      padding: max(12vh, calc(env(safe-area-inset-top) + 12px)) 0
+      padding: max(12vh, calc(env(safe-area-inset-top) + 12px)) 8px
         max(5vh, calc(env(safe-area-inset-bottom) + 8px));
       padding-top: max(12dvh, calc(env(safe-area-inset-top) + 12px));
       padding-bottom: max(5dvh, calc(env(safe-area-inset-bottom) + 8px));
       place-items: stretch;
     }
-    .backdrop { background: #fff; }
+    .backdrop { background: var(--terminal-background); }
     .dialog-shell {
-      width: 100vw;
+      width: 100%;
       height: 100%;
       max-height: none;
       padding: 0;

@@ -70,7 +70,12 @@
         const expectedBottom = innerHeight * 0.05;
 
         assert(!popup.hidden, 'mobile popup did not open');
-        assert(shellRect.width >= innerWidth - 1, 'mobile popup is not edge-to-edge');
+        assert(
+          Math.abs(shellRect.width - (innerWidth - 16)) < 1 &&
+          Math.abs(shellRect.left - 8) < 1 &&
+          Math.abs(innerWidth - shellRect.right - 8) < 1,
+          'mobile popup does not keep an 8px side gap'
+        );
         assert(
           Math.abs(shellRect.top - expectedTop) < 4,
           `mobile popup top gap is not 12vh: ${shellRect.top}px instead of ${expectedTop}px`
@@ -93,8 +98,8 @@
         assert(getComputedStyle(shell).borderTopWidth === '0px', 'mobile background shell has a border');
         assert(getComputedStyle(shell).paddingTop === '0px', 'dark shell spacing remains outside the accent border');
         assert(
-          getComputedStyle(popup.shadowRoot.querySelector('.backdrop')).backgroundColor === 'rgb(255, 255, 255)',
-          'mobile outer area is not white'
+          getComputedStyle(popup.shadowRoot.querySelector('.backdrop')).backgroundColor === 'rgb(24, 24, 37)',
+          'mobile outer area does not use the card background color'
         );
         assert(body.getBoundingClientRect().height > innerHeight / 2, 'mobile controls have too little vertical space');
         assert(popup.shadowRoot.querySelectorAll('.range').length === 3, 'mobile popup lost controls');
@@ -110,8 +115,8 @@
         document.body.dataset.testStatus = 'PASS';
         document.title = 'PASS terminal mobile popup';
         document.querySelector('#result').textContent = [
-          'PASS: white outer area leads directly into accent border and card surface',
-          'PASS: full-width popup uses 12vh top and 5vh bottom clearance',
+          'PASS: card-background outer area leads directly into accent border and card surface',
+          'PASS: popup uses 8px sides, 12vh top and 5vh bottom clearance',
           'PASS: more-info title, entity heading and bordered expanded logs',
         ].join('\n');
       }

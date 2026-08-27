@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.5.2 — 2026-08-27
+
+- Add an 8 px mobile gap between the popup accent border and both screen edges.
+- Use the standard `--card-background-color` for the outer top, side, and bottom areas instead of white.
+
 ## 0.5.1 — 2026-08-27
 
 - Make the mobile popup layering explicit: white outer area, accent border, then card surface.

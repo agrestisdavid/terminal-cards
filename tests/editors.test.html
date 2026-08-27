@@ -131,7 +131,7 @@
             detail: {
               value: {
                 title: 'new title',
-                accent_color: [166, 227, 161],
+                accent_color: 'green',
                 title_position: 'right',
                 entity: 'sensor.temp',
                 state_template: '{{ states(config.entity) }} °C',
@@ -140,7 +140,7 @@
             },
           })
         );
-        assert(latest.accent_color[1] === 227, 'wrapper accent color was not updated');
+        assert(latest.accent_color === 'green', 'wrapper HA theme color was not updated');
         assert(latest.title_position === 'right', 'wrapper title position was not updated');
         assert(latest.entity === 'sensor.temp', 'wrapper state entity was not updated');
         assert(latest.state_template.includes('states'), 'wrapper state template was not updated');
@@ -184,7 +184,8 @@
         assert(titleFields.find((field) => field.name === 'title').selector.text, 'title card text selector missing');
         assert(titleFields.find((field) => field.name === 'subtitle').selector.template, 'title card subtitle selector missing');
         assert(titleFields.find((field) => field.name === 'font_size').selector.number, 'title card size selector missing');
-        assert(titleFields.some((field) => field.name === 'accent_color'), 'title card accent selector missing');
+        const titleAccent = titleFields.find((field) => field.name === 'accent_color');
+        assert(titleAccent.selector.ui_color?.default_color === 'accent', 'title card does not use the HA theme color selector');
         assert(titleFields.some((field) => field.name === 'title_position'), 'title card position selector missing');
 
         const lightClass = customElements.get('terminal-light-card');
@@ -196,7 +197,8 @@
         assert(fields.some((field) => field.name === 'show_hue'), 'light hue option missing');
         assert(fields.some((field) => field.name === 'show_color_temp'), 'light temperature option missing');
         assert(fields.some((field) => field.name === 'show_controls'), 'light controls button option missing');
-        assert(fields.some((field) => field.name === 'accent_color'), 'light accent color option missing');
+        const lightAccent = fields.find((field) => field.name === 'accent_color');
+        assert(lightAccent.selector.ui_color?.default_color === 'accent', 'light card does not use the HA theme color selector');
         assert(fields.some((field) => field.name === 'more_icon'), 'light controls icon option missing');
         assert(fields.find((field) => field.name === 'popup_title').selector.text, 'light popup title selector missing');
         assert(form.schema.filter((field) => field.type === 'expandable').length >= 3, 'native expandable groups missing');
@@ -209,7 +211,8 @@
         const coverEntity = shutterFields.find((field) => field.name === 'entity');
         assert(coverEntity.selector.entity.filter.domain === 'cover', 'shutter selector accepts other domains');
         assert(shutterFields.some((field) => field.name === 'show_tilt'), 'shutter tilt option missing');
-        assert(shutterFields.some((field) => field.name === 'accent_color'), 'shutter accent color missing');
+        const shutterAccent = shutterFields.find((field) => field.name === 'accent_color');
+        assert(shutterAccent.selector.ui_color?.default_color === 'accent', 'shutter card does not use the HA theme color selector');
         assert(shutterFields.some((field) => field.name === 'more_icon'), 'shutter controls icon missing');
         assert(shutterFields.find((field) => field.name === 'popup_title').selector.text, 'shutter popup title selector missing');
         assert(shutterFields.some((field) => field.name === 'hold_action'), 'shutter hold action missing');
@@ -221,7 +224,8 @@
           'native navigation selector missing'
         );
         assert(navigationFields.some((field) => field.name === 'variant'), 'navigation variant missing');
-        assert(navigationFields.some((field) => field.name === 'accent_color'), 'navigation accent color missing');
+        const navigationAccent = navigationFields.find((field) => field.name === 'accent_color');
+        assert(navigationAccent.selector.ui_color?.default_color === 'accent', 'navigation card does not use the HA theme color selector');
         assert(navigationFields.some((field) => field.name === 'title_position'), 'navigation title position missing');
         assert(navigationFields.some((field) => field.name === 'more_icon'), 'navigation icon option missing');
         assert(
@@ -238,7 +242,8 @@
         assert(wrapperStateFields.find((field) => field.name === 'state_template').selector.template, 'wrapper state template selector missing');
         const wrapperPosition = wrapperStateFields.find((field) => field.name === 'state_position');
         assert(wrapperPosition.selector.select.options.length === 4, 'wrapper does not expose all four state corners');
-        assert(wrapperAppearanceFields.some((field) => field.name === 'accent_color'), 'wrapper accent color missing');
+        const wrapperAccent = wrapperAppearanceFields.find((field) => field.name === 'accent_color');
+        assert(wrapperAccent.selector.ui_color?.default_color === 'accent', 'wrapper does not use the HA theme color selector');
         assert(wrapperAppearanceFields.some((field) => field.name === 'title_position'), 'wrapper title position missing');
 
         document.body.dataset.testStatus = 'PASS';
@@ -249,6 +254,7 @@
           'PASS: child cards add, update, move and remove',
           'PASS: title card exposes native title, Markdown/template subtitle, size and appearance controls',
           'PASS: light form uses native expandable controls and actions',
+          'PASS: all cards use the native HA theme color selector instead of RGB pickers',
           'PASS: wrapper state, shutter and navigation forms use native HA selectors',
         ].join('\n');
       }

@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.7.0 — 2026-08-27
+
+- Replace every Terminal Card RGB color picker with Home Assistant's native internal theme-color palette.
+- Resolve selected names such as `blue`, `green`, `purple`, and `cyan` through Home Assistant theme variables so theme overrides stay reactive.
+- Keep existing RGB-array configurations render-compatible while no longer offering RGB values in visual editors.
+
 ## 0.6.0 — 2026-08-27
 
 - Match the mobile popup's bottom outer spacing to its 12 vh top spacing while preserving the 8 px side gaps and safe-area fallback.

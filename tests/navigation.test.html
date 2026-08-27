@@ -68,7 +68,7 @@
         variant: 'pane',
         label: 'settings',
         title_position: 'right',
-        accent_color: [137, 220, 235],
+        accent_color: 'cyan',
         more_icon: 'mdi:arrow-right-bold',
       });
       const entityState = create({
@@ -133,8 +133,8 @@
         assert(title.dataset.titlePosition === 'right', 'pane title position is missing');
         assert(getComputedStyle(title).right === '12px', 'pane title is not positioned right');
         assert(
-          pane.style.getPropertyValue('--terminal-card-accent') === 'rgb(137 220 235)',
-          'navigation accent color is missing'
+          pane.style.getPropertyValue('--terminal-card-accent') === 'var(--cyan-color, #00bcd4)',
+          'navigation HA theme accent is missing'
         );
         assert(titleRect.top < paneRect.top && titleRect.bottom > paneRect.top, 'pane title does not cut border');
         assert(pane.shadowRoot.querySelector('.name').hidden, 'pane repeats name in content');
@@ -260,7 +260,7 @@
           { name: 'external', navigation_path: 'https://example.com/config' },
           { name: 'protocol relative', navigation_path: '//example.com/config' },
           { name: 'bad title side', navigation_path: '/lovelace', title_position: 'center' },
-          { name: 'bad color', navigation_path: '/lovelace', accent_color: [999, 0, 0] },
+          { name: 'bad color', navigation_path: '/lovelace', accent_color: 'chartreuse' },
           { name: 'bad icon', navigation_path: '/lovelace', more_icon: '' },
           { name: 'bad template', navigation_path: '/lovelace', state_template: 42 },
         ]) {

@@ -117,7 +117,7 @@
         show_hue: true,
         show_color_temp: true,
         use_light_color: true,
-        accent_color: [203, 166, 247],
+        accent_color: 'purple',
         more_icon: 'mdi:tune-variant',
         show_more_info: true,
       });
@@ -177,8 +177,8 @@
           'light border does not use the active RGB color'
         );
         assert(
-          light.style.getPropertyValue('--terminal-card-accent') === 'rgb(203 166 247)',
-          'configured light accent color is missing'
+          light.style.getPropertyValue('--terminal-card-accent') === 'var(--purple-color, #9c27b0)',
+          'configured light HA theme accent is missing'
         );
         const warmColor = warm.shadowRoot.querySelector('.card')
           .style.getPropertyValue('--terminal-light-color');
@@ -365,7 +365,7 @@
         try {
           document.createElement('terminal-light-card').setConfig({
             entity: 'light.desk',
-            accent_color: ['bad', 0, 0],
+            accent_color: 'chartreuse',
           });
         } catch (_error) {
           invalidColor = true;

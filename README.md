@@ -14,7 +14,7 @@ Frames arbitrary Lovelace child cards with a terminal-style title embedded in it
 type: custom:terminal-card-wrapper
 title: kitchen
 title_position: right
-accent_color: [137, 180, 250]
+accent_color: blue
 entity: sensor.kitchen_temperature
 state_template: "{{ states(config.entity) }} °C"
 state_position: bottom-right
@@ -36,7 +36,7 @@ title: home status
 subtitle: "**power:** {{ states('sensor.house_power') }} W"
 font_size: 28
 title_position: left
-accent_color: [137, 180, 250]
+accent_color: blue
 ```
 
 ### `custom:terminal-light-card`
@@ -53,7 +53,7 @@ show_brightness: true
 show_hue: true
 show_color_temp: true
 use_light_color: true
-accent_color: [137, 180, 250]
+accent_color: blue
 more_icon: mdi:tune-variant
 popup_title: light-details
 show_controls: true
@@ -79,7 +79,7 @@ show_state: true
 show_controls: true
 show_position: true
 show_tilt: true
-accent_color: [249, 226, 175]
+accent_color: yellow
 more_icon: mdi:menu
 popup_title: cover-details
 controls_expanded: false
@@ -98,7 +98,7 @@ navigation_path: /dashboard-test/kitchen
 icon: mdi:fridge
 variant: pane # or: continuous
 title_position: right
-accent_color: [137, 220, 235]
+accent_color: cyan
 more_icon: mdi:arrow-right-bold
 entity: sensor.kitchen_status
 state_template: "{{ states(config.entity) | upper }}"
@@ -107,7 +107,7 @@ show_path: true
 
 ## Appearance and terminal popup
 
-Every card supports an optional native RGB color selector through `accent_color: [r, g, b]`. It controls the active border, icons, hover/focus state, and controls. The design intentionally has no box-shadow glow. Light state color takes precedence when `use_light_color: true`.
+Every card uses Home Assistant's native theme-color palette for `accent_color` (for example `blue`, `green`, `purple`, or `cyan`) instead of an RGB color picker. The selected theme token controls the active border, icons, hover/focus state, and controls, and follows theme overrides such as `--blue-color`. Existing RGB-array configurations remain render-compatible but are no longer offered by the visual editor. The design intentionally has no box-shadow glow. Light state color takes precedence when `use_light_color: true`.
 
 Wrapper, Title, and pane-style Navigation Cards support `title_position: left|right`. Wrapper state supports `state_position: top-left|top-right|bottom-left|bottom-right`; labels sharing a corner shrink without overlapping. Light, Shutter, and Navigation Cards support `more_icon`; Navigation uses it for the trailing navigation icon. These conventions should also be used by future Terminal Cards.
 
@@ -143,6 +143,7 @@ The bundle uses Home Assistant theme variables with Herdr/Catppuccin Mocha fallb
 - `--primary-text-color`
 - `--secondary-text-color`
 - `--accent-color`
+- Home Assistant palette variables selected through `accent_color`, such as `--blue-color`, `--green-color`, and `--purple-color`
 - `--error-color`
 
 ## License

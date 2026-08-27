@@ -162,7 +162,7 @@
       const vertical = wrapper({
         title: 'Vertikale Child-Cards',
         title_position: 'right',
-        accent_color: [166, 227, 161],
+        accent_color: 'green',
         entity: 'light.desk',
         state_template: '{{ states(config.entity) }} W',
         state_position: 'bottom-right',
@@ -286,8 +286,8 @@
           'Wrapper-Rahmenlabels übernehmen die Hover-Farbe nicht'
         );
         assert(
-          pane.style.getPropertyValue('--terminal-wrapper-accent') === 'rgb(166 227 161)',
-          'Wrapper-Akzentfarbe fehlt'
+          pane.style.getPropertyValue('--terminal-wrapper-accent') === 'var(--green-color, #4caf50)',
+          'Wrapper-HA-Theme-Akzentfarbe fehlt'
         );
         assert(title.dataset.titlePosition === 'right', 'Wrapper-Titelposition fehlt');
         assert(title.parentElement.dataset.position === 'top-right', 'Wrapper-Titel sitzt nicht rechts oben');

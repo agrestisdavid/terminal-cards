@@ -10,6 +10,7 @@
         --primary-text-color: #cdd6f4;
         --secondary-text-color: #6c7086;
         --accent-color: #89b4fa;
+        --green-color: #123456;
         --error-color: #f38ba8;
       }
       body { background: #11111b; color: #cdd6f4; padding: 24px; }
@@ -54,7 +55,7 @@
           subtitle: '**power:** {{ states("sensor.power") }}',
           font_size: 30,
           title_position: 'right',
-          accent_color: [166, 227, 161],
+          accent_color: 'green',
         });
         document.body.prepend(card);
         card.hass = hass;
@@ -74,7 +75,12 @@
 
         assert(frameStyle.borderRadius === '0px', 'title card corners are not square');
         assert(frameStyle.borderTopWidth === '1px', 'title card border is not 1px');
-        assert(frameStyle.borderTopColor === 'rgb(166, 227, 161)', 'title card accent border is wrong');
+        assert(frameStyle.borderTopColor === 'rgb(18, 52, 86)', 'title card ignored the HA theme color override');
+        document.documentElement.style.setProperty('--green-color', '#654321');
+        assert(
+          getComputedStyle(frame).borderTopColor === 'rgb(101, 67, 33)',
+          'title card accent did not react to a HA theme color change'
+        );
         assert(frameStyle.boxShadow === 'none', 'title card renders a glow');
         assert(titleStyle.fontSize === '30px', 'configurable title size is not applied');
         assert(title.dataset.titlePosition === 'right', 'title position is not applied');
@@ -100,7 +106,8 @@
         assert(fields.find((field) => field.name === 'subtitle').selector.template, 'native Markdown/template subtitle selector missing');
         const sizeField = fields.find((field) => field.name === 'font_size');
         assert(sizeField.selector.number.min === 14 && sizeField.selector.number.max === 48, 'font-size selector bounds are wrong');
-        assert(fields.some((field) => field.name === 'accent_color'), 'title accent selector missing');
+        const accentField = fields.find((field) => field.name === 'accent_color');
+        assert(accentField.selector.ui_color?.default_color === 'accent', 'title accent does not use the HA theme color selector');
         assert(fields.some((field) => field.name === 'title_position'), 'title position selector missing');
 
         let invalidTitle = false;
@@ -114,7 +121,7 @@
         try {
           document.createElement('terminal-title-card').setConfig({
             title: 'x',
-            accent_color: [1, 2, 3, 4],
+            accent_color: '#123456',
           });
         } catch (_error) { invalidAccent = true; }
         try {
@@ -122,7 +129,7 @@
         } catch (_error) { invalidSubtitle = true; }
         assert(invalidTitle, 'missing title was accepted');
         assert(invalidSize, 'invalid font size was accepted');
-        assert(invalidAccent, 'non-RGB accent array was accepted');
+        assert(invalidAccent, 'custom accent outside the HA theme palette was accepted');
         assert(invalidSubtitle, 'non-string subtitle was accepted');
         assert(
           window.customCards.some((entry) => entry.type === 'terminal-title-card'),
@@ -133,6 +140,13 @@
         compact.setConfig({ title: 'compact title' });
         document.body.prepend(compact);
         assert(compact.getBoundingClientRect().height < 72, 'title-only card is not more compact than before');
+
+        const legacyAccent = document.createElement('terminal-title-card');
+        legacyAccent.setConfig({ title: 'legacy accent', accent_color: [137, 180, 250] });
+        assert(
+          legacyAccent.style.getPropertyValue('--terminal-card-accent') === 'rgb(137 180 250)',
+          'existing RGB-array accent configuration lost render compatibility'
+        );
 
         card.setConfig({ title: 'plain markdown', subtitle: '_literal markdown_' });
         card.hass = hass;
@@ -147,13 +161,14 @@
         assert(unsubscribeCount === 1, 'template subscription was not cleaned up on config change');
         card.remove();
         compact.remove();
+        legacyAccent.remove();
 
         document.body.dataset.testStatus = 'PASS';
         document.title = 'PASS terminal-title-card';
         document.querySelector('#result').textContent = [
           'PASS: compact square 1px frame, lowered border title and no glow',
           'PASS: reactive Markdown/template subtitle with subscription cleanup',
-          'PASS: native editor schema, validation and picker metadata',
+          'PASS: native HA theme-color editor, validation and legacy RGB rendering',
         ].join('\n');
       }
 

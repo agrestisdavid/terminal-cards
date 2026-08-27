@@ -110,7 +110,7 @@
         title: 'home status // terminal cards',
         subtitle: '**system:** {{ states("sensor.camera_count") }}',
         font_size: 28,
-        accent_color: [137, 180, 250],
+        accent_color: 'blue',
       });
       title.hass = hass;
       document.querySelector('main').append(title);
@@ -119,7 +119,7 @@
       wrapper.setConfig({
         title: 'lighting',
         title_position: 'right',
-        accent_color: [203, 166, 247],
+        accent_color: 'purple',
         entity: 'light.kitchen',
         state_template: '{{ states(config.entity) }} // 80%',
         state_position: 'bottom-right',
@@ -143,20 +143,20 @@
       const controls = document.createElement('terminal-card-wrapper');
       controls.setConfig({
         title: 'covers + navigation',
-        accent_color: [137, 220, 235],
+        accent_color: 'cyan',
         entity: 'cover.office',
         state_position: 'top-right',
         columns: 2,
         cards: [
           {
             type: 'custom:terminal-shutter-card', entity: 'cover.office',
-            accent_color: [249, 226, 175], more_icon: 'mdi:menu',
+            accent_color: 'yellow', more_icon: 'mdi:menu',
             controls_expanded: true,
           },
           {
             type: 'custom:terminal-navigation-card', name: 'kitchen',
             navigation_path: '/dashboard-test/kitchen', icon: 'mdi:fridge',
-            variant: 'continuous', accent_color: [137, 220, 235],
+            variant: 'continuous', accent_color: 'cyan',
             more_icon: 'mdi:arrow-right-bold', entity: 'cover.office',
           },
           {
@@ -164,7 +164,7 @@
             navigation_path: '/config/dashboard', icon: 'mdi:cog',
             variant: 'pane', title_position: 'right',
             state_template: '{{ states.sensor.camera_count.state }}',
-            accent_color: [166, 227, 161], more_icon: 'mdi:arrow-right-bold',
+            accent_color: 'green', more_icon: 'mdi:arrow-right-bold',
           },
         ],
       });

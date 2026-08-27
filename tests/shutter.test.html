@@ -78,7 +78,7 @@
         entity: 'cover.blind',
         name: 'living blind',
         icon: 'mdi:blinds-horizontal',
-        accent_color: [249, 226, 175],
+        accent_color: 'yellow',
         more_icon: 'mdi:menu',
       });
       const basic = create({ entity: 'cover.basic', controls_expanded: true });
@@ -132,8 +132,8 @@
         expand.click();
         assert(!controls.hidden, 'shutter controls did not expand');
         assert(
-          blind.style.getPropertyValue('--terminal-card-accent') === 'rgb(249 226 175)',
-          'configured shutter accent color is missing'
+          blind.style.getPropertyValue('--terminal-card-accent') === 'var(--yellow-color, #ffeb3b)',
+          'configured shutter HA theme accent is missing'
         );
         const commandButtons = blind.shadowRoot.querySelector('.command-buttons');
         const commandButtonsRect = commandButtons.getBoundingClientRect();

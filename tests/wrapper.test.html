@@ -36,6 +36,7 @@
     </style>
     <script>
       let createCount = 0;
+      customElements.define('ha-icon', class extends HTMLElement {});
 
       class MockHaCard extends HTMLElement {
         constructor(config) {
@@ -64,7 +65,8 @@
           const content = (entity && entity.attributes.friendly_name) || cfg.content;
           this.shadowRoot.innerHTML = `
             <style>
-              .card { box-sizing: border-box; min-height: 76px; padding: 12px;
+              :host { display: block; height: 100%; }
+              .card { box-sizing: border-box; min-height: ${cfg.tall ? 140 : 76}px; height: 100%; padding: 12px;
                 border: 1px solid #45475a; background: #1e1e2e; }
               .card[data-state="on"] { border-color: #89b4fa; }
               .card[data-state="unavailable"] { border-color: #f38ba8; color: #f38ba8; }
@@ -84,6 +86,11 @@
               resolve({
                 createCardElement(config) {
                   createCount += 1;
+                  if (config.type === 'custom:terminal-light-card') {
+                    const card = document.createElement('terminal-light-card');
+                    card.setConfig(config);
+                    return card;
+                  }
                   return new MockHaCard(config);
                 },
               }),
@@ -111,6 +118,21 @@
           'switch.fan': {
             state: 'off',
             attributes: { friendly_name: 'Ventilator ist aus' },
+          },
+          'light.dimmer': {
+            state: 'on',
+            attributes: {
+              friendly_name: 'Dimmer',
+              brightness: 128,
+              supported_color_modes: ['brightness'],
+            },
+          },
+          'light.onoff': {
+            state: 'off',
+            attributes: {
+              friendly_name: 'On/off',
+              supported_color_modes: ['onoff'],
+            },
           },
         },
       };
@@ -144,7 +166,7 @@
         title: 'Zweispaltiges Grid',
         columns: 2,
         cards: [
-          { type: 'mock', title: 'Links', content: 'Spalte 1', state: 'on' },
+          { type: 'mock', title: 'Links', content: 'Spalte 1', state: 'on', tall: true },
           {
             type: 'mock',
             title: 'Rechts',
@@ -158,6 +180,22 @@
       document.querySelector('#scenes').appendChild(grid);
 
       const empty = wrapper({ title: 'Leerer erlaubter Wrapper', cards: [] });
+
+      const equalLights = wrapper({
+        title: 'Gleich hohe Light-Cards',
+        columns: 2,
+        cards: [
+          {
+            type: 'custom:terminal-light-card',
+            entity: 'light.dimmer',
+            controls_expanded: true,
+          },
+          {
+            type: 'custom:terminal-light-card',
+            entity: 'light.onoff',
+          },
+        ],
+      });
 
       const lifecycle = wrapper({
         title: 'Disconnect/Reconnect',
@@ -184,6 +222,7 @@
           () =>
             vertical._cards.length === 3 &&
             grid._cards.length === 2 &&
+            equalLights._cards.length === 2 &&
             lifecycle._cards.length === 2,
           'Child-Erstellung hat Timeout erreicht'
         );
@@ -212,7 +251,34 @@
         assert(getComputedStyle(gridContainer).display === 'grid', 'columns aktiviert kein Grid');
         assert(gridColumns.length === 2, `Erwartete 2 Spalten, gefunden: ${gridColumns.join(' ')}`);
         assert(gridContainer.children.length === 2, 'Grid-Child-Cards fehlen');
+        const [leftGridCard, rightGridCard] = [...gridContainer.children];
+        assert(
+          Math.abs(leftGridCard.getBoundingClientRect().height - rightGridCard.getBoundingClientRect().height) < 0.5,
+          'Child-Cards derselben Grid-Zeile sind nicht gleich hoch'
+        );
+        assert(
+          Math.abs(
+            leftGridCard.shadowRoot.querySelector('.card').getBoundingClientRect().height -
+            rightGridCard.shadowRoot.querySelector('.card').getBoundingClientRect().height
+          ) < 0.5,
+          'Child-Card-Rahmen derselben Grid-Zeile werden nicht gestreckt'
+        );
         assert(grid.shadowRoot.querySelector('.title').textContent === 'Zweispaltiges Grid', 'Race hat alte Config gewonnen');
+
+        const equalLightContainer = equalLights.shadowRoot.querySelector('.cards');
+        const [expandedLight, compactLight] = [...equalLightContainer.children];
+        assert(expandedLight.localName === 'terminal-light-card', 'Echte Terminal Light-Card fehlt');
+        assert(
+          Math.abs(expandedLight.getBoundingClientRect().height - compactLight.getBoundingClientRect().height) < 0.5,
+          'Terminal Light-Cards derselben Zeile sind nicht gleich hoch'
+        );
+        assert(
+          Math.abs(
+            expandedLight.shadowRoot.querySelector('.card').getBoundingClientRect().height -
+            compactLight.shadowRoot.querySelector('.card').getBoundingClientRect().height
+          ) < 0.5,
+          'Sichtbare Terminal Light-Card-Rahmen werden nicht gleich hoch gestreckt'
+        );
 
         const emptyPane = empty.shadowRoot.querySelector('.pane');
         assert(emptyPane.getBoundingClientRect().height > 0, 'Leerer Rahmen ist unsichtbar');
@@ -222,6 +288,7 @@
         const earlyVerticalSize = await vertical.earlyCardSize;
         assert(earlyVerticalSize === 3, `Frühes getCardSize blieb bei ${earlyVerticalSize} statt 3`);
         assert((await grid.getCardSize()) === 1, 'Abgelehnte Child-Size fiel nicht auf 1 zurück');
+        assert((await equalLights.getCardSize()) === 2, 'Light-Card-Zeilengröße verwendet nicht das höchste Child');
         assert(vertical.getCardSize() === 3, 'Dynamische Card-Size ist falsch');
         assert(grid.getGridOptions().rows === 'auto', 'Grid rows sind nicht dynamisch');
 
@@ -256,7 +323,7 @@
           lifecycle._cards.every((card) => !initialLifecycleCards.includes(card)),
           'Reconnect verwendete freizugebende Child-Instanzen erneut'
         );
-        assert(createCount === 9, `Unerwartete Child-Erzeugungszahl: ${createCount}`);
+        assert(createCount === 11, `Unerwartete Child-Erzeugungszahl: ${createCount}`);
         assert(
           rebuildCount === 0,
           'Wrapper löste ll-rebuild aus und würde sich in Home Assistant neu erstellen'
@@ -265,7 +332,8 @@
         const evidence = [
           'PASS: 1px-Rahmen, quadratische Ecken und Title-Overlay geprüft',
           'PASS: 3 vertikale Child-Cards sichtbar; hass propagiert',
-          'PASS: columns=2 ergibt CSS-Grid mit 2 Spalten',
+          'PASS: columns=2 ergibt CSS-Grid mit gleich hohen Child-Cards je Zeile',
+          'PASS: echte Light-Cards mit/ohne Controls haben gleich hohe sichtbare Rahmen',
           'PASS: cards=[] ergibt sichtbaren Rahmen + Title ohne Children',
           'PASS: Generation-Guard verwirft überholte setConfig-Erstellung',
           'PASS: frühes getCardSize wartet auf Cards und ergibt 3',

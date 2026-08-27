@@ -49,11 +49,16 @@ const STYLES = `
   .cards[data-layout="grid"] {
     display: grid;
     grid-template-columns: repeat(var(--terminal-wrapper-columns), minmax(0, 1fr));
+    align-items: stretch;
   }
   .cards > * {
     box-sizing: border-box;
     min-width: 0;
     width: 100%;
+  }
+  .cards[data-layout="grid"] > * {
+    align-self: stretch;
+    height: 100%;
   }
   .error {
     color: var(--terminal-error);

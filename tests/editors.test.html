@@ -6,6 +6,41 @@
     <script>
       customElements.define('ha-icon', class extends HTMLElement {});
       customElements.define(
+        'ha-form',
+        class extends HTMLElement {
+          set hass(value) { this._hass = value; }
+          get hass() { return this._hass; }
+          set data(value) { this._data = value; }
+          get data() { return this._data; }
+          set schema(value) { this._schema = value; }
+          get schema() { return this._schema; }
+          set computeLabel(value) { this._computeLabel = value; }
+          get computeLabel() { return this._computeLabel; }
+          set computeHelper(value) { this._computeHelper = value; }
+          get computeHelper() { return this._computeHelper; }
+        }
+      );
+      customElements.define('ha-tab-group', class extends HTMLElement {});
+      customElements.define(
+        'ha-tab-group-tab',
+        class extends HTMLElement {
+          set panel(value) { this._panel = value; }
+          get panel() { return this._panel; }
+          set active(value) { this._active = value; }
+          get active() { return this._active; }
+        }
+      );
+      customElements.define(
+        'ha-icon-button',
+        class extends HTMLElement {
+          set label(value) { this._label = value; }
+          get label() { return this._label; }
+          set disabled(value) { this._disabled = Boolean(value); }
+          get disabled() { return this._disabled; }
+        }
+      );
+      customElements.define('ha-alert', class extends HTMLElement {});
+      customElements.define(
         'hui-card-element-editor',
         class extends HTMLElement {
           set value(value) { this._value = value; }
@@ -60,15 +95,30 @@
           latest = event.detail.config;
         });
 
-        const title = editor.shadowRoot.querySelector('#title');
-        title.value = 'new title';
-        title.dispatchEvent(new Event('input', { bubbles: true }));
+        const wrapperForm = editor.shadowRoot.querySelector('ha-form');
+        assert(wrapperForm, 'native ha-form is missing');
+        assert(wrapperForm.hass === hass, 'ha-form context missing');
+        assert(
+          wrapperForm.schema[0].schema.every((field) => field.selector),
+          'wrapper fields do not use HA selectors'
+        );
+        assert(wrapperForm.computeLabel({ name: 'title' }) === 'Border title', 'HA form label callback missing');
+        wrapperForm.dispatchEvent(
+          new CustomEvent('value-changed', {
+            bubbles: true,
+            detail: { value: { title: 'new title', columns: 2 } },
+          })
+        );
         assert(latest.title === 'new title', 'wrapper title was not updated');
-
-        const columns = editor.shadowRoot.querySelector('#columns');
-        columns.value = '';
-        columns.dispatchEvent(new Event('change', { bubbles: true }));
+        wrapperForm.dispatchEvent(
+          new CustomEvent('value-changed', {
+            bubbles: true,
+            detail: { value: { title: 'new title' } },
+          })
+        );
         assert(latest.columns === undefined, 'vertical layout was not selected');
+        assert(editor.shadowRoot.querySelector('ha-tab-group'), 'native HA tab group missing');
+        assert(editor.shadowRoot.querySelector('ha-icon-button'), 'native HA icon button missing');
 
         const childEditor = editor.shadowRoot.querySelector('hui-card-element-editor');
         assert(childEditor.hass === hass && childEditor.lovelace === lovelace, 'editor context missing');
@@ -106,6 +156,10 @@
         assert(fields.some((field) => field.name === 'entity'), 'light entity selector missing');
         assert(fields.some((field) => field.name === 'icon'), 'light icon selector missing');
         assert(fields.some((field) => field.name === 'tap_action'), 'light tap action missing');
+        assert(fields.some((field) => field.name === 'show_hue'), 'light hue option missing');
+        assert(fields.some((field) => field.name === 'show_color_temp'), 'light temperature option missing');
+        assert(fields.some((field) => field.name === 'show_controls'), 'light controls button option missing');
+        assert(form.schema.filter((field) => field.type === 'expandable').length === 2, 'native expandable groups missing');
         assert(!fields.some((field) => field.name === 'title'), 'light editor contains forbidden title');
         const entityField = fields.find((field) => field.name === 'entity');
         assert(entityField.selector.entity.filter.domain === 'light', 'light selector accepts other domains');
@@ -113,10 +167,10 @@
         document.body.dataset.testStatus = 'PASS';
         document.title = 'PASS terminal-cards editors';
         document.querySelector('#result').textContent = [
-          'PASS: wrapper title, columns and child cards editable visually',
-          'PASS: native child-card picker/editor integration',
+          'PASS: wrapper fields use native ha-form controls',
+          'PASS: native HA tabs, icon buttons, card picker and child editor',
           'PASS: child cards add, update, move and remove',
-          'PASS: light form exposes entity/name/icon/options/actions without title',
+          'PASS: light form uses native expandable controls and actions',
         ].join('\n');
       }
 

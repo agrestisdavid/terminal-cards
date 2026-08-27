@@ -1,6 +1,6 @@
 {
   "name": "terminal-cards",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Herdr-inspired terminal-style Lovelace cards for Home Assistant",
   "type": "module",
   "private": true,

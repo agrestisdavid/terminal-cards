@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.1.2 — 2026-08-27
+
+- Make the square controls button expand and collapse the Light Card controls instead of opening more-info.
+- Align control values directly below the controls button.
+- Calculate brightness segments from the available track width so narrow cards never overlap.
+- Add capability-aware hue and color-temperature controls.
+- Stretch Wrapper children to equal heights within each grid row.
+- Rebuild the Wrapper editor with native `ha-form`, tabs, icon buttons, card picker, and child-card editor components.
+- Group Light Card settings in Home Assistant-native expandable form sections.
+- Add `show_controls`; legacy `show_more_info` configurations remain compatible.
+
 ## 0.1.1 — 2026-08-26
 
 - Replace the native brightness line with 16 interactive square segments.

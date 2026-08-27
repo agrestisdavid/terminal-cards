@@ -1,38 +1,49 @@
 import { defineElement, fireConfigChanged } from '../shared/ha.js';
-import { EDITOR_STYLES } from '../shared/styles.js';
 
 const TAG = 'terminal-card-wrapper-editor';
-const CORE_CARD_TYPES = [
-  'tile',
-  'button',
-  'heading',
-  'markdown',
-  'entities',
-  'area',
-  'sensor',
-  'gauge',
-  'history-graph',
-  'statistics-graph',
-  'conditional',
-  'grid',
-  'vertical-stack',
-  'horizontal-stack',
+const FORM_SCHEMA = [
+  {
+    type: 'grid',
+    name: '',
+    schema: [
+      { name: 'title', required: true, selector: { text: {} } },
+      { name: 'columns', selector: { number: { min: 1, mode: 'box' } } },
+    ],
+  },
 ];
 
 const STYLES = `
-  ${EDITOR_STYLES}
-  .toolbar, .tabs { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-  .toolbar { justify-content: space-between; }
-  .tabs { flex: 1 1 auto; }
-  .tab[aria-selected="true"] { border-color: var(--primary-color); color: var(--primary-color); }
-  .actions { display: flex; gap: 6px; flex-wrap: wrap; }
-  .child-editor {
-    margin-top: 8px;
-    padding: 12px;
-    border: 1px solid var(--divider-color, #6c7086);
+  :host { display: block; }
+  .editor { display: grid; gap: 16px; }
+  .toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
   }
-  .picker-fallback { display: grid; gap: 12px; }
+  ha-tab-group {
+    flex: 1 1 auto;
+    min-width: 0;
+    --ha-tab-track-color: var(--card-background-color);
+  }
+  .card-editor {
+    padding: 12px;
+    border: 1px solid var(--divider-color);
+  }
+  .card-options {
+    display: flex;
+    justify-content: flex-end;
+    width: 100%;
+  }
+  .gui-mode-button {
+    margin-right: auto;
+    margin-inline-end: auto;
+    margin-inline-start: initial;
+  }
   .danger { color: var(--error-color); }
+  ha-alert { display: block; }
+  @media (max-width: 450px) {
+    .card-editor { margin: 0 -12px; }
+  }
 `;
 
 export class TerminalCardWrapperEditor extends HTMLElement {
@@ -44,6 +55,10 @@ export class TerminalCardWrapperEditor extends HTMLElement {
     this._selected = 0;
     this._guiMode = true;
     this._guiModeAvailable = true;
+    this._childEditor = null;
+    this._picker = null;
+    this._form = null;
+
     const root = this.attachShadow({ mode: 'open' });
     const style = document.createElement('style');
     style.textContent = STYLES;
@@ -53,6 +68,7 @@ export class TerminalCardWrapperEditor extends HTMLElement {
 
   set hass(hass) {
     this._hass = hass;
+    if (this._config && !this._container.hasChildNodes()) this._render();
     this._propagateContext();
   }
 
@@ -83,6 +99,7 @@ export class TerminalCardWrapperEditor extends HTMLElement {
   }
 
   _propagateContext() {
+    if (this._form) this._form.hass = this._hass;
     if (this._childEditor) {
       this._childEditor.hass = this._hass;
       this._childEditor.lovelace = this._lovelace;
@@ -101,88 +118,136 @@ export class TerminalCardWrapperEditor extends HTMLElement {
 
   _render() {
     if (!this._config) return;
-    const cards = this._config.cards;
-    const selectedIsCard = this._selected < cards.length;
-    this._container.innerHTML = `
-      <div class="editor">
-        <div class="row">
-          <div class="field">
-            <label for="title">Border title</label>
-            <input id="title" type="text" required />
-          </div>
-          <div class="field">
-            <label for="columns">Columns</label>
-            <input id="columns" type="number" min="1" step="1" placeholder="vertical" />
-            <span class="hint">Leave empty for a vertical list.</span>
-          </div>
-        </div>
-        <div class="toolbar">
-          <div class="tabs" role="tablist" aria-label="Child cards"></div>
-          <div class="actions">
-            <button type="button" data-action="add">Add card</button>
-            ${
-              selectedIsCard
-                ? `<button type="button" data-action="mode">${
-                    this._guiMode ? 'Code editor' : 'Visual editor'
-                  }</button>
-                   <button type="button" data-action="prev" ${this._selected === 0 ? 'disabled' : ''}>Move left</button>
-                   <button type="button" data-action="next" ${this._selected === cards.length - 1 ? 'disabled' : ''}>Move right</button>
-                   <button type="button" class="danger" data-action="delete">Remove</button>`
-                : ''
-            }
-          </div>
-        </div>
-        <div class="child-editor"></div>
-      </div>
-    `;
+    this._childEditor = null;
+    this._picker = null;
+    this._form = null;
+    this._container.replaceChildren();
 
-    const title = this._container.querySelector('#title');
-    title.value = this._config.title || '';
-    title.addEventListener('input', (event) => {
-      this._emit({ ...this._config, title: event.target.value });
-    });
-
-    const columns = this._container.querySelector('#columns');
-    columns.value = this._config.columns ?? '';
-    columns.addEventListener('change', (event) => {
-      const value = event.target.value;
-      const next = { ...this._config };
-      if (value === '') delete next.columns;
-      else next.columns = Math.max(1, Number.parseInt(value, 10) || 1);
+    const editor = document.createElement('div');
+    editor.className = 'editor';
+    this._form = document.createElement('ha-form');
+    this._form.hass = this._hass;
+    this._form.data = {
+      title: this._config.title || '',
+      ...(this._config.columns === undefined ? {} : { columns: this._config.columns }),
+    };
+    this._form.schema = FORM_SCHEMA;
+    this._form.computeLabel = (schema) => ({
+      title: 'Border title',
+      columns: 'Columns',
+    })[schema.name] || schema.name;
+    this._form.computeHelper = (schema) =>
+      schema.name === 'columns' ? 'Leave empty for a vertical list.' : undefined;
+    this._form.addEventListener('value-changed', (event) => {
+      event.stopPropagation();
+      const value = event.detail?.value || {};
+      const next = { ...this._config, title: value.title ?? '' };
+      if (value.columns === undefined || value.columns === null || value.columns === '') {
+        delete next.columns;
+      } else {
+        next.columns = Math.max(1, Number.parseInt(value.columns, 10) || 1);
+      }
       this._emit(next);
     });
+    editor.append(this._form);
 
-    const tabs = this._container.querySelector('.tabs');
-    cards.forEach((card, index) => {
-      const button = document.createElement('button');
-      button.type = 'button';
-      button.className = 'tab';
-      button.setAttribute('role', 'tab');
-      button.setAttribute('aria-selected', String(index === this._selected));
-      button.textContent = `${index + 1}: ${card.type || 'manual'}`;
-      button.addEventListener('click', () => {
-        this._selected = index;
-        this._guiMode = true;
-        this._guiModeAvailable = true;
+    const toolbar = document.createElement('div');
+    toolbar.className = 'toolbar';
+    const tabs = document.createElement('ha-tab-group');
+    tabs.setAttribute('aria-label', 'Child cards');
+    this._config.cards.forEach((card, index) => {
+      const tab = document.createElement('ha-tab-group-tab');
+      tab.slot = 'nav';
+      tab.panel = String(index);
+      tab.active = index === this._selected;
+      tab.textContent = String(index + 1);
+      tab.title = card.type || 'manual';
+      tab.addEventListener('click', () => this._select(index));
+      tabs.append(tab);
+    });
+    tabs.addEventListener('wa-tab-show', (event) => {
+      const index = Number.parseInt(event.detail?.name, 10);
+      if (Number.isInteger(index)) this._select(index);
+    });
+    toolbar.append(tabs);
+    toolbar.append(
+      this._iconButton('mdi:plus', 'Add card', () => {
+        this._selected = this._config.cards.length;
         this._render();
-      });
-      tabs.append(button);
-    });
+      }, 'add')
+    );
+    editor.append(toolbar);
 
-    this._container.querySelector('[data-action="add"]').addEventListener('click', () => {
-      this._selected = cards.length;
-      this._render();
-    });
-    this._container.querySelector('[data-action="mode"]')?.addEventListener('click', () => {
-      if (this._guiModeAvailable) this._childEditor?.toggleMode?.();
-    });
-    this._container.querySelector('[data-action="prev"]')?.addEventListener('click', () => this._move(-1));
-    this._container.querySelector('[data-action="next"]')?.addEventListener('click', () => this._move(1));
-    this._container.querySelector('[data-action="delete"]')?.addEventListener('click', () => this._remove());
+    const cardEditor = document.createElement('div');
+    cardEditor.className = 'card-editor';
+    if (this._selected < this._config.cards.length) {
+      this._renderCardOptions(cardEditor);
+      this._renderChildEditor(cardEditor);
+    } else {
+      this._renderPicker(cardEditor);
+    }
+    editor.append(cardEditor);
+    this._container.append(editor);
+  }
 
-    const editor = this._container.querySelector('.child-editor');
-    if (selectedIsCard) this._renderChildEditor(editor);
-    else this._renderPicker(editor);
+  _iconButton(icon, label, handler, action, className = '') {
+    const button = document.createElement('ha-icon-button');
+    button.label = label;
+    button.title = label;
+    button.dataset.action = action;
+    if (className) button.className = className;
+    const iconElement = document.createElement('ha-icon');
+    iconElement.icon = icon;
+    button.append(iconElement);
+    button.addEventListener('click', handler);
+    return button;
+  }
+
+  _renderCardOptions(container) {
+    const options = document.createElement('div');
+    options.className = 'card-options';
+    this._modeButton = this._iconButton(
+      this._guiMode ? 'mdi:code-braces' : 'mdi:format-list-bulleted',
+      this._guiMode ? 'Show code editor' : 'Show visual editor',
+      () => {
+        if (this._guiModeAvailable) this._childEditor?.toggleMode?.();
+      },
+      'mode',
+      'gui-mode-button'
+    );
+    this._modeButton.disabled = !this._guiModeAvailable;
+    options.append(this._modeButton);
+
+    const previous = this._iconButton(
+      'mdi:arrow-left',
+      'Move before',
+      () => this._move(-1),
+      'prev'
+    );
+    previous.disabled = this._selected === 0;
+    options.append(previous);
+
+    const next = this._iconButton(
+      'mdi:arrow-right',
+      'Move after',
+      () => this._move(1),
+      'next'
+    );
+    next.disabled = this._selected === this._config.cards.length - 1;
+    options.append(next);
+
+    options.append(
+      this._iconButton('mdi:delete', 'Remove card', () => this._remove(), 'delete', 'danger')
+    );
+    container.append(options);
+  }
+
+  _select(index) {
+    if (index === this._selected) return;
+    this._selected = index;
+    this._guiMode = true;
+    this._guiModeAvailable = true;
+    this._render();
   }
 
   _renderChildEditor(container) {
@@ -201,10 +266,19 @@ export class TerminalCardWrapperEditor extends HTMLElement {
       event.stopPropagation();
       this._guiMode = event.detail.guiMode;
       this._guiModeAvailable = event.detail.guiModeAvailable !== false;
-      const button = this._container.querySelector('[data-action="mode"]');
-      if (button) button.textContent = this._guiMode ? 'Code editor' : 'Visual editor';
+      this._updateModeButton();
     });
     container.append(this._childEditor);
+  }
+
+  _updateModeButton() {
+    if (!this._modeButton) return;
+    const icon = this._modeButton.querySelector('ha-icon');
+    icon.icon = this._guiMode ? 'mdi:code-braces' : 'mdi:format-list-bulleted';
+    const label = this._guiMode ? 'Show code editor' : 'Show visual editor';
+    this._modeButton.label = label;
+    this._modeButton.title = label;
+    this._modeButton.disabled = !this._guiModeAvailable;
   }
 
   _renderPicker(container) {
@@ -214,56 +288,20 @@ export class TerminalCardWrapperEditor extends HTMLElement {
       this._picker.lovelace = this._lovelace;
       this._picker.addEventListener('config-changed', (event) => {
         event.stopPropagation();
-        this._appendCard(event.detail.config);
+        const cards = [...this._config.cards, event.detail.config];
+        this._selected = cards.length - 1;
+        this._guiMode = true;
+        this._guiModeAvailable = true;
+        this._emit({ ...this._config, cards }, true);
       });
       container.append(this._picker);
       return;
     }
 
-    const fallback = document.createElement('div');
-    fallback.className = 'picker-fallback';
-    const hint = document.createElement('span');
-    hint.className = 'hint';
-    hint.textContent = 'Choose a child-card type. Its native visual editor opens next.';
-    const select = document.createElement('select');
-    const customTypes = (window.customCards || []).map((card) => `custom:${card.type}`);
-    for (const type of [...new Set([...CORE_CARD_TYPES, ...customTypes])]) {
-      const option = document.createElement('option');
-      option.value = type;
-      option.textContent = type;
-      select.append(option);
-    }
-    const add = document.createElement('button');
-    add.type = 'button';
-    add.textContent = 'Create child card';
-    add.addEventListener('click', () => this._appendCard(this._stubForType(select.value)));
-    fallback.append(hint, select, add);
-    container.append(fallback);
-  }
-
-  _stubForType(type) {
-    const firstEntity = Object.keys(this._hass?.states || {})[0] || '';
-    const firstLight =
-      Object.keys(this._hass?.states || {}).find((entityId) => entityId.startsWith('light.')) || '';
-    if (type === 'markdown') return { type, content: '' };
-    if (type === 'heading') return { type, heading: 'heading' };
-    if (type === 'entities') return { type, entities: [] };
-    if (type === 'grid') return { type, columns: 2, square: false, cards: [] };
-    if (type === 'vertical-stack' || type === 'horizontal-stack') return { type, cards: [] };
-    if (type === 'custom:terminal-light-card') return { type, entity: firstLight };
-    const tag = type.startsWith('custom:') ? type.slice(7) : type;
-    const constructor = customElements.get(tag);
-    const stub = constructor?.getStubConfig?.(this._hass, [], []) || {};
-    if (Object.keys(stub).length) return { type, ...stub };
-    return { type, entity: firstEntity };
-  }
-
-  _appendCard(card) {
-    const cards = [...this._config.cards, card];
-    this._selected = cards.length - 1;
-    this._guiMode = true;
-    this._guiModeAvailable = true;
-    this._emit({ ...this._config, cards }, true);
+    const alert = document.createElement('ha-alert');
+    alert.setAttribute('alert-type', 'warning');
+    alert.textContent = 'Home Assistant’s native card picker is not available yet. Reopen the card editor.';
+    container.append(alert);
   }
 
   _move(delta) {

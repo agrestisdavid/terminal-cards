@@ -8,7 +8,7 @@ Terminal-style Lovelace cards for Home Assistant, inspired by Herdr panes: squar
 
 ### `custom:terminal-card-wrapper`
 
-Frames arbitrary Lovelace child cards with a terminal-style title embedded in its top border. Child cards are vertical by default; set `columns` for a grid. The visual editor can add, configure, reorder, and remove child cards without YAML.
+Frames arbitrary Lovelace child cards with a terminal-style title embedded in its top border. Child cards are vertical by default; set `columns` for a grid. Children in the same grid row stretch to an equal height. The native-style visual editor can add, configure, reorder, and remove child cards without YAML.
 
 ```yaml
 type: custom:terminal-card-wrapper
@@ -23,7 +23,7 @@ cards:
 
 ### `custom:terminal-light-card`
 
-A compact light card with terminal state colors and an optional segmented brightness control made from small squares. Its border is continuous: unlike the wrapper, the Light Card deliberately has **no title embedded in the border**. Its name is shown inside the card.
+A compact light card with terminal state colors and responsive square controls for brightness, hue, and color temperature when the selected light supports them. The square three-dot button expands or collapses those controls. Its border is continuous: unlike the wrapper, the Light Card deliberately has **no title embedded in the border**. Its name is shown inside the card.
 
 ```yaml
 type: custom:terminal-light-card
@@ -32,14 +32,17 @@ name: ceiling light
 icon: mdi:ceiling-light
 show_state: true
 show_brightness: true
-show_more_info: true
+show_hue: true
+show_color_temp: true
+show_controls: true
+controls_expanded: false
 tap_action:
   action: toggle
 hold_action:
   action: more-info
 ```
 
-All options are available in Home Assistant's visual card editor. The entity selector only offers `light.*` entities; action fields use Home Assistant's native action editor.
+All options are available through Home Assistant-native visual form controls. The entity selector only offers `light.*` entities; action fields use Home Assistant's native action editor. The number of square segments adapts automatically to the rendered card width.
 
 ## Installation with HACS
 

@@ -57,7 +57,11 @@
         states: {
           'light.kitchen': {
             entity_id: 'light.kitchen', state: 'on',
-            attributes: { friendly_name: 'kitchen', brightness: 204, supported_color_modes: ['brightness'] },
+            attributes: {
+              friendly_name: 'kitchen', brightness: 204, hs_color: [215, 72],
+              color_temp_kelvin: 3600, min_color_temp_kelvin: 2000,
+              max_color_temp_kelvin: 6500, supported_color_modes: ['hs', 'color_temp'],
+            },
           },
           'light.dining': {
             entity_id: 'light.dining', state: 'off',
@@ -78,8 +82,15 @@
         title: 'lighting',
         columns: 3,
         cards: [
-          { type: 'custom:terminal-light-card', entity: 'light.kitchen', show_brightness: true },
-          { type: 'custom:terminal-light-card', entity: 'light.dining', show_brightness: true },
+          {
+            type: 'custom:terminal-light-card', entity: 'light.kitchen',
+            show_brightness: true, show_hue: true, show_color_temp: true,
+            controls_expanded: true,
+          },
+          {
+            type: 'custom:terminal-light-card', entity: 'light.dining',
+            show_brightness: true, controls_expanded: true,
+          },
           { type: 'custom:terminal-light-card', entity: 'light.garage', show_brightness: true },
         ],
       });

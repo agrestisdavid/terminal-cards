@@ -2,7 +2,6 @@ import {
   DOCUMENTATION_URL,
   defineElement,
   executeAction,
-  fireMoreInfo,
   registerCard,
 } from '../shared/ha.js';
 import { TERMINAL_COLORS, TERMINAL_FONT } from '../shared/styles.js';
@@ -10,15 +9,24 @@ import { TERMINAL_COLORS, TERMINAL_FONT } from '../shared/styles.js';
 const TAG = 'terminal-light-card';
 const DEFAULT_TAP_ACTION = { action: 'toggle' };
 const DEFAULT_HOLD_ACTION = { action: 'more-info' };
+const COLOR_MODES = new Set(['hs', 'xy', 'rgb', 'rgbw', 'rgbww']);
+const SEGMENT_SIZE = 7;
+const MIN_SEGMENT_GAP = 4;
+const MAX_SEGMENTS = 40;
 
 const STYLES = `
   :host {
     ${TERMINAL_COLORS}
     display: block;
+    height: 100%;
   }
   .card {
     box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
     min-width: 0;
+    min-height: 72px;
+    height: 100%;
     border: 1px solid var(--terminal-dim);
     border-radius: 0;
     background: var(--terminal-background);
@@ -75,14 +83,14 @@ const STYLES = `
     height: 34px;
     padding: 0;
     border: 1px solid transparent;
-    border-radius: 50%;
+    border-radius: 0;
     background: transparent;
     color: var(--terminal-dim);
     line-height: 0;
     cursor: pointer;
   }
   .more[hidden] { display: none; }
-  .more:hover, .more:focus-visible {
+  .more:hover, .more:focus-visible, .more[aria-expanded="true"] {
     border-color: currentColor;
     color: var(--terminal-accent);
     outline: none;
@@ -95,42 +103,69 @@ const STYLES = `
     height: 20px;
     --mdc-icon-size: 20px;
   }
-  .brightness {
+  .controls {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) 42px;
-    align-items: center;
-    gap: 10px;
+    gap: 8px;
+    margin-top: auto;
     padding: 0 14px 12px;
   }
-  .brightness[hidden] { display: none; }
-  .dimmer {
+  .controls[hidden], .control[hidden] { display: none; }
+  .control {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 34px;
+    align-items: center;
+    gap: 14px;
+    min-width: 0;
+  }
+  .control-main {
+    display: grid;
+    grid-template-columns: 32px minmax(0, 1fr);
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+  }
+  .control-label, .control-value {
+    color: var(--terminal-dim);
+    font-size: 11px;
+    white-space: nowrap;
+  }
+  .control-value { text-align: center; }
+  .track {
     position: relative;
     display: flex;
     align-items: center;
     min-width: 0;
     height: 20px;
   }
-  .dimmer:focus-within {
+  .track:focus-within {
     outline: 1px solid var(--terminal-accent);
     outline-offset: 2px;
   }
-  .dimmer[data-disabled="true"] { cursor: not-allowed; opacity: .55; }
+  .track[data-disabled="true"] { cursor: not-allowed; opacity: .55; }
   .segments {
-    display: grid;
-    grid-template-columns: repeat(16, minmax(3px, 8px));
+    display: flex;
     align-items: center;
     justify-content: space-between;
     width: 100%;
+    min-width: 0;
     pointer-events: none;
   }
   .segment {
-    width: 100%;
-    aspect-ratio: 1;
+    box-sizing: border-box;
+    flex: 0 0 ${SEGMENT_SIZE}px;
+    width: ${SEGMENT_SIZE}px;
+    height: ${SEGMENT_SIZE}px;
+    border: 0;
     background: var(--terminal-dim);
     opacity: .42;
   }
-  .segment[data-active="true"] {
+  .control[data-control="brightness"] .segment[data-active="true"] {
     background: var(--terminal-accent);
+    opacity: 1;
+  }
+  .control:not([data-control="brightness"]) .segment { opacity: .42; }
+  .control:not([data-control="brightness"]) .segment[data-selected="true"] {
+    border: 1px solid var(--terminal-text);
     opacity: 1;
   }
   input[type="range"] {
@@ -145,7 +180,6 @@ const STYLES = `
     cursor: pointer;
   }
   input[type="range"]:disabled { cursor: not-allowed; }
-  .percent { color: var(--terminal-dim); text-align: right; font-size: 12px; }
 `;
 
 export class TerminalLightCard extends HTMLElement {
@@ -156,7 +190,10 @@ export class TerminalLightCard extends HTMLElement {
       icon: 'Icon',
       show_state: 'Show state',
       show_brightness: 'Show brightness',
-      show_more_info: 'Show more-info button',
+      show_hue: 'Show hue',
+      show_color_temp: 'Show color temperature',
+      show_controls: 'Show controls button',
+      controls_expanded: 'Expand controls by default',
       tap_action: 'Tap action',
       hold_action: 'Hold action',
     };
@@ -181,39 +218,59 @@ export class TerminalLightCard extends HTMLElement {
           ],
         },
         {
-          type: 'grid',
+          type: 'expandable',
           name: '',
+          title: 'Display and controls',
           flatten: true,
           schema: [
-            { name: 'show_state', selector: { boolean: {} } },
-            { name: 'show_brightness', selector: { boolean: {} } },
-            { name: 'show_more_info', selector: { boolean: {} } },
+            { name: 'show_state', default: true, selector: { boolean: {} } },
+            { name: 'show_brightness', default: true, selector: { boolean: {} } },
+            { name: 'show_hue', default: true, selector: { boolean: {} } },
+            { name: 'show_color_temp', default: true, selector: { boolean: {} } },
+            { name: 'show_controls', default: true, selector: { boolean: {} } },
+            { name: 'controls_expanded', default: false, selector: { boolean: {} } },
           ],
         },
         {
-          name: 'tap_action',
-          selector: {
-            ui_action: {
-              actions: ['toggle', 'more-info', 'navigate', 'url', 'perform-action', 'none'],
-              default_action: 'toggle',
+          type: 'expandable',
+          name: '',
+          title: 'Actions',
+          flatten: true,
+          schema: [
+            {
+              name: 'tap_action',
+              selector: {
+                ui_action: {
+                  actions: ['toggle', 'more-info', 'navigate', 'url', 'perform-action', 'none'],
+                  default_action: 'toggle',
+                },
+              },
             },
-          },
-        },
-        {
-          name: 'hold_action',
-          selector: {
-            ui_action: {
-              actions: ['toggle', 'more-info', 'navigate', 'url', 'perform-action', 'none'],
-              default_action: 'more-info',
+            {
+              name: 'hold_action',
+              selector: {
+                ui_action: {
+                  actions: ['toggle', 'more-info', 'navigate', 'url', 'perform-action', 'none'],
+                  default_action: 'more-info',
+                },
+              },
             },
-          },
+          ],
         },
       ],
-      computeLabel: (schema) => labels[schema.name],
-      computeHelper: (schema) =>
-        schema.name === 'show_brightness'
-          ? 'Shown only when the selected light supports brightness.'
-          : undefined,
+      computeLabel: (schema) => labels[schema.name] || schema.name,
+      computeHelper: (schema) => {
+        if (schema.name === 'show_brightness') {
+          return 'Shown only when the selected light supports brightness.';
+        }
+        if (schema.name === 'show_hue') {
+          return 'Shown only for color-capable lights.';
+        }
+        if (schema.name === 'show_color_temp') {
+          return 'Shown only for lights that support color temperature.';
+        }
+        return undefined;
+      },
     };
   }
 
@@ -224,7 +281,10 @@ export class TerminalLightCard extends HTMLElement {
       entity,
       show_state: true,
       show_brightness: true,
-      show_more_info: true,
+      show_hue: true,
+      show_color_temp: true,
+      show_controls: true,
+      controls_expanded: false,
     };
   }
 
@@ -234,6 +294,12 @@ export class TerminalLightCard extends HTMLElement {
     this._hass = null;
     this._holdTimer = null;
     this._held = false;
+    this._controlsExpanded = false;
+    this._segmentLayoutFrame = null;
+    this._resizeObserver = typeof ResizeObserver === 'function'
+      ? new ResizeObserver(() => this._updateSegmentCounts())
+      : null;
+    this._controlsByName = {};
 
     const root = this.attachShadow({ mode: 'open' });
     const style = document.createElement('style');
@@ -256,36 +322,22 @@ export class TerminalLightCard extends HTMLElement {
     this._more = document.createElement('button');
     this._more.className = 'more';
     this._more.type = 'button';
-    this._more.title = 'More information';
-    this._more.setAttribute('aria-label', 'More information');
+    this._more.title = 'Toggle light controls';
+    this._more.setAttribute('aria-label', 'Toggle light controls');
+    this._more.setAttribute('aria-controls', 'terminal-light-controls');
     const moreIcon = document.createElement('ha-icon');
     moreIcon.icon = 'mdi:dots-vertical';
     this._more.append(moreIcon);
     this._main.append(this._icon, this._text, this._more);
 
-    this._brightness = document.createElement('div');
-    this._brightness.className = 'brightness';
-    this._dimmer = document.createElement('div');
-    this._dimmer.className = 'dimmer';
-    this._segments = document.createElement('div');
-    this._segments.className = 'segments';
-    this._segments.setAttribute('aria-hidden', 'true');
-    this._segmentElements = Array.from({ length: 16 }, () => {
-      const segment = document.createElement('span');
-      segment.className = 'segment';
-      this._segments.append(segment);
-      return segment;
-    });
-    this._slider = document.createElement('input');
-    this._slider.type = 'range';
-    this._slider.min = '0';
-    this._slider.max = '100';
-    this._slider.setAttribute('aria-label', 'Brightness');
-    this._dimmer.append(this._segments, this._slider);
-    this._percent = document.createElement('span');
-    this._percent.className = 'percent';
-    this._brightness.append(this._dimmer, this._percent);
-    this._card.append(this._main, this._brightness);
+    this._controls = document.createElement('div');
+    this._controls.id = 'terminal-light-controls';
+    this._controls.className = 'controls';
+    this._createControl('brightness', 'bri', 0, 100, 1);
+    this._createControl('hue', 'hue', 0, 360, 1);
+    this._createControl('temperature', 'temp', 2000, 6500, 50);
+
+    this._card.append(this._main, this._controls);
     root.append(style, this._card);
 
     this._main.addEventListener('click', () => this._tap());
@@ -305,13 +357,23 @@ export class TerminalLightCard extends HTMLElement {
     this._more.addEventListener('pointerdown', (event) => event.stopPropagation());
     this._more.addEventListener('click', (event) => {
       event.stopPropagation();
-      if (this._hass && this._config) fireMoreInfo(this, this._config.entity);
+      this._toggleControls();
     });
-    this._slider.addEventListener('click', (event) => event.stopPropagation());
-    this._slider.addEventListener('input', () => {
-      this._renderBrightness(Number(this._slider.value));
-    });
-    this._slider.addEventListener('change', () => this._setBrightness());
+  }
+
+  connectedCallback() {
+    this._resizeObserver?.observe(this._card);
+    this._scheduleSegmentLayout();
+  }
+
+  disconnectedCallback() {
+    this._cancelHold();
+    this._resizeObserver?.disconnect();
+    if (this._segmentLayoutFrame !== null) {
+      cancelAnimationFrame(this._segmentLayoutFrame);
+      this._segmentLayoutFrame = null;
+    }
+    this._hass = null;
   }
 
   setConfig(config) {
@@ -321,7 +383,11 @@ export class TerminalLightCard extends HTMLElement {
     if (!config.entity.startsWith('light.')) {
       throw new Error('terminal-light-card: "entity" must be a light');
     }
+    const previousDefault = this._config?.controls_expanded;
     this._config = { ...config };
+    if (previousDefault !== config.controls_expanded) {
+      this._controlsExpanded = config.controls_expanded === true;
+    }
     this._render();
   }
 
@@ -330,17 +396,60 @@ export class TerminalLightCard extends HTMLElement {
     this._render();
   }
 
-  disconnectedCallback() {
-    this._cancelHold();
-    this._hass = null;
-  }
-
   getCardSize() {
-    return this._showBrightness() ? 2 : 1;
+    if (!this._controlsExpanded) return 1;
+    return 1 + Math.ceil(this._enabledControlNames().length / 2);
   }
 
   getGridOptions() {
     return { columns: 6, rows: 'auto', min_columns: 3 };
+  }
+
+  _createControl(name, label, min, max, step) {
+    const row = document.createElement('div');
+    row.className = 'control';
+    row.dataset.control = name;
+    const main = document.createElement('div');
+    main.className = 'control-main';
+    const labelElement = document.createElement('span');
+    labelElement.className = 'control-label';
+    labelElement.textContent = label;
+    const track = document.createElement('div');
+    track.className = 'track';
+    const segments = document.createElement('div');
+    segments.className = 'segments';
+    segments.setAttribute('aria-hidden', 'true');
+    const input = document.createElement('input');
+    input.type = 'range';
+    input.min = String(min);
+    input.max = String(max);
+    input.step = String(step);
+    input.setAttribute('aria-label', label);
+    track.append(segments, input);
+    main.append(labelElement, track);
+    const value = document.createElement('span');
+    value.className = 'control-value';
+    row.append(main, value);
+    this._controls.append(row);
+
+    const control = {
+      name,
+      row,
+      track,
+      segments,
+      segmentElements: [],
+      input,
+      value,
+      min,
+      max,
+      currentValue: min,
+    };
+    input.addEventListener('click', (event) => event.stopPropagation());
+    input.addEventListener('input', () => {
+      this._renderControl(control, Number(input.value));
+    });
+    input.addEventListener('change', () => this._setControl(control));
+    this._controlsByName[name] = control;
   }
 
   _entity() {
@@ -355,14 +464,45 @@ export class TerminalLightCard extends HTMLElement {
     return entity.state === 'on' ? 'on' : 'off';
   }
 
+  _supportedModes() {
+    return this._entity()?.attributes?.supported_color_modes || [];
+  }
+
   _supportsBrightness() {
     const entity = this._entity();
-    const modes = entity?.attributes?.supported_color_modes || [];
+    const modes = this._supportedModes();
     return entity?.attributes?.brightness !== undefined || modes.some((mode) => mode !== 'onoff');
   }
 
-  _showBrightness() {
-    return this._config?.show_brightness !== false && this._supportsBrightness();
+  _supportsHue() {
+    return this._supportedModes().some((mode) => COLOR_MODES.has(mode));
+  }
+
+  _supportsColorTemperature() {
+    return this._supportedModes().includes('color_temp');
+  }
+
+  _enabledControlNames() {
+    if (!this._config) return [];
+    const names = [];
+    if (this._config.show_brightness !== false && this._supportsBrightness()) {
+      names.push('brightness');
+    }
+    if (this._config.show_hue !== false && this._supportsHue()) {
+      names.push('hue');
+    }
+    if (this._config.show_color_temp !== false && this._supportsColorTemperature()) {
+      names.push('temperature');
+    }
+    return names;
+  }
+
+  _temperatureBounds(attributes) {
+    const min = Number(attributes.min_color_temp_kelvin) ||
+      (Number(attributes.max_mireds) ? Math.round(1000000 / Number(attributes.max_mireds)) : 2000);
+    const max = Number(attributes.max_color_temp_kelvin) ||
+      (Number(attributes.min_mireds) ? Math.round(1000000 / Number(attributes.min_mireds)) : 6500);
+    return { min: Math.min(min, max), max: Math.max(min, max) };
   }
 
   _render() {
@@ -371,15 +511,28 @@ export class TerminalLightCard extends HTMLElement {
     const state = this._dataState();
     const unavailable = state === 'unavailable';
     const attributes = entity?.attributes || {};
-    const rawBrightness = Math.round(
-      ((Number(attributes.brightness) || 0) / 255) * 100
-    );
+    const rawBrightness = Math.round(((Number(attributes.brightness) || 0) / 255) * 100);
     const brightness = state === 'on'
       ? Math.max(1, Math.min(100, rawBrightness))
       : 0;
+    const hue = Math.max(0, Math.min(360, Number(attributes.hs_color?.[0]) || 0));
+    const temperatureBounds = this._temperatureBounds(attributes);
+    const colorTemperature = Math.max(
+      temperatureBounds.min,
+      Math.min(
+        temperatureBounds.max,
+        Number(attributes.color_temp_kelvin) ||
+          (Number(attributes.color_temp)
+            ? Math.round(1000000 / Number(attributes.color_temp))
+            : Math.round((temperatureBounds.min + temperatureBounds.max) / 2))
+      )
+    );
 
     this._card.dataset.state = state;
-    this._card.setAttribute('aria-label', this._config.name || attributes.friendly_name || this._config.entity);
+    this._card.setAttribute(
+      'aria-label',
+      this._config.name || attributes.friendly_name || this._config.entity
+    );
     this._icon.icon = this._config.icon || attributes.icon || 'mdi:lightbulb';
     this._name.textContent = this._config.name || attributes.friendly_name || this._config.entity;
     this._state.hidden = this._config.show_state === false;
@@ -387,13 +540,125 @@ export class TerminalLightCard extends HTMLElement {
       ? this._hass?.formatEntityState?.(entity) || entity.state
       : 'unavailable';
     this._state.textContent = String(formattedState).toLocaleLowerCase();
-    this._more.hidden = this._config.show_more_info === false;
-    this._brightness.hidden = !this._showBrightness();
-    this._slider.value = String(brightness);
-    this._slider.disabled = unavailable;
-    this._dimmer.dataset.disabled = unavailable ? 'true' : 'false';
-    this._renderBrightness(brightness);
+
+    const enabledControls = this._enabledControlNames();
+    for (const [name, control] of Object.entries(this._controlsByName)) {
+      control.row.hidden = !enabledControls.includes(name);
+      control.input.disabled = unavailable;
+      control.track.dataset.disabled = unavailable ? 'true' : 'false';
+    }
+    const showControlsButton = this._config.show_controls === undefined
+      ? this._config.show_more_info !== false
+      : this._config.show_controls !== false;
+    this._more.hidden = !showControlsButton || enabledControls.length === 0;
+    const expanded = this._controlsExpanded && enabledControls.length > 0;
+    this._more.setAttribute('aria-expanded', String(expanded));
+    this._controls.hidden = !expanded;
+
+    const brightnessControl = this._controlsByName.brightness;
+    brightnessControl.min = 0;
+    brightnessControl.max = 100;
+    brightnessControl.input.min = '0';
+    brightnessControl.input.max = '100';
+    this._renderControl(brightnessControl, brightness);
+
+    const hueControl = this._controlsByName.hue;
+    hueControl.min = 0;
+    hueControl.max = 360;
+    this._renderControl(hueControl, hue);
+
+    const temperatureControl = this._controlsByName.temperature;
+    temperatureControl.min = temperatureBounds.min;
+    temperatureControl.max = temperatureBounds.max;
+    temperatureControl.input.min = String(temperatureBounds.min);
+    temperatureControl.input.max = String(temperatureBounds.max);
+    this._renderControl(temperatureControl, colorTemperature);
+
     this._main.setAttribute('aria-disabled', unavailable ? 'true' : 'false');
+    if (expanded) {
+      this._updateSegmentCounts();
+      this._scheduleSegmentLayout();
+    }
+  }
+
+  _renderControl(control, value) {
+    const normalized = Math.max(
+      control.min,
+      Math.min(control.max, Math.round(Number(value) || control.min))
+    );
+    control.currentValue = normalized;
+    control.input.value = String(normalized);
+    if (control.name === 'brightness') control.value.textContent = `${normalized}%`;
+    if (control.name === 'hue') control.value.textContent = `${normalized}°`;
+    if (control.name === 'temperature') control.value.textContent = `${normalized}K`;
+    this._paintSegments(control);
+  }
+
+  _paintSegments(control) {
+    const count = control.segmentElements.length;
+    if (!count) return;
+    const range = Math.max(1, control.max - control.min);
+    const ratio = (control.currentValue - control.min) / range;
+    const activeSegments = Math.ceil(ratio * count);
+    const selectedSegment = Math.min(count - 1, Math.max(0, Math.round(ratio * (count - 1))));
+
+    control.segmentElements.forEach((segment, index) => {
+      segment.dataset.active = control.name === 'brightness' && index < activeSegments
+        ? 'true'
+        : 'false';
+      segment.dataset.selected = control.name !== 'brightness' && index === selectedSegment
+        ? 'true'
+        : 'false';
+      if (control.name === 'hue') {
+        segment.style.background = `hsl(${(index / Math.max(1, count - 1)) * 360} 85% 65%)`;
+      } else if (control.name === 'temperature') {
+        const progress = index / Math.max(1, count - 1);
+        const red = Math.round(137 + (250 - 137) * progress);
+        const green = Math.round(180 + (179 - 180) * progress);
+        const blue = Math.round(250 + (135 - 250) * progress);
+        segment.style.background = `rgb(${red} ${green} ${blue})`;
+      } else {
+        segment.style.removeProperty('background');
+      }
+    });
+  }
+
+  _scheduleSegmentLayout() {
+    if (this._segmentLayoutFrame !== null) return;
+    this._segmentLayoutFrame = requestAnimationFrame(() => {
+      this._segmentLayoutFrame = null;
+      this._updateSegmentCounts();
+    });
+  }
+
+  _updateSegmentCounts() {
+    for (const control of Object.values(this._controlsByName)) {
+      if (control.row.hidden || this._controls.hidden) continue;
+      const width = control.track.getBoundingClientRect().width;
+      if (width <= 0) continue;
+      const count = Math.max(
+        1,
+        Math.min(
+          MAX_SEGMENTS,
+          Math.floor((width + MIN_SEGMENT_GAP) / (SEGMENT_SIZE + MIN_SEGMENT_GAP))
+        )
+      );
+      if (count !== control.segmentElements.length) {
+        control.segmentElements = Array.from({ length: count }, () => {
+          const segment = document.createElement('span');
+          segment.className = 'segment';
+          return segment;
+        });
+        control.segments.replaceChildren(...control.segmentElements);
+      }
+      this._paintSegments(control);
+    }
+  }
+
+  _toggleControls() {
+    if (!this._enabledControlNames().length) return;
+    this._controlsExpanded = !this._controlsExpanded;
+    this._render();
   }
 
   _tap() {
@@ -433,26 +698,27 @@ export class TerminalLightCard extends HTMLElement {
     }
   }
 
-  _renderBrightness(value) {
-    const brightness = Math.max(0, Math.min(100, Math.round(Number(value) || 0)));
-    const activeSegments = Math.ceil(
-      (brightness / 100) * this._segmentElements.length
-    );
-    this._segmentElements.forEach((segment, index) => {
-      segment.dataset.active = index < activeSegments ? 'true' : 'false';
-    });
-    this._percent.textContent = `${brightness}%`;
-  }
-
-  _setBrightness() {
-    if (!this._hass || !this._config || this._slider.disabled) return;
-    const brightness = Number(this._slider.value);
-    this._hass.callService(
-      'light',
-      brightness === 0 ? 'turn_off' : 'turn_on',
-      brightness === 0 ? {} : { brightness_pct: brightness },
-      { entity_id: this._config.entity }
-    );
+  _setControl(control) {
+    if (!this._hass || !this._config || control.input.disabled) return;
+    const value = Number(control.input.value);
+    const target = { entity_id: this._config.entity };
+    if (control.name === 'brightness') {
+      this._hass.callService(
+        'light',
+        value === 0 ? 'turn_off' : 'turn_on',
+        value === 0 ? {} : { brightness_pct: value },
+        target
+      );
+      return;
+    }
+    if (control.name === 'hue') {
+      const saturation = Number(this._entity()?.attributes?.hs_color?.[1]) || 100;
+      this._hass.callService('light', 'turn_on', { hs_color: [value, saturation] }, target);
+      return;
+    }
+    if (control.name === 'temperature') {
+      this._hass.callService('light', 'turn_on', { color_temp_kelvin: value }, target);
+    }
   }
 }
 

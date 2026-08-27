@@ -15,6 +15,21 @@
       terminal-light-card { display: block; width: 420px; margin-bottom: 16px; }
     </style>
     <script>
+      const resizeObservers = [];
+      window.ResizeObserver = class {
+        constructor(callback) {
+          this.callback = callback;
+          this.targets = new Set();
+          resizeObservers.push(this);
+        }
+        observe(target) { this.targets.add(target); }
+        disconnect() { this.targets.clear(); }
+      };
+      window.triggerResizeObserver = (target) => {
+        for (const observer of resizeObservers) {
+          if (observer.targets.has(target)) observer.callback([{ target }], observer);
+        }
+      };
       customElements.define('ha-icon', class extends HTMLElement {});
     </script>
     <script type="module" src="../dist/terminal-cards.js"></script>
@@ -32,7 +47,11 @@
             attributes: {
               friendly_name: 'Desk light',
               brightness: 128,
-              supported_color_modes: ['brightness'],
+              hs_color: [120, 60],
+              color_temp_kelvin: 3500,
+              min_color_temp_kelvin: 2000,
+              max_color_temp_kelvin: 6500,
+              supported_color_modes: ['hs', 'color_temp'],
             },
           },
           'light.simple': {
@@ -55,7 +74,11 @@
           'light.offline': {
             entity_id: 'light.offline',
             state: 'unavailable',
-            attributes: { friendly_name: 'Offline light' },
+            attributes: {
+              friendly_name: 'Offline light',
+              brightness: null,
+              supported_color_modes: ['brightness'],
+            },
           },
         },
         formatEntityState: (entity) => entity.state.toUpperCase(),
@@ -76,11 +99,17 @@
         icon: 'mdi:desk-lamp',
         show_state: true,
         show_brightness: true,
+        show_hue: true,
+        show_color_temp: true,
         show_more_info: true,
       });
       const simple = create({ entity: 'light.simple', show_brightness: true });
-      const dimmedOff = create({ entity: 'light.dimmed_off', show_brightness: true });
-      const offline = create({ entity: 'light.offline' });
+      const dimmedOff = create({
+        entity: 'light.dimmed_off',
+        show_brightness: true,
+        controls_expanded: true,
+      });
+      const offline = create({ entity: 'light.offline', controls_expanded: true });
       const urlCard = create({
         entity: 'light.simple',
         tap_action: { action: 'url', url_path: 'https://example.com/light' },
@@ -90,9 +119,21 @@
         if (!condition) throw new Error(message);
       }
 
+      async function nextLayout() {
+        await new Promise((resolve) => setTimeout(resolve, 30));
+      }
+
+      async function waitFor(condition, message) {
+        const deadline = performance.now() + 2000;
+        while (!condition() && performance.now() < deadline) {
+          await nextLayout();
+        }
+        assert(condition(), message);
+      }
+
       async function run() {
         await customElements.whenDefined('terminal-light-card');
-        await new Promise((resolve) => requestAnimationFrame(resolve));
+        await nextLayout();
 
         const card = light.shadowRoot.querySelector('.card');
         const style = getComputedStyle(card);
@@ -103,36 +144,91 @@
         assert(light.shadowRoot.querySelector('.state').textContent === 'on', 'state is not lowercase');
         assert(light.shadowRoot.querySelector('.icon').icon === 'mdi:desk-lamp', 'custom icon missing');
         assert(card.dataset.state === 'on', 'on state missing');
-        assert(!light.shadowRoot.querySelector('.brightness').hidden, 'brightness is hidden');
-        const segments = [...light.shadowRoot.querySelectorAll('.segment')];
-        assert(segments.length === 16, 'segmented dimmer does not contain 16 squares');
+
+        const controls = light.shadowRoot.querySelector('.controls');
+        const more = light.shadowRoot.querySelector('.more');
+        const moreIcon = more.querySelector('ha-icon');
+        assert(controls.hidden, 'controls are not collapsed by default');
+        assert(light.getCardSize() === 1, 'collapsed card size is not 1');
+        assert(getComputedStyle(more).borderRadius === '0px', 'controls button is not square');
+        const moreRect = more.getBoundingClientRect();
+        const moreIconRect = moreIcon.getBoundingClientRect();
         assert(
-          segments.filter((segment) => segment.dataset.active === 'true').length === 8,
-          'segmented dimmer does not reflect brightness'
+          Math.abs((moreRect.left + moreRect.width / 2) - (moreIconRect.left + moreIconRect.width / 2)) < 0.5 &&
+          Math.abs((moreRect.top + moreRect.height / 2) - (moreIconRect.top + moreIconRect.height / 2)) < 0.5,
+          'controls icon is not centered in its hover target'
         );
-        const styleSource = light.shadowRoot.querySelector('style').textContent;
+
+        let moreInfoEntity = null;
+        light.addEventListener('hass-more-info', (event) => {
+          moreInfoEntity = event.detail.entityId;
+        });
+        more.click();
+        await waitFor(
+          () => light.shadowRoot.querySelectorAll('[data-control="brightness"] .segment').length > 0,
+          'responsive brightness segments were not created'
+        );
+        assert(!controls.hidden, 'controls button did not expand the panel');
+        assert(more.getAttribute('aria-expanded') === 'true', 'expanded state is not exposed');
+        assert(moreInfoEntity === null, 'controls button still opens more-info');
+        assert(light.getCardSize() === 3, 'expanded multi-control size is wrong');
+
+        const brightness = light.shadowRoot.querySelector('[data-control="brightness"]');
+        const hue = light.shadowRoot.querySelector('[data-control="hue"]');
+        const temperature = light.shadowRoot.querySelector('[data-control="temperature"]');
+        assert(!brightness.hidden && !hue.hidden && !temperature.hidden, 'supported controls are hidden');
+        assert(brightness.querySelector('.control-value').textContent === '50%', 'brightness value is wrong');
+        assert(hue.querySelector('.control-value').textContent === '120°', 'hue value is wrong');
+        assert(temperature.querySelector('.control-value').textContent === '3500K', 'temperature value is wrong');
+
+        const valueRect = brightness.querySelector('.control-value').getBoundingClientRect();
+        const alignedMoreRect = more.getBoundingClientRect();
         assert(
-          styleSource.includes('.card:not([data-state="unavailable"]):hover'),
-          'whole-card hover selector is missing'
+          Math.abs((valueRect.left + valueRect.width / 2) - (alignedMoreRect.left + alignedMoreRect.width / 2)) < 0.5,
+          'brightness percentage is not centered below the controls button'
         );
-        assert(light.getCardSize() === 2, 'brightness card size is not 2');
+
+        const initialSegments = brightness.querySelectorAll('.segment').length;
+        assert(initialSegments >= 2, 'brightness dimmer has too few segments');
+        light.style.width = '190px';
+        light.getBoundingClientRect();
+        window.triggerResizeObserver(card);
+        assert(
+          brightness.querySelectorAll('.segment').length > 0 &&
+            brightness.querySelectorAll('.segment').length < initialSegments,
+          'segment count did not shrink with the card width'
+        );
+        const narrowSegments = [...brightness.querySelectorAll('.segment')];
+        for (let index = 1; index < narrowSegments.length; index += 1) {
+          assert(
+            narrowSegments[index].getBoundingClientRect().left >=
+              narrowSegments[index - 1].getBoundingClientRect().right,
+            'responsive brightness segments overlap'
+          );
+        }
+        const narrowSegmentCount = narrowSegments.length;
+        light.style.width = '420px';
+        light.getBoundingClientRect();
+        window.triggerResizeObserver(card);
+        assert(
+          brightness.querySelectorAll('.segment').length > narrowSegmentCount,
+          'segment count did not grow after restoring width'
+        );
+
         assert(simple.getCardSize() === 1, 'onoff-only light size is not 1');
+        assert(simple.shadowRoot.querySelector('.more').hidden, 'control-less light shows expand button');
         assert(
-          dimmedOff.shadowRoot.querySelector('.percent').textContent === '0%',
+          dimmedOff.shadowRoot.querySelector('[data-control="brightness"] .control-value').textContent === '0%',
           'off light does not display 0% brightness'
         );
         assert(
-          dimmedOff.shadowRoot.querySelector('input[type="range"]').value === '0',
-          'off light slider is not at zero'
-        );
-        assert(
-          ![...dimmedOff.shadowRoot.querySelectorAll('.segment')]
+          ![...dimmedOff.shadowRoot.querySelectorAll('[data-control="brightness"] .segment')]
             .some((segment) => segment.dataset.active === 'true'),
-          'off light still has active dimmer squares'
+          'off light still has active brightness segments'
         );
         assert(offline.shadowRoot.querySelector('.card').dataset.state === 'unavailable', 'unavailable state missing');
         assert(
-          offline.shadowRoot.querySelector('input[type="range"]').disabled,
+          offline.shadowRoot.querySelector('[data-control="brightness"] input').disabled,
           'unavailable brightness control is enabled'
         );
 
@@ -140,39 +236,34 @@
         assert(calls[0][0] === 'light' && calls[0][1] === 'toggle', 'tap did not toggle light');
         assert(calls[0][3].entity_id === 'light.desk', 'toggle target is wrong');
 
-        const slider = light.shadowRoot.querySelector('input[type="range"]');
-        slider.value = '42';
-        slider.dispatchEvent(new Event('input', { bubbles: true }));
-        slider.dispatchEvent(new Event('change', { bubbles: true }));
+        const brightnessInput = brightness.querySelector('input');
+        brightnessInput.value = '42';
+        brightnessInput.dispatchEvent(new Event('input', { bubbles: true }));
+        brightnessInput.dispatchEvent(new Event('change', { bubbles: true }));
         assert(calls[1][1] === 'turn_on', 'brightness did not call turn_on');
         assert(calls[1][2].brightness_pct === 42, 'brightness value is wrong');
-        assert(light.shadowRoot.querySelector('.percent').textContent === '42%', 'live dimmer value missing');
-        assert(
-          segments.filter((segment) => segment.dataset.active === 'true').length === 7,
-          'dimmer squares did not update during input'
-        );
+        assert(brightness.querySelector('.control-value').textContent === '42%', 'live brightness value missing');
 
-        const offSlider = dimmedOff.shadowRoot.querySelector('input[type="range"]');
-        offSlider.value = '0';
-        offSlider.dispatchEvent(new Event('change', { bubbles: true }));
+        brightnessInput.value = '0';
+        brightnessInput.dispatchEvent(new Event('change', { bubbles: true }));
         assert(calls[2][1] === 'turn_off', 'zero brightness did not turn the light off');
 
-        let moreInfoEntity = null;
-        light.addEventListener('hass-more-info', (event) => {
-          moreInfoEntity = event.detail.entityId;
-        });
-        const more = light.shadowRoot.querySelector('.more');
-        const moreIcon = more.querySelector('ha-icon');
-        const moreRect = more.getBoundingClientRect();
-        const moreIconRect = moreIcon.getBoundingClientRect();
-        assert(getComputedStyle(more).borderRadius === '50%', 'more-info hover target is not round');
-        assert(
-          Math.abs((moreRect.left + moreRect.width / 2) - (moreIconRect.left + moreIconRect.width / 2)) < 0.5 &&
-          Math.abs((moreRect.top + moreRect.height / 2) - (moreIconRect.top + moreIconRect.height / 2)) < 0.5,
-          'more-info icon is not centered in its hover target'
-        );
+        const hueInput = hue.querySelector('input');
+        hueInput.value = '210';
+        hueInput.dispatchEvent(new Event('input', { bubbles: true }));
+        hueInput.dispatchEvent(new Event('change', { bubbles: true }));
+        assert(calls[3][1] === 'turn_on', 'hue did not call turn_on');
+        assert(calls[3][2].hs_color[0] === 210 && calls[3][2].hs_color[1] === 60, 'hue payload is wrong');
+
+        const temperatureInput = temperature.querySelector('input');
+        temperatureInput.value = '4200';
+        temperatureInput.dispatchEvent(new Event('input', { bubbles: true }));
+        temperatureInput.dispatchEvent(new Event('change', { bubbles: true }));
+        assert(calls[4][1] === 'turn_on', 'temperature did not call turn_on');
+        assert(calls[4][2].color_temp_kelvin === 4200, 'temperature payload is wrong');
+
         more.click();
-        assert(moreInfoEntity === 'light.desk', 'more-info target is wrong');
+        assert(controls.hidden, 'controls button did not collapse the panel');
 
         const originalOpen = window.open;
         let openArgs = null;
@@ -201,21 +292,23 @@
         assert(invalidEntity, 'non-light entity was accepted');
         assert(window.customCards.some((entry) => entry.type === 'terminal-light-card'), 'picker metadata missing');
         const form = document.createElement('terminal-light-card').constructor.getConfigForm();
-        assert(form.schema.some((field) => field.name === 'entity'), 'entity form field missing');
-        assert(!form.schema.some((field) => field.name === 'title'), 'light editor exposes a title field');
-        assert(
-          form.schema.some((field) => field.name === 'tap_action'),
-          'tap action form field missing'
-        );
+        const fields = form.schema.flatMap((item) => item.schema || [item]);
+        assert(fields.some((field) => field.name === 'entity'), 'entity form field missing');
+        assert(fields.some((field) => field.name === 'show_hue'), 'hue form field missing');
+        assert(fields.some((field) => field.name === 'show_color_temp'), 'temperature form field missing');
+        assert(fields.some((field) => field.name === 'show_controls'), 'controls button form field missing');
+        assert(fields.some((field) => field.name === 'controls_expanded'), 'expanded form field missing');
+        assert(form.schema.some((field) => field.type === 'expandable'), 'native expandable forms missing');
+        assert(!fields.some((field) => field.name === 'title'), 'light editor exposes a title field');
 
         document.body.dataset.testStatus = 'PASS';
         document.title = 'PASS terminal-light-card';
         document.querySelector('#result').textContent = [
-          'PASS: continuous square 1px border without border title',
-          'PASS: lowercase on/off/unavailable state rendering',
-          'PASS: segmented dimmer, zero-off behavior and whole-card hover',
-          'PASS: centered more-info, toggle and safe URL actions',
-          'PASS: card picker and visual editor hooks',
+          'PASS: square centered controls toggle with aligned values',
+          'PASS: width-responsive non-overlapping brightness segments',
+          'PASS: lowercase states and off lights display 0%',
+          'PASS: brightness, hue and color-temperature services',
+          'PASS: native expandable config form and safe actions',
         ].join('\n');
       }
 

@@ -104,7 +104,6 @@
 
       async function run() {
         await customElements.whenDefined('terminal-navigation-card');
-        await new Promise((resolve) => requestAnimationFrame(resolve));
 
         const continuousCard = continuous.shadowRoot.querySelector('.card');
         const continuousStyle = getComputedStyle(continuousCard);

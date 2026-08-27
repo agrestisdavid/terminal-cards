@@ -34,6 +34,7 @@ show_state: true
 show_brightness: true
 show_hue: true
 show_color_temp: true
+use_light_color: true
 show_controls: true
 controls_expanded: false
 tap_action:
@@ -42,7 +43,36 @@ hold_action:
   action: more-info
 ```
 
-All options are available through Home Assistant-native visual form controls. The entity selector only offers `light.*` entities; action fields use Home Assistant's native action editor. The number of square segments adapts automatically to the rendered card width.
+All options are available through Home Assistant-native visual form controls. The entity selector only offers `light.*` entities; action fields use Home Assistant's native action editor. The number of square segments adapts automatically to the rendered card width. With `use_light_color`, the active RGB/HS color or color temperature drives the icon and border color.
+
+### `custom:terminal-shutter-card`
+
+A capability-aware control for `cover.*` entities. The square controls button reveals only the functions supported by the selected shutter or blind: open, stop, close, position, and tilt position.
+
+```yaml
+type: custom:terminal-shutter-card
+entity: cover.office_blind
+name: office blind
+icon: mdi:blinds-horizontal
+show_state: true
+show_controls: true
+show_position: true
+show_tilt: true
+controls_expanded: false
+```
+
+### `custom:terminal-navigation-card`
+
+An internal Home Assistant navigation card. `variant` switches between a continuous border and the Wrapper-style name embedded in the top border. The visual editor uses Home Assistant's native navigation-path picker.
+
+```yaml
+type: custom:terminal-navigation-card
+name: kitchen
+navigation_path: /dashboard-test/kitchen
+icon: mdi:fridge
+variant: continuous # or: pane
+show_path: true
+```
 
 ## Installation with HACS
 
@@ -51,7 +81,7 @@ All options are available through Home Assistant-native visual form controls. Th
 3. Install **Terminal Cards**.
 4. Hard-refresh Home Assistant (`Ctrl+Shift+R`).
 
-HACS loads the release asset `terminal-cards.js`; no inline `data:` resource is needed. Both cards appear in Home Assistant's card picker and provide graphical configuration.
+HACS loads the release asset `terminal-cards.js`; no inline `data:` resource is needed. All four cards appear in Home Assistant's card picker and provide graphical configuration.
 
 ## Development
 

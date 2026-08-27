@@ -1,0 +1,171 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>terminal-navigation-card test running</title>
+    <style>
+      :root {
+        --card-background-color: #181825;
+        --primary-text-color: #cdd6f4;
+        --secondary-text-color: #6c7086;
+        --accent-color: #89b4fa;
+        --error-color: #f38ba8;
+      }
+      body { background: #11111b; color: #cdd6f4; padding: 24px; }
+      terminal-navigation-card { display: block; width: 420px; margin-bottom: 16px; }
+      #equal-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; width: 852px; }
+      #equal-grid terminal-navigation-card { width: auto; margin: 0; }
+    </style>
+    <script>
+      customElements.define('ha-icon', class extends HTMLElement {});
+    </script>
+    <script type="module" src="../dist/terminal-cards.js"></script>
+  </head>
+  <body>
+    <main id="cards"></main>
+    <pre id="result">WAITING</pre>
+    <script type="module">
+      function create(config) {
+        const card = document.createElement('terminal-navigation-card');
+        card.setConfig(config);
+        document.querySelector('#cards').append(card);
+        return card;
+      }
+
+      const continuous = create({
+        name: 'kitchen',
+        navigation_path: '/dashboard-test/kitchen',
+        icon: 'mdi:fridge',
+        variant: 'continuous',
+        show_path: true,
+      });
+      const pane = create({
+        name: 'system',
+        navigation_path: '/config/dashboard',
+        icon: 'mdi:cog',
+        variant: 'pane',
+        label: 'settings',
+      });
+      const equalGrid = document.createElement('div');
+      equalGrid.id = 'equal-grid';
+      const gridContinuous = create({
+        name: 'continuous grid',
+        navigation_path: '/lovelace',
+        variant: 'continuous',
+      });
+      const gridPane = create({
+        name: 'pane grid',
+        navigation_path: '/lovelace',
+        variant: 'pane',
+      });
+      equalGrid.append(gridContinuous, gridPane);
+      document.querySelector('#cards').append(equalGrid);
+
+      function assert(condition, message) {
+        if (!condition) throw new Error(message);
+      }
+
+      async function run() {
+        await customElements.whenDefined('terminal-navigation-card');
+        await new Promise((resolve) => requestAnimationFrame(resolve));
+
+        const continuousCard = continuous.shadowRoot.querySelector('.card');
+        const continuousStyle = getComputedStyle(continuousCard);
+        assert(continuousStyle.borderRadius === '0px', 'navigation corners are not square');
+        assert(continuousStyle.transitionProperty.includes('box-shadow'), 'navigation hover glow is missing');
+        assert(continuousCard.dataset.variant === 'continuous', 'continuous variant missing');
+        assert(continuous.shadowRoot.querySelector('.border-title').hidden, 'continuous variant has border title');
+        assert(!continuous.shadowRoot.querySelector('.name').hidden, 'continuous name is hidden');
+        assert(continuous.shadowRoot.querySelector('.name').textContent === 'kitchen', 'navigation name missing');
+        assert(
+          continuous.shadowRoot.querySelector('.secondary').textContent === '/dashboard-test/kitchen',
+          'navigation path is not displayed'
+        );
+        assert(continuous.shadowRoot.querySelector('.icon').icon === 'mdi:fridge', 'navigation icon missing');
+
+        const paneCard = pane.shadowRoot.querySelector('.card');
+        const paneRect = paneCard.getBoundingClientRect();
+        const title = pane.shadowRoot.querySelector('.border-title');
+        const titleRect = title.getBoundingClientRect();
+        assert(paneCard.dataset.variant === 'pane', 'pane variant missing');
+        assert(!title.hidden && title.textContent === 'system', 'pane border title missing');
+        assert(titleRect.top < paneRect.top && titleRect.bottom > paneRect.top, 'pane title does not cut border');
+        assert(pane.shadowRoot.querySelector('.name').hidden, 'pane repeats name in content');
+        assert(pane.shadowRoot.querySelector('.secondary').textContent === 'settings', 'pane label missing');
+
+        const continuousGridRect = gridContinuous.getBoundingClientRect();
+        const paneGridRect = gridPane.getBoundingClientRect();
+        const paneGridCardRect = gridPane.shadowRoot.querySelector('.card').getBoundingClientRect();
+        assert(
+          Math.abs(continuousGridRect.height - paneGridRect.height) < 0.5,
+          'navigation variants do not share equal grid-row height'
+        );
+        assert(
+          paneGridCardRect.bottom <= paneGridRect.bottom + 0.5,
+          'pane navigation card overflows its stretched grid row'
+        );
+
+        const originalPushState = History.prototype.pushState;
+        const navigations = [];
+        History.prototype.pushState = (_state, _title, path) => navigations.push(path);
+        let locationChanged = 0;
+        window.addEventListener('location-changed', () => { locationChanged += 1; });
+        continuous.shadowRoot.querySelector('.main').click();
+        assert(
+          navigations[0]?.endsWith('/dashboard-test/kitchen'),
+          `click navigation path is wrong: ${JSON.stringify(navigations)}`
+        );
+        assert(locationChanged === 1, 'click did not dispatch location-changed');
+        pane.shadowRoot.querySelector('.main').dispatchEvent(
+          new KeyboardEvent('keydown', { key: 'Enter', bubbles: true })
+        );
+        assert(navigations[1]?.endsWith('/config/dashboard'), 'keyboard navigation path is wrong');
+        assert(locationChanged === 2, 'keyboard did not dispatch location-changed');
+        History.prototype.pushState = originalPushState;
+
+        let invalidConfig = 0;
+        for (const config of [
+          { navigation_path: '/lovelace' },
+          { name: 'missing path' },
+          { name: 'bad variant', navigation_path: '/lovelace', variant: 'round' },
+          { name: 'external', navigation_path: 'https://example.com/config' },
+          { name: 'protocol relative', navigation_path: '//example.com/config' },
+        ]) {
+          try {
+            document.createElement('terminal-navigation-card').setConfig(config);
+          } catch (_error) {
+            invalidConfig += 1;
+          }
+        }
+        assert(invalidConfig === 5, 'invalid navigation configuration was accepted');
+        assert(continuous.getCardSize() === 1, 'navigation card size is wrong');
+        assert(
+          window.customCards.some((entry) => entry.type === 'terminal-navigation-card'),
+          'navigation picker metadata missing'
+        );
+        const form = document.createElement('terminal-navigation-card').constructor.getConfigForm();
+        const fields = form.schema.flatMap((item) => item.schema || [item]);
+        const pathField = fields.find((field) => field.name === 'navigation_path');
+        assert(pathField.selector.navigation, 'native navigation selector missing');
+        const variantField = fields.find((field) => field.name === 'variant');
+        assert(variantField.selector.select.options.length === 2, 'variant selector is incomplete');
+
+        document.body.dataset.testStatus = 'PASS';
+        document.title = 'PASS terminal-navigation-card';
+        document.querySelector('#result').textContent = [
+          'PASS: continuous and title-in-border navigation variants',
+          'PASS: square border, title overlay, hover glow and equal-row sizing',
+          'PASS: click and keyboard internal navigation',
+          'PASS: native navigation/variant form and picker metadata',
+        ].join('\n');
+      }
+
+      run().catch((error) => {
+        document.body.dataset.testStatus = 'FAIL';
+        document.title = 'FAIL terminal-navigation-card';
+        document.querySelector('#result').textContent = `FAIL: ${error.stack || error}`;
+        console.error(error);
+      });
+    </script>
+  </body>
+</html>

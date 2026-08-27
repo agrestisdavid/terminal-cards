@@ -1,6 +1,8 @@
 import './editors/wrapper-editor.js';
 import './cards/wrapper-card.js';
 import './cards/light-card.js';
+import './cards/shutter-card.js';
+import './cards/navigation-card.js';
 
 const VERSION =
   typeof __TERMINAL_CARDS_VERSION__ === 'string'

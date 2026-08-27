@@ -35,13 +35,23 @@ const STYLES = `
     font-size: 13px;
     line-height: 1.4;
     overflow: hidden;
-    transition: border-color 120ms ease;
+    transition: border-color 120ms ease, box-shadow 120ms ease;
   }
   .card[data-state="on"] { border-color: var(--terminal-accent); }
   .card[data-state="unavailable"] { border-color: var(--terminal-error); }
-  .card:not([data-state="unavailable"]):hover { border-color: var(--terminal-accent); }
+  .card[data-light-color="true"] { border-color: var(--terminal-light-color); }
+  .card[data-state="on"][data-light-color="true"] .icon { color: var(--terminal-light-color); }
+  .card:not([data-state="unavailable"]):hover {
+    border-color: var(--terminal-accent);
+    box-shadow: 0 0 8px color-mix(in srgb, var(--terminal-accent) 45%, transparent);
+  }
+  .card[data-light-color="true"]:hover {
+    border-color: var(--terminal-light-color);
+    box-shadow: 0 0 8px color-mix(in srgb, var(--terminal-light-color) 45%, transparent);
+  }
   .card:not([data-state="unavailable"]):hover .icon,
   .card:not([data-state="unavailable"]):hover .name { color: var(--terminal-accent); }
+  .card[data-light-color="true"]:hover .icon { color: var(--terminal-light-color); }
   .main {
     box-sizing: border-box;
     display: flex;
@@ -192,6 +202,7 @@ export class TerminalLightCard extends HTMLElement {
       show_brightness: 'Show brightness',
       show_hue: 'Show hue',
       show_color_temp: 'Show color temperature',
+      use_light_color: 'Use current light color',
       show_controls: 'Show controls button',
       controls_expanded: 'Expand controls by default',
       tap_action: 'Tap action',
@@ -227,6 +238,7 @@ export class TerminalLightCard extends HTMLElement {
             { name: 'show_brightness', default: true, selector: { boolean: {} } },
             { name: 'show_hue', default: true, selector: { boolean: {} } },
             { name: 'show_color_temp', default: true, selector: { boolean: {} } },
+            { name: 'use_light_color', default: false, selector: { boolean: {} } },
             { name: 'show_controls', default: true, selector: { boolean: {} } },
             { name: 'controls_expanded', default: false, selector: { boolean: {} } },
           ],
@@ -269,6 +281,9 @@ export class TerminalLightCard extends HTMLElement {
         if (schema.name === 'show_color_temp') {
           return 'Shown only for lights that support color temperature.';
         }
+        if (schema.name === 'use_light_color') {
+          return 'Colors the icon and border from the active RGB/HS color or color temperature.';
+        }
         return undefined;
       },
     };
@@ -283,6 +298,7 @@ export class TerminalLightCard extends HTMLElement {
       show_brightness: true,
       show_hue: true,
       show_color_temp: true,
+      use_light_color: false,
       show_controls: true,
       controls_expanded: false,
     };
@@ -505,6 +521,44 @@ export class TerminalLightCard extends HTMLElement {
     return { min: Math.min(min, max), max: Math.max(min, max) };
   }
 
+  _lightColor(attributes, state, temperatureBounds, colorTemperature) {
+    if (this._config?.use_light_color !== true || state !== 'on') return null;
+    const colorMode = attributes.color_mode;
+    if (colorMode === 'color_temp') {
+      return this._temperatureColor(colorTemperature, temperatureBounds);
+    }
+    if (COLOR_MODES.has(colorMode)) {
+      const rgb = attributes.rgb_color;
+      if (Array.isArray(rgb) && rgb.length >= 3) {
+        const values = rgb.slice(0, 3).map((value) =>
+          Math.max(0, Math.min(255, Math.round(Number(value) || 0)))
+        );
+        return `rgb(${values.join(' ')})`;
+      }
+      const hs = attributes.hs_color;
+      if (Array.isArray(hs) && hs.length >= 2) {
+        const hue = Math.max(0, Math.min(360, Number(hs[0]) || 0));
+        const saturation = Math.max(0, Math.min(100, Number(hs[1]) || 0));
+        return `hsl(${hue} ${saturation}% 60%)`;
+      }
+    }
+    if (this._supportsColorTemperature() && Number(attributes.color_temp_kelvin)) {
+      return this._temperatureColor(colorTemperature, temperatureBounds);
+    }
+    return null;
+  }
+
+  _temperatureColor(value, bounds) {
+    const range = Math.max(1, bounds.max - bounds.min);
+    const progress = Math.max(0, Math.min(1, (value - bounds.min) / range));
+    const warm = [255, 147, 44];
+    const cool = [202, 218, 255];
+    const color = warm.map((channel, index) =>
+      Math.round(channel + (cool[index] - channel) * progress)
+    );
+    return `rgb(${color.join(' ')})`;
+  }
+
   _render() {
     if (!this._config) return;
     const entity = this._entity();
@@ -528,7 +582,16 @@ export class TerminalLightCard extends HTMLElement {
       )
     );
 
+    const lightColor = this._lightColor(
+      attributes,
+      state,
+      temperatureBounds,
+      colorTemperature
+    );
     this._card.dataset.state = state;
+    this._card.dataset.lightColor = lightColor ? 'true' : 'false';
+    if (lightColor) this._card.style.setProperty('--terminal-light-color', lightColor);
+    else this._card.style.removeProperty('--terminal-light-color');
     this._card.setAttribute(
       'aria-label',
       this._config.name || attributes.friendly_name || this._config.entity

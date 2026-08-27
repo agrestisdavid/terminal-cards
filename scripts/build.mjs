@@ -21,7 +21,12 @@ await build({
 });
 
 const output = await readFile(outfile, 'utf8');
-for (const element of ['terminal-card-wrapper', 'terminal-light-card']) {
+for (const element of [
+  'terminal-card-wrapper',
+  'terminal-light-card',
+  'terminal-shutter-card',
+  'terminal-navigation-card',
+]) {
   if (!output.includes(element)) {
     throw new Error(`Build output is missing ${element}`);
   }

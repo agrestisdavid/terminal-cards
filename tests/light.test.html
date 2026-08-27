@@ -47,6 +47,8 @@
             attributes: {
               friendly_name: 'Desk light',
               brightness: 128,
+              color_mode: 'hs',
+              rgb_color: [10, 120, 240],
               hs_color: [120, 60],
               color_temp_kelvin: 3500,
               min_color_temp_kelvin: 2000,
@@ -69,6 +71,19 @@
               friendly_name: 'Dimmed off light',
               brightness: 3,
               supported_color_modes: ['brightness'],
+            },
+          },
+          'light.warm': {
+            entity_id: 'light.warm',
+            state: 'on',
+            attributes: {
+              friendly_name: 'Warm light',
+              color_mode: 'color_temp',
+              color_temp_kelvin: 2400,
+              min_color_temp_kelvin: 2000,
+              max_color_temp_kelvin: 6500,
+              brightness: 180,
+              supported_color_modes: ['color_temp'],
             },
           },
           'light.offline': {
@@ -101,6 +116,7 @@
         show_brightness: true,
         show_hue: true,
         show_color_temp: true,
+        use_light_color: true,
         show_more_info: true,
       });
       const simple = create({ entity: 'light.simple', show_brightness: true });
@@ -109,6 +125,7 @@
         show_brightness: true,
         controls_expanded: true,
       });
+      const warm = create({ entity: 'light.warm', use_light_color: true });
       const offline = create({ entity: 'light.offline', controls_expanded: true });
       const urlCard = create({
         entity: 'light.simple',
@@ -144,6 +161,24 @@
         assert(light.shadowRoot.querySelector('.state').textContent === 'on', 'state is not lowercase');
         assert(light.shadowRoot.querySelector('.icon').icon === 'mdi:desk-lamp', 'custom icon missing');
         assert(card.dataset.state === 'on', 'on state missing');
+        assert(card.dataset.lightColor === 'true', 'active RGB color feedback is missing');
+        assert(
+          card.style.getPropertyValue('--terminal-light-color') === 'rgb(10 120 240)',
+          'RGB light color was not exposed to the card'
+        );
+        assert(
+          getComputedStyle(light.shadowRoot.querySelector('.icon')).color === 'rgb(10, 120, 240)',
+          'light icon does not use the active RGB color'
+        );
+        assert(
+          getComputedStyle(card).borderTopColor === 'rgb(10, 120, 240)',
+          'light border does not use the active RGB color'
+        );
+        const warmColor = warm.shadowRoot.querySelector('.card')
+          .style.getPropertyValue('--terminal-light-color');
+        assert(warmColor.startsWith('rgb('), 'color-temperature feedback is missing');
+        assert(warmColor !== 'rgb(10 120 240)', 'temperature feedback reused the RGB color');
+        assert(style.transitionProperty.includes('box-shadow'), 'light hover glow is not animated');
 
         const controls = light.shadowRoot.querySelector('.controls');
         const more = light.shadowRoot.querySelector('.more');
@@ -296,6 +331,7 @@
         assert(fields.some((field) => field.name === 'entity'), 'entity form field missing');
         assert(fields.some((field) => field.name === 'show_hue'), 'hue form field missing');
         assert(fields.some((field) => field.name === 'show_color_temp'), 'temperature form field missing');
+        assert(fields.some((field) => field.name === 'use_light_color'), 'light color form field missing');
         assert(fields.some((field) => field.name === 'show_controls'), 'controls button form field missing');
         assert(fields.some((field) => field.name === 'controls_expanded'), 'expanded form field missing');
         assert(form.schema.some((field) => field.type === 'expandable'), 'native expandable forms missing');
@@ -306,6 +342,7 @@
         document.querySelector('#result').textContent = [
           'PASS: square centered controls toggle with aligned values',
           'PASS: width-responsive non-overlapping brightness segments',
+          'PASS: optional RGB/color-temperature icon and border feedback',
           'PASS: lowercase states and off lights display 0%',
           'PASS: brightness, hue and color-temperature services',
           'PASS: native expandable config form and safe actions',

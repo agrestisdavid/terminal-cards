@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.2.0 — 2026-08-27
+
+- Add `custom:terminal-shutter-card` for capability-aware cover control: open, stop, close, position, and tilt.
+- Add `custom:terminal-navigation-card` with continuous-border and title-in-border variants plus the native HA navigation-path selector.
+- Add optional active RGB/HS/color-temperature feedback on the Light Card icon and border.
+- Add the same accent glow to Wrapper hover/focus that interactive Terminal Cards use.
+- Register and test all four cards in the shared HACS bundle.
+
 ## 0.1.2 — 2026-08-27
 
 - Make the square controls button expand and collapse the Light Card controls instead of opening more-info.

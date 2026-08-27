@@ -69,6 +69,8 @@
       async function run() {
         await customElements.whenDefined('terminal-card-wrapper-editor');
         await customElements.whenDefined('terminal-light-card');
+        await customElements.whenDefined('terminal-shutter-card');
+        await customElements.whenDefined('terminal-navigation-card');
 
         const hass = {
           states: {
@@ -164,6 +166,20 @@
         const entityField = fields.find((field) => field.name === 'entity');
         assert(entityField.selector.entity.filter.domain === 'light', 'light selector accepts other domains');
 
+        const shutterForm = customElements.get('terminal-shutter-card').getConfigForm();
+        const shutterFields = shutterForm.schema.flatMap((item) => item.schema || [item]);
+        const coverEntity = shutterFields.find((field) => field.name === 'entity');
+        assert(coverEntity.selector.entity.filter.domain === 'cover', 'shutter selector accepts other domains');
+        assert(shutterFields.some((field) => field.name === 'show_tilt'), 'shutter tilt option missing');
+
+        const navigationForm = customElements.get('terminal-navigation-card').getConfigForm();
+        const navigationFields = navigationForm.schema.flatMap((item) => item.schema || [item]);
+        assert(
+          navigationFields.find((field) => field.name === 'navigation_path').selector.navigation,
+          'native navigation selector missing'
+        );
+        assert(navigationFields.some((field) => field.name === 'variant'), 'navigation variant missing');
+
         document.body.dataset.testStatus = 'PASS';
         document.title = 'PASS terminal-cards editors';
         document.querySelector('#result').textContent = [
@@ -171,6 +187,7 @@
           'PASS: native HA tabs, icon buttons, card picker and child editor',
           'PASS: child cards add, update, move and remove',
           'PASS: light form uses native expandable controls and actions',
+          'PASS: shutter and navigation forms use native HA selectors',
         ].join('\n');
       }
 

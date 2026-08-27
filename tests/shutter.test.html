@@ -1,0 +1,215 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>terminal-shutter-card test running</title>
+    <style>
+      :root {
+        --card-background-color: #181825;
+        --primary-text-color: #cdd6f4;
+        --secondary-text-color: #6c7086;
+        --accent-color: #89b4fa;
+        --error-color: #f38ba8;
+      }
+      body { background: #11111b; color: #cdd6f4; padding: 24px; }
+      terminal-shutter-card { display: block; width: 420px; margin-bottom: 16px; }
+    </style>
+    <script>
+      const resizeObservers = [];
+      window.ResizeObserver = class {
+        constructor(callback) {
+          this.callback = callback;
+          this.targets = new Set();
+          resizeObservers.push(this);
+        }
+        observe(target) { this.targets.add(target); }
+        disconnect() { this.targets.clear(); }
+      };
+      window.triggerResizeObserver = (target) => {
+        for (const observer of resizeObservers) {
+          if (observer.targets.has(target)) observer.callback([{ target }], observer);
+        }
+      };
+      customElements.define('ha-icon', class extends HTMLElement {});
+    </script>
+    <script type="module" src="../dist/terminal-cards.js"></script>
+  </head>
+  <body>
+    <main id="cards"></main>
+    <pre id="result">WAITING</pre>
+    <script type="module">
+      const calls = [];
+      const hass = {
+        states: {
+          'cover.blind': {
+            entity_id: 'cover.blind',
+            state: 'open',
+            attributes: {
+              friendly_name: 'Living blind',
+              current_position: 65,
+              current_tilt_position: 30,
+              supported_features: 79,
+            },
+          },
+          'cover.basic': {
+            entity_id: 'cover.basic',
+            state: 'closed',
+            attributes: { friendly_name: 'Basic shutter', supported_features: 3 },
+          },
+          'cover.offline': {
+            entity_id: 'cover.offline',
+            state: 'unavailable',
+            attributes: { friendly_name: 'Offline shutter', supported_features: 79 },
+          },
+        },
+        formatEntityState: (entity) => entity.state.toUpperCase(),
+        callService: (...args) => calls.push(args),
+      };
+
+      function create(config) {
+        const card = document.createElement('terminal-shutter-card');
+        card.setConfig(config);
+        card.hass = hass;
+        document.querySelector('#cards').append(card);
+        return card;
+      }
+
+      const blind = create({
+        entity: 'cover.blind',
+        name: 'living blind',
+        icon: 'mdi:blinds-horizontal',
+      });
+      const basic = create({ entity: 'cover.basic', controls_expanded: true });
+      const offline = create({ entity: 'cover.offline', controls_expanded: true });
+
+      function assert(condition, message) {
+        if (!condition) throw new Error(message);
+      }
+
+      async function run() {
+        await customElements.whenDefined('terminal-shutter-card');
+        await new Promise((resolve) => setTimeout(resolve, 30));
+
+        const card = blind.shadowRoot.querySelector('.card');
+        const cardStyle = getComputedStyle(card);
+        assert(cardStyle.borderRadius === '0px', 'shutter corners are not square');
+        assert(cardStyle.transitionProperty.includes('box-shadow'), 'shutter hover glow is missing');
+        assert(card.dataset.state === 'open', 'cover state data is wrong');
+        assert(blind.shadowRoot.querySelector('.state').textContent === 'open', 'cover state is not lowercase');
+        assert(blind.shadowRoot.querySelector('.name').textContent === 'living blind', 'cover name missing');
+        assert(!blind.shadowRoot.querySelector('.title'), 'shutter contains a border title');
+
+        let moreInfoEntity = null;
+        blind.addEventListener('hass-more-info', (event) => {
+          moreInfoEntity = event.detail.entityId;
+        });
+        blind.shadowRoot.querySelector('.main').click();
+        assert(moreInfoEntity === 'cover.blind', 'main shutter tap did not open more-info');
+
+        const expand = blind.shadowRoot.querySelector('.expand');
+        const controls = blind.shadowRoot.querySelector('.controls');
+        assert(controls.hidden, 'shutter controls are not collapsed by default');
+        assert(getComputedStyle(expand).borderRadius === '0px', 'shutter expand button is not square');
+        expand.click();
+        assert(!controls.hidden, 'shutter controls did not expand');
+        assert(moreInfoEntity === 'cover.blind', 'expand button incorrectly opened more-info');
+        assert(blind.getCardSize() === 3, 'expanded shutter size is wrong');
+
+        const position = blind.shadowRoot.querySelector('[data-control="position"]');
+        const tilt = blind.shadowRoot.querySelector('[data-control="tilt"]');
+        assert(position.querySelector('.range-value').textContent === '65%', 'cover position is wrong');
+        assert(tilt.querySelector('.range-value').textContent === '30%', 'cover tilt is wrong');
+        const valueRect = position.querySelector('.range-value').getBoundingClientRect();
+        const expandRect = expand.getBoundingClientRect();
+        assert(
+          Math.abs((valueRect.left + valueRect.width / 2) - (expandRect.left + expandRect.width / 2)) < 0.5,
+          'cover value is not aligned below the expand button'
+        );
+
+        const initialSegments = position.querySelectorAll('.segment').length;
+        assert(initialSegments > 1, 'position segments were not created');
+        blind.style.width = '190px';
+        blind.getBoundingClientRect();
+        window.triggerResizeObserver(card);
+        const narrowSegments = [...position.querySelectorAll('.segment')];
+        assert(narrowSegments.length < initialSegments, 'position segments are not responsive');
+        for (let index = 1; index < narrowSegments.length; index += 1) {
+          assert(
+            narrowSegments[index].getBoundingClientRect().left >=
+              narrowSegments[index - 1].getBoundingClientRect().right,
+            'position segments overlap'
+          );
+        }
+
+        blind.shadowRoot.querySelector('.command[aria-label="Open"]').click();
+        blind.shadowRoot.querySelector('.command[aria-label="Stop"]').click();
+        blind.shadowRoot.querySelector('.command[aria-label="Close"]').click();
+        assert(calls[0][1] === 'open_cover', 'open command is wrong');
+        assert(calls[1][1] === 'stop_cover', 'stop command is wrong');
+        assert(calls[2][1] === 'close_cover', 'close command is wrong');
+
+        const positionInput = position.querySelector('input');
+        positionInput.value = '42';
+        positionInput.dispatchEvent(new Event('input', { bubbles: true }));
+        positionInput.dispatchEvent(new Event('change', { bubbles: true }));
+        assert(calls[3][1] === 'set_cover_position', 'position service is wrong');
+        assert(calls[3][2].position === 42, 'position payload is wrong');
+
+        const tiltInput = tilt.querySelector('input');
+        tiltInput.value = '74';
+        tiltInput.dispatchEvent(new Event('input', { bubbles: true }));
+        tiltInput.dispatchEvent(new Event('change', { bubbles: true }));
+        assert(calls[4][1] === 'set_cover_tilt_position', 'tilt service is wrong');
+        assert(calls[4][2].tilt_position === 74, 'tilt payload is wrong');
+        assert(calls.every((call) => call[0] === 'cover'), 'cover controls called another domain');
+        assert(calls.every((call) => call[3].entity_id === 'cover.blind'), 'cover target is wrong');
+
+        assert(basic.shadowRoot.querySelector('[data-control="position"]').hidden, 'basic cover shows position');
+        assert(basic.shadowRoot.querySelector('[data-control="tilt"]').hidden, 'basic cover shows tilt');
+        assert(basic.shadowRoot.querySelector('.command[aria-label="Stop"]').hidden, 'basic cover shows stop');
+        assert(
+          offline.shadowRoot.querySelector('[data-control="position"] input').disabled,
+          'unavailable cover position is enabled'
+        );
+        assert(
+          offline.shadowRoot.querySelector('.command[aria-label="Open"]').disabled,
+          'unavailable cover command is enabled'
+        );
+
+        let invalidEntity = false;
+        try {
+          document.createElement('terminal-shutter-card').setConfig({ entity: 'light.nope' });
+        } catch (_error) {
+          invalidEntity = true;
+        }
+        assert(invalidEntity, 'non-cover entity was accepted');
+        assert(
+          window.customCards.some((entry) => entry.type === 'terminal-shutter-card'),
+          'shutter picker metadata missing'
+        );
+        const form = document.createElement('terminal-shutter-card').constructor.getConfigForm();
+        const fields = form.schema.flatMap((item) => item.schema || [item]);
+        const entityField = fields.find((field) => field.name === 'entity');
+        assert(entityField.selector.entity.filter.domain === 'cover', 'cover selector accepts other domains');
+        assert(fields.some((field) => field.name === 'show_position'), 'position form field missing');
+        assert(fields.some((field) => field.name === 'show_tilt'), 'tilt form field missing');
+
+        document.body.dataset.testStatus = 'PASS';
+        document.title = 'PASS terminal-shutter-card';
+        document.querySelector('#result').textContent = [
+          'PASS: square shutter card with hover glow and controls toggle',
+          'PASS: capability-aware open, stop, close, position and tilt',
+          'PASS: responsive non-overlapping position segments',
+          'PASS: unavailable handling, picker metadata and native form',
+        ].join('\n');
+      }
+
+      run().catch((error) => {
+        document.body.dataset.testStatus = 'FAIL';
+        document.title = 'FAIL terminal-shutter-card';
+        document.querySelector('#result').textContent = `FAIL: ${error.stack || error}`;
+        console.error(error);
+      });
+    </script>
+  </body>
+</html>

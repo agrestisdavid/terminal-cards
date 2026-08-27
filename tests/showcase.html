@@ -22,6 +22,7 @@
       }
       h1 { margin: 0 0 30px; color: #89b4fa; font-size: 20px; font-weight: 700; }
       h1 span { color: #6c7086; font-weight: 400; }
+      main { display: grid; gap: 24px; }
       terminal-card-wrapper { max-width: 1000px; }
     </style>
     <script>
@@ -50,7 +51,7 @@
     <script type="module" src="../dist/terminal-cards.js"></script>
   </head>
   <body>
-    <h1>terminal-cards <span>// wrapper + light-card</span></h1>
+    <h1>terminal-cards <span>// wrapper + light + shutter + navigation</span></h1>
     <main></main>
     <script type="module">
       const hass = {
@@ -58,7 +59,8 @@
           'light.kitchen': {
             entity_id: 'light.kitchen', state: 'on',
             attributes: {
-              friendly_name: 'kitchen', brightness: 204, hs_color: [215, 72],
+              friendly_name: 'kitchen', brightness: 204, color_mode: 'hs',
+              rgb_color: [166, 227, 161], hs_color: [115, 72],
               color_temp_kelvin: 3600, min_color_temp_kelvin: 2000,
               max_color_temp_kelvin: 6500, supported_color_modes: ['hs', 'color_temp'],
             },
@@ -70,6 +72,13 @@
           'light.garage': {
             entity_id: 'light.garage', state: 'unavailable',
             attributes: { friendly_name: 'garage', supported_color_modes: ['onoff'] },
+          },
+          'cover.office': {
+            entity_id: 'cover.office', state: 'open',
+            attributes: {
+              friendly_name: 'office blind', current_position: 68,
+              current_tilt_position: 35, supported_features: 79,
+            },
           },
         },
         formatEntityState: (entity) => entity.state,
@@ -85,7 +94,7 @@
           {
             type: 'custom:terminal-light-card', entity: 'light.kitchen',
             show_brightness: true, show_hue: true, show_color_temp: true,
-            controls_expanded: true,
+            use_light_color: true, controls_expanded: true,
           },
           {
             type: 'custom:terminal-light-card', entity: 'light.dining',
@@ -96,6 +105,30 @@
       });
       wrapper.hass = hass;
       document.querySelector('main').append(wrapper);
+
+      const controls = document.createElement('terminal-card-wrapper');
+      controls.setConfig({
+        title: 'covers + navigation',
+        columns: 3,
+        cards: [
+          {
+            type: 'custom:terminal-shutter-card', entity: 'cover.office',
+            controls_expanded: true,
+          },
+          {
+            type: 'custom:terminal-navigation-card', name: 'kitchen',
+            navigation_path: '/dashboard-test/kitchen', icon: 'mdi:fridge',
+            variant: 'continuous',
+          },
+          {
+            type: 'custom:terminal-navigation-card', name: 'system',
+            navigation_path: '/config/dashboard', icon: 'mdi:cog',
+            variant: 'pane', label: 'settings',
+          },
+        ],
+      });
+      controls.hass = hass;
+      document.querySelector('main').append(controls);
     </script>
   </body>
 </html>

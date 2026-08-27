@@ -21,9 +21,12 @@ const STYLES = `
     font-family: ${TERMINAL_FONT};
     font-size: 13px;
     line-height: 1.4;
-    transition: border-color 120ms ease;
+    transition: border-color 120ms ease, box-shadow 120ms ease;
   }
-  .pane:focus-within { border-color: var(--terminal-accent); }
+  .pane:hover, .pane:focus-within {
+    border-color: var(--terminal-accent);
+    box-shadow: 0 0 8px color-mix(in srgb, var(--terminal-accent) 45%, transparent);
+  }
   .title {
     position: absolute;
     top: 0;

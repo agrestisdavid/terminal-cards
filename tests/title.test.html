@@ -105,6 +105,40 @@
         assert(card.getGridOptions().columns === 12, 'title card is not full-width by default');
         assert(card.getCardSize() === 2, 'title card size does not reflect the large font');
 
+        const leftCard = document.createElement('terminal-title-card');
+        leftCard.setConfig({
+          title: 'left title',
+          subtitle: 'left subtitle',
+          font_size: 30,
+          title_position: 'left',
+        });
+        document.body.prepend(leftCard);
+        leftCard.hass = hass;
+        const leftFrame = leftCard.shadowRoot.querySelector('.frame');
+        const leftTitle = leftCard.shadowRoot.querySelector('.title');
+        const leftSubtitle = leftCard.shadowRoot.querySelector('.subtitle');
+        const leftFrameRect = leftFrame.getBoundingClientRect();
+        const leftTitleRect = leftTitle.getBoundingClientRect();
+        const leftSubtitleRect = leftSubtitle.getBoundingClientRect();
+        const leftTitleStyle = getComputedStyle(leftTitle);
+        const leftSubtitleStyle = getComputedStyle(leftSubtitle);
+        const titleTextLeft = leftTitleRect.left + parseFloat(leftTitleStyle.paddingLeft);
+        const subtitleTextLeft = leftSubtitleRect.left + parseFloat(leftSubtitleStyle.paddingLeft);
+        assert(
+          Math.abs(titleTextLeft - subtitleTextLeft) < 1,
+          'left subtitle does not share the title text inset'
+        );
+        const titleToSubtitleGap = leftSubtitleRect.top - leftTitleRect.bottom;
+        const subtitleToBottomGap = leftFrameRect.bottom - leftSubtitleRect.bottom;
+        assert(
+          Math.abs(titleToSubtitleGap - subtitleToBottomGap) < 1,
+          `left subtitle gaps differ: title=${titleToSubtitleGap}, bottom=${subtitleToBottomGap}`
+        );
+        assert(
+          Math.abs((subtitleRect.top + subtitleRect.bottom) / 2 - (frameRect.top + frameRect.bottom) / 2) < 1,
+          'right subtitle alignment changed while adjusting the left layout'
+        );
+
         const form = card.constructor.getConfigForm();
         const fields = form.schema.flatMap((item) => item.schema || [item]);
         assert(fields.find((field) => field.name === 'title').selector.text, 'native title selector missing');
@@ -165,6 +199,7 @@
         );
         assert(unsubscribeCount === 1, 'template subscription was not cleaned up on config change');
         card.remove();
+        leftCard.remove();
         compact.remove();
         legacyAccent.remove();
 
@@ -172,6 +207,7 @@
         document.title = 'PASS terminal-title-card';
         document.querySelector('#result').textContent = [
           'PASS: compact square 1px frame, lowered border title and no glow',
+          'PASS: position-aware subtitle inset and balanced left-title spacing',
           'PASS: reactive Markdown/template subtitle with subscription cleanup',
           'PASS: native HA theme-color editor, validation and legacy RGB rendering',
         ].join('\n');

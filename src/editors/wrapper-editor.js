@@ -45,6 +45,57 @@ const FORM_SCHEMA = [
   },
 ];
 
+let cardPickerLoadPromise = null;
+
+function withTimeout(promise, message, timeout = 5000) {
+  return new Promise((resolve, reject) => {
+    const timer = window.setTimeout(() => reject(new Error(message)), timeout);
+    Promise.resolve(promise).then(
+      (value) => {
+        window.clearTimeout(timer);
+        resolve(value);
+      },
+      (error) => {
+        window.clearTimeout(timer);
+        reject(error);
+      }
+    );
+  });
+}
+
+function ensureNativeCardPicker() {
+  if (customElements.get('hui-card-picker')) return Promise.resolve();
+  if (cardPickerLoadPromise) return cardPickerLoadPromise;
+
+  cardPickerLoadPromise = (async () => {
+    if (typeof window.loadCardHelpers !== 'function') {
+      throw new Error('window.loadCardHelpers is unavailable');
+    }
+    const helpers = await window.loadCardHelpers();
+    helpers.createCardElement({ type: 'vertical-stack', cards: [] });
+    await withTimeout(
+      customElements.whenDefined('hui-vertical-stack-card'),
+      'Home Assistant stack card load timed out'
+    );
+    const stackCardClass = customElements.get('hui-vertical-stack-card');
+    if (typeof stackCardClass?.getConfigElement !== 'function') {
+      throw new Error('Home Assistant stack editor is unavailable');
+    }
+    await withTimeout(
+      stackCardClass.getConfigElement(),
+      'Home Assistant stack editor load timed out'
+    );
+    if (!customElements.get('hui-card-picker')) {
+      throw new Error('Home Assistant card picker did not load');
+    }
+  })().catch((error) => {
+    cardPickerLoadPromise = null;
+    throw error;
+  });
+
+  return cardPickerLoadPromise;
+}
+
 const STYLES = `
   :host { display: block; }
   .editor { display: grid; gap: 16px; }
@@ -91,6 +142,7 @@ export class TerminalCardWrapperEditor extends HTMLElement {
     this._childEditor = null;
     this._picker = null;
     this._form = null;
+    this._renderGeneration = 0;
 
     const root = this.attachShadow({ mode: 'open' });
     const style = document.createElement('style');
@@ -99,9 +151,23 @@ export class TerminalCardWrapperEditor extends HTMLElement {
     root.append(style, this._container);
   }
 
+  connectedCallback() {
+    if (this._config) this._render();
+  }
+
+  disconnectedCallback() {
+    ++this._renderGeneration;
+  }
+
   set hass(hass) {
     this._hass = hass;
-    if (this._config && !this._container.hasChildNodes()) this._render();
+    if (
+      this._config &&
+      (!this._container.hasChildNodes() ||
+        (this._selected >= this._config.cards.length && !this._picker))
+    ) {
+      this._render();
+    }
     this._propagateContext();
   }
 
@@ -111,6 +177,13 @@ export class TerminalCardWrapperEditor extends HTMLElement {
 
   set lovelace(lovelace) {
     this._lovelace = lovelace;
+    if (
+      this._config &&
+      this._selected >= this._config.cards.length &&
+      !this._picker
+    ) {
+      this._render();
+    }
     this._propagateContext();
   }
 
@@ -151,6 +224,7 @@ export class TerminalCardWrapperEditor extends HTMLElement {
 
   _render() {
     if (!this._config) return;
+    const renderGeneration = ++this._renderGeneration;
     this._childEditor = null;
     this._picker = null;
     this._form = null;
@@ -256,7 +330,7 @@ export class TerminalCardWrapperEditor extends HTMLElement {
       this._renderCardOptions(cardEditor);
       this._renderChildEditor(cardEditor);
     } else {
-      this._renderPicker(cardEditor);
+      this._renderPicker(cardEditor, renderGeneration);
     }
     editor.append(cardEditor);
     this._container.append(editor);
@@ -353,8 +427,8 @@ export class TerminalCardWrapperEditor extends HTMLElement {
     this._modeButton.disabled = !this._guiModeAvailable;
   }
 
-  _renderPicker(container) {
-    if (customElements.get('hui-card-picker')) {
+  _renderPicker(container, renderGeneration) {
+    if (customElements.get('hui-card-picker') && this._hass && this._lovelace) {
       this._picker = document.createElement('hui-card-picker');
       this._picker.hass = this._hass;
       this._picker.lovelace = this._lovelace;
@@ -371,9 +445,37 @@ export class TerminalCardWrapperEditor extends HTMLElement {
     }
 
     const alert = document.createElement('ha-alert');
-    alert.setAttribute('alert-type', 'warning');
-    alert.textContent = 'Home Assistant’s native card picker is not available yet. Reopen the card editor.';
+    alert.setAttribute('alert-type', 'info');
+    alert.textContent = this._hass && this._lovelace
+      ? 'Loading Home Assistant’s native card picker…'
+      : 'Loading Home Assistant editor context…';
     container.append(alert);
+    if (!this._hass || !this._lovelace) return;
+
+    ensureNativeCardPicker()
+      .then(() => {
+        if (
+          renderGeneration !== this._renderGeneration ||
+          !this.isConnected ||
+          this._selected < this._config.cards.length
+        ) {
+          return;
+        }
+        this._render();
+      })
+      .catch((error) => {
+        if (
+          renderGeneration !== this._renderGeneration ||
+          !this.isConnected ||
+          !container.isConnected
+        ) {
+          return;
+        }
+        alert.setAttribute('alert-type', 'error');
+        alert.textContent = `Home Assistant’s native card picker could not be loaded: ${
+          error instanceof Error ? error.message : String(error)
+        }`;
+      });
   }
 
   _move(delta) {

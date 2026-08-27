@@ -55,7 +55,34 @@
           }
         }
       );
-      customElements.define('hui-card-picker', class extends HTMLElement {});
+      let pickerLoadCount = 0;
+      let stackLoadCount = 0;
+      window.loadCardHelpers = async () => ({
+        createCardElement(config) {
+          if (config.type !== 'vertical-stack' || !Array.isArray(config.cards)) {
+            throw new Error('unexpected native editor preload config');
+          }
+          stackLoadCount += 1;
+          const stack = document.createElement('hui-vertical-stack-card');
+          setTimeout(() => {
+            if (customElements.get('hui-vertical-stack-card')) return;
+            customElements.define(
+              'hui-vertical-stack-card',
+              class extends HTMLElement {
+                static async getConfigElement() {
+                  pickerLoadCount += 1;
+                  await new Promise((resolve) => setTimeout(resolve, 10));
+                  if (!customElements.get('hui-card-picker')) {
+                    customElements.define('hui-card-picker', class extends HTMLElement {});
+                  }
+                  return document.createElement('div');
+                }
+              }
+            );
+          }, 10);
+          return stack;
+        },
+      });
     </script>
     <script type="module" src="../dist/terminal-cards.js"></script>
   </head>
@@ -64,6 +91,14 @@
     <script type="module">
       function assert(condition, message) {
         if (!condition) throw new Error(message);
+      }
+
+      async function waitFor(condition, message) {
+        const deadline = performance.now() + 3000;
+        while (!condition() && performance.now() < deadline) {
+          await new Promise((resolve) => setTimeout(resolve, 10));
+        }
+        assert(condition(), message);
       }
 
       async function run() {
@@ -160,9 +195,34 @@
         );
         assert(latest.cards[0].name === 'updated', 'child card visual edit was not saved');
 
+        assert(!customElements.get('hui-card-picker'), 'picker was already loaded before add');
+        editor.lovelace = null;
         editor.shadowRoot.querySelector('[data-action="add"]').click();
+        assert(
+          editor.shadowRoot.querySelector('ha-alert')?.textContent.includes('editor context'),
+          'picker was attached without complete Home Assistant editor context'
+        );
+        editor.lovelace = lovelace;
+        assert(
+          editor.shadowRoot.querySelector('ha-alert')?.textContent.includes('native card picker'),
+          'missing native picker did not enter a loading state'
+        );
+        editor.remove();
+        await customElements.whenDefined('hui-card-picker');
+        await Promise.resolve();
+        assert(
+          !editor.shadowRoot.querySelector('hui-card-picker'),
+          'stale picker load rendered while the editor was disconnected'
+        );
+        document.body.append(editor);
+        await waitFor(
+          () => Boolean(editor.shadowRoot.querySelector('hui-card-picker')),
+          'native card picker did not load without reopening the editor'
+        );
         const picker = editor.shadowRoot.querySelector('hui-card-picker');
-        assert(picker && picker.hass === hass && picker.lovelace === lovelace, 'native card picker missing');
+        assert(stackLoadCount === 1, 'native stack card preload ran more than once');
+        assert(pickerLoadCount === 1, 'native card picker preload ran more than once');
+        assert(picker.hass === hass && picker.lovelace === lovelace, 'native card picker context missing');
         picker.dispatchEvent(
           new CustomEvent('config-changed', {
             bubbles: true,
@@ -296,7 +356,7 @@
         document.title = 'PASS terminal-cards editors';
         document.querySelector('#result').textContent = [
           'PASS: wrapper fields use native ha-form controls',
-          'PASS: native HA tabs, icon buttons, card picker and child editor',
+          'PASS: native HA tabs, icon buttons, lazy card picker and child editor',
           'PASS: child cards add, update, move and remove',
           'PASS: title card exposes native title, Markdown/template subtitle, size and appearance controls',
           'PASS: light, switch and sensor forms use native entity/action controls',

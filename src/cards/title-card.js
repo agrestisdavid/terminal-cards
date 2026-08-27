@@ -43,6 +43,10 @@ const STYLES = `
     align-items: center;
     min-height: max(56px, calc(var(--terminal-title-font-size) * 1.1 + 36px));
   }
+  .frame[data-has-subtitle="true"][data-title-position="left"] {
+    /* The title's 1.1 line box sits 58% below the border after translateY(-42%). */
+    padding-top: calc(var(--terminal-title-font-size) * .638 + 1px);
+  }
   .title {
     position: absolute;
     z-index: 1;
@@ -76,6 +80,9 @@ const STYLES = `
     --mdc-typography-body1-font-family: ${TERMINAL_FONT};
     --mdc-typography-body1-font-size: 12px;
     --mdc-typography-body1-line-height: 1.35;
+  }
+  .frame[data-has-subtitle="true"][data-title-position="left"] .subtitle {
+    padding-left: 20px;
   }
   .subtitle[hidden] { display: none; }
 `;
@@ -191,6 +198,7 @@ export class TerminalTitleCard extends HTMLElement {
     applyAccentColor(this, config.accent_color);
     this._title.textContent = config.title;
     this._title.dataset.titlePosition = config.title_position || 'left';
+    this._frame.dataset.titlePosition = config.title_position || 'left';
     this._frame.setAttribute('aria-label', config.title);
     this._renderSubtitle();
     this._ensureTemplateSubscription();

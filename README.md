@@ -8,7 +8,7 @@ Terminal-style Lovelace cards for Home Assistant, inspired by Herdr panes: squar
 
 ### `custom:terminal-card-wrapper`
 
-Frames arbitrary Lovelace child cards with a terminal-style title embedded in its top border. Child cards have matching 18 px top and bottom spacing. They are vertical by default; set `columns` for a grid. Children in the same grid row stretch to an equal height. When the final grid row contains only one card, that card automatically spans the complete row. An optional formatted entity state or reactive template result can be embedded in any of the four frame corners. The native-style visual editor can add, configure, reorder, and remove child cards without YAML.
+Frames arbitrary Lovelace child cards with a terminal-style title embedded in its top border. Child cards have matching 18 px top and bottom spacing. They are vertical by default; set `columns` for a grid. Children in the same grid row stretch to an equal height. When the final grid row contains only one card, that card automatically spans the complete row. An optional formatted entity state or reactive template result can be embedded in any of the four frame corners. The native-style visual editor can add, configure, reorder, and remove child cards without YAML; it lazily loads Home Assistant's native card picker when necessary instead of requiring the editor to be reopened.
 
 ```yaml
 type: custom:terminal-card-wrapper
@@ -28,7 +28,7 @@ cards:
 
 ### `custom:terminal-title-card`
 
-A compact terminal heading frame for dashboard sections. Its large title remains embedded slightly inside the upper border and can be positioned left or right. Font size is configurable from 14 to 48 px. An optional vertically centered `subtitle` accepts Markdown and reactive Home Assistant templates in the same field; rendered template output is passed to Home Assistant's Markdown component.
+A compact terminal heading frame for dashboard sections. Its large title remains embedded slightly inside the upper border and can be positioned left or right. Font size is configurable from 14 to 48 px. An optional `subtitle` accepts Markdown and reactive Home Assistant templates in the same field; rendered template output is passed to Home Assistant's Markdown component. With a left-aligned title, the subtitle uses the same text inset and sits with equal vertical space between the title and lower border. Right-aligned titles retain the centered subtitle layout.
 
 ```yaml
 type: custom:terminal-title-card

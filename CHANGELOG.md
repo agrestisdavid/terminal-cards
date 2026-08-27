@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.9.1 — 2026-08-27
+
+- Align a left-positioned TitleCard subtitle with the title text and balance its vertical spacing between the title and lower border, while preserving the centered right-title layout.
+- Lazily load Home Assistant's native Wrapper child-card picker so cards can be added visually without reopening the editor.
+
 ## 0.9.0 — 2026-08-27
 
 - Let Switch Cards control both `switch.*` and `input_boolean.*` entities with their native toggle services.

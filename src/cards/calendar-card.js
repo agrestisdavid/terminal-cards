@@ -336,27 +336,38 @@ export class TerminalCalendarCard extends HTMLElement {
   }
 
   _formatEventTime(event) {
-    const date = parseCalendarDate(event?.start);
-    if (!date) return 'time unavailable';
+    const start = parseCalendarDate(event?.start);
+    if (!start) return 'time unavailable';
     const allDay = isAllDayEvent(event);
     const locale = this._hass?.locale?.language || navigator.language || 'en';
-    const options = {
+    const timeZone = this._hass?.config?.time_zone;
+    const dateOptions = {
       weekday: 'short',
       day: '2-digit',
       month: 'short',
-      ...(allDay
-        ? { timeZone: 'UTC' }
-        : {
-            hour: '2-digit',
-            minute: '2-digit',
-            ...(this._hass?.config?.time_zone
-              ? { timeZone: this._hass.config.time_zone }
-              : {}),
-          }),
+      ...(allDay ? { timeZone: 'UTC' } : timeZone ? { timeZone } : {}),
     };
     try {
-      const formatted = new Intl.DateTimeFormat(locale, options).format(date);
-      return `${formatted}${allDay ? ' · all-day' : ''}`.toLocaleLowerCase(locale);
+      const dateFormatter = new Intl.DateTimeFormat(locale, dateOptions);
+      const startDate = dateFormatter.format(start);
+      if (allDay) return `${startDate} · all-day`.toLocaleLowerCase(locale);
+
+      const timeOptions = {
+        hour: '2-digit',
+        minute: '2-digit',
+        ...(timeZone ? { timeZone } : {}),
+      };
+      const timeFormatter = new Intl.DateTimeFormat(locale, timeOptions);
+      const startLabel = `${startDate}, ${timeFormatter.format(start)}`;
+      const end = parseCalendarDate(event?.end);
+      if (!end) return startLabel.toLocaleLowerCase(locale);
+
+      const sameDay = dateKeyInTimeZone(start, timeZone || 'UTC') ===
+        dateKeyInTimeZone(end, timeZone || 'UTC');
+      const endLabel = sameDay
+        ? timeFormatter.format(end)
+        : `${dateFormatter.format(end)}, ${timeFormatter.format(end)}`;
+      return `${startLabel}–${endLabel}`.toLocaleLowerCase(locale);
     } catch (_error) {
       return calendarValue(event?.start).toLocaleLowerCase();
     }

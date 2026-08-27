@@ -109,7 +109,7 @@ tap_action:
 
 ### `custom:terminal-calendar-card`
 
-A compact agenda for one `calendar.*` entity. It shows the next three events by default and subscribes to Home Assistant's live calendar event API. The visual editor can change the event count from 1 to 10, search between 1 and 365 days ahead (30 by default), and optionally show event locations. Timed and all-day events are sorted chronologically and rendered as a terminal tree.
+A compact agenda for one `calendar.*` entity. It shows the next three events by default and subscribes to Home Assistant's live calendar event API. The visual editor can change the event count from 1 to 10, search between 1 and 365 days ahead (30 by default), and optionally show event locations. Timed events show their start and end times, with both dates for overnight events; all-day events remain clearly labelled. Events are sorted chronologically and rendered as a terminal tree.
 
 ```yaml
 type: custom:terminal-calendar-card

@@ -76,11 +76,13 @@
         const requestedDays = (new Date(params[0].end) - new Date(params[0].start)) / 86400000;
         assert(Math.abs(requestedDays - 30) < 0.01, 'calendar did not request the configured 30-day range');
 
+        const firstStart = future(2);
+        const firstEnd = future(3);
         callbacks[0]({
           events: [
             { summary: 'expired event', start: future(-10) },
             { summary: 'fourth event', start: future(10), end: future(11), location: 'hidden' },
-            { summary: '<b>first event</b>', start: future(2), end: future(3), location: 'home' },
+            { summary: '<b>first event</b>', start: firstStart, end: firstEnd, location: 'home' },
             { summary: 'third event', start: future(8), end: future(9) },
             { summary: 'second event', start: future(5), end: future(6) },
           ],
@@ -97,6 +99,15 @@
         assert(rows.length === 3, 'calendar max_events did not limit the list to three');
         assert(rows[0].querySelector('.summary').textContent === '<b>first event</b>', 'calendar events are not sorted');
         assert(!rows[0].querySelector('b'), 'calendar summary was interpreted as HTML');
+        const firstEndLabel = new Intl.DateTimeFormat('en-GB', {
+          hour: '2-digit',
+          minute: '2-digit',
+          timeZone: 'America/Los_Angeles',
+        }).format(new Date(firstEnd)).toLocaleLowerCase('en-GB');
+        assert(
+          rows[0].querySelector('.when').textContent.includes(`–${firstEndLabel}`),
+          'calendar event end time is missing'
+        );
         assert(rows[1].querySelector('.summary').textContent === 'second event', 'second calendar event is wrong');
         assert(rows[2].querySelector('.summary').textContent === 'third event', 'third calendar event is wrong');
         assert(rows[2].querySelector('.branch').textContent === '└─', 'last calendar tree branch is wrong');
@@ -155,6 +166,24 @@
         callbacks[1]({ events: [{ summary: 'stale connection', start: future(1), end: future(2) }] });
         assert(!card.shadowRoot.textContent.includes('stale connection'), 'stale connection update was rendered');
 
+        Date.now = () => Date.parse('2026-01-01T20:00:00Z');
+        reconnectCallbacks[0]({
+          events: [{
+            summary: 'overnight event',
+            start: '2026-01-02T07:30:00Z',
+            end: '2026-01-02T09:00:00Z',
+          }],
+        });
+        await Promise.resolve();
+        Date.now = originalDateNow;
+        const overnightWhen = card.shadowRoot.querySelector('.when').textContent;
+        assert(overnightWhen.includes('23:30'), 'overnight event start time is missing');
+        assert(overnightWhen.includes('01:00'), 'overnight event end time is missing');
+        assert(
+          overnightWhen.includes('thu') && overnightWhen.includes('fri'),
+          'overnight event does not show both calendar dates'
+        );
+
         reconnectCallbacks[0]({ events: null });
         assert(
           card.shadowRoot.querySelector('.status').textContent === 'calendar events unavailable',
@@ -205,7 +234,7 @@
         document.title = 'PASS terminal-calendar-card';
         document.querySelector('#result').textContent = [
           'PASS: next events sorted, limited and rendered safely',
-          'PASS: all-day time and optional location formatting',
+          'PASS: start/end times, overnight dates and all-day formatting',
           'PASS: reactive calendar subscription with stale/disconnect cleanup',
           'PASS: native calendar editor selectors and validation',
         ].join('\n');

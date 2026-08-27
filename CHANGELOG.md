@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 0.10.1 — 2026-08-28
+
+- Show both start and end times for timed Calendar Card events, including both dates when an event crosses midnight.
+
 ## 0.10.0 — 2026-08-28
 
 - Reduce the balanced vertical gap above and below left-positioned TitleCard subtitles, especially with large title sizes.

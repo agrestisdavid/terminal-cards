@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.3.2 — 2026-08-27
+
+- Place the bordered terminal popup inside its own borderless background shell and keep the border title stacked above the dialog.
+
 ## 0.3.1 — 2026-08-27
 
 - Keep the terminal popup border title fully visible above its scrollable dialog.

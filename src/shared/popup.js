@@ -39,20 +39,31 @@ const STYLES = `
     inset: 0;
     background: rgb(0 0 0 / 62%);
   }
-  .dialog-frame {
+  .dialog-shell {
     --terminal-popup-effective-accent: var(
       --terminal-popup-light-color,
       var(--terminal-accent)
     );
     position: relative;
+    z-index: 1;
     box-sizing: border-box;
     width: min(480px, calc(100vw - 32px));
     max-height: calc(100vh - 32px);
-    margin-top: 8px;
+    padding: 8px;
+    border: 0;
+    background: var(--terminal-background);
+    overflow: visible;
+  }
+  .dialog-frame {
+    position: relative;
+    box-sizing: border-box;
+    width: 100%;
+    max-height: calc(100vh - 48px);
     overflow: visible;
   }
   .dialog {
     position: relative;
+    z-index: 1;
     box-sizing: border-box;
     display: flex;
     flex-direction: column;
@@ -66,6 +77,7 @@ const STYLES = `
   }
   .border-title {
     position: absolute;
+    z-index: 2;
     top: 0;
     left: 12px;
     box-sizing: border-box;
@@ -234,7 +246,8 @@ const STYLES = `
   input[type="range"]:disabled { cursor: not-allowed; }
   @media (max-width: 420px) {
     :host { padding: 8px; }
-    .dialog-frame { width: calc(100vw - 16px); max-height: calc(100vh - 16px); }
+    .dialog-shell { width: calc(100vw - 16px); max-height: calc(100vh - 16px); }
+    .dialog-frame { max-height: calc(100vh - 32px); }
     .body { max-height: calc(100vh - 114px); }
   }
 `;
@@ -268,6 +281,8 @@ export class TerminalEntityPopup extends HTMLElement {
     style.textContent = STYLES;
     this._backdrop = document.createElement('div');
     this._backdrop.className = 'backdrop';
+    this._dialogShell = document.createElement('div');
+    this._dialogShell.className = 'dialog-shell';
     this._dialogFrame = document.createElement('div');
     this._dialogFrame.className = 'dialog-frame';
     this._dialog = document.createElement('section');
@@ -299,7 +314,8 @@ export class TerminalEntityPopup extends HTMLElement {
     this._body.className = 'body';
     this._dialog.append(this._header, this._body);
     this._dialogFrame.append(this._borderTitle, this._dialog);
-    root.append(style, this._backdrop, this._dialogFrame);
+    this._dialogShell.append(this._dialogFrame);
+    root.append(style, this._backdrop, this._dialogShell);
 
     this._close.addEventListener('click', () => this.close());
     this._backdrop.addEventListener('click', () => this.close());

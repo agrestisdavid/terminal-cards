@@ -93,7 +93,7 @@ Every card supports an optional native RGB color selector through `accent_color:
 
 Wrapper and pane-style Navigation Cards support `title_position: left|right`. Light, Shutter, and Navigation Cards support `more_icon`; Navigation uses it for the trailing navigation icon. These conventions should also be used by future Terminal Cards.
 
-A `more-info` action opens the bundle's own terminal-style entity popup instead of Home Assistant's native dialog. The popup title sits fully above the border without clipping. Its capability-aware Light and Cover ranges use the same responsive square segments as the cards. It supports pointer and keyboard holds, traps focus, closes with Escape/backdrop/close, and returns focus to the card.
+A `more-info` action opens the bundle's own terminal-style entity popup instead of Home Assistant's native dialog. A borderless terminal-background shell surrounds the bordered dialog, and the popup title is stacked fully above its border without clipping. Its capability-aware Light and Cover ranges use the same responsive square segments as the cards. It supports pointer and keyboard holds, traps focus, closes with Escape/backdrop/close, and returns focus to the card.
 
 Navigation secondary content uses this precedence: a successful reactive `state_template` result, then the formatted `entity` state, then `label`, then the navigation path when `show_path` is enabled. Templates are rendered by Home Assistant's `render_template` WebSocket subscription and update automatically.
 

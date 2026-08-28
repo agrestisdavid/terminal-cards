@@ -1,6 +1,6 @@
 # Terminal Cards
 
-Terminal-style Lovelace cards for Home Assistant, inspired by Herdr panes: square 1 px borders, monospace labels embedded in the top border, and theme-aware state colors.
+Terminal-style Lovelace cards for Home Assistant, inspired by Herdr panes: square 1 px borders, monospace labels embedded in the top border, and theme-aware state colors. Entity, Light, Shutter, and Navigation Cards automatically reduce their horizontal content spacing from 14 px to 10 px below 261 px card width so mobile labels retain more room.
 
 ![Terminal Cards preview](docs/terminal-cards-preview.png)
 

@@ -99,6 +99,12 @@
         off_icon: 'mdi:lightbulb-off',
         icon_tap_action: { action: 'toggle' },
       }, hass);
+      const compact = create({
+        name: 'navigation with a deliberately long mobile label',
+        navigation_path: '/lovelace/compact',
+        icon: 'mdi:compass',
+      });
+      compact.style.width = '240px';
       const equalGrid = document.createElement('div');
       equalGrid.id = 'equal-grid';
       const gridContinuous = create({
@@ -152,6 +158,13 @@
           Math.abs((mainIcon.getBoundingClientRect().top + mainIcon.getBoundingClientRect().bottom) / 2 -
             (mainText.getBoundingClientRect().top + mainText.getBoundingClientRect().bottom) / 2) < 1,
           'navigation icon is not vertically centered against name and state'
+        );
+        const compactMainStyle = getComputedStyle(compact.shadowRoot.querySelector('.main'));
+        const compactTargetStyle = getComputedStyle(compact.shadowRoot.querySelector('.nav-target'));
+        assert(
+          compactMainStyle.paddingLeft === '10px' && compactMainStyle.paddingRight === '10px' &&
+            compactMainStyle.columnGap === '10px' && compactTargetStyle.columnGap === '10px',
+          'narrow navigation layout does not reclaim horizontal text space'
         );
 
         const paneCard = pane.shadowRoot.querySelector('.card');

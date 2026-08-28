@@ -90,6 +90,11 @@
         controls_expanded: true,
       });
       const offline = create({ entity: 'cover.offline', controls_expanded: true });
+      const compact = create({
+        entity: 'cover.basic',
+        name: 'Basic shutter with a deliberately long mobile label',
+      });
+      compact.style.width = '240px';
 
       function assert(condition, message) {
         if (!condition) throw new Error(message);
@@ -125,6 +130,12 @@
         assert(getComputedStyle(basic.shadowRoot.querySelector('.border-title')).right === '12px', 'shutter border title cannot be positioned right');
         assert(basic.shadowRoot.querySelector('.name').textContent === 'Basic shutter', 'shutter border title replaced the internal name');
         assert(!blind.shadowRoot.querySelector('.title'), 'shutter contains a legacy title element');
+        const compactMainStyle = getComputedStyle(compact.shadowRoot.querySelector('.main'));
+        assert(
+          compactMainStyle.paddingLeft === '10px' && compactMainStyle.paddingRight === '10px' &&
+            compactMainStyle.columnGap === '10px',
+          'narrow shutter layout does not reclaim horizontal text space'
+        );
 
         let nativeMoreInfoCount = 0;
         blind.addEventListener('hass-more-info', () => { nativeMoreInfoCount += 1; });

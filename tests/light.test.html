@@ -140,6 +140,11 @@
         entity: 'light.simple',
         tap_action: { action: 'url', url_path: 'https://example.com/light' },
       });
+      const compact = create({
+        entity: 'light.simple',
+        name: 'Simple light with a deliberately long mobile label',
+      });
+      compact.style.width = '240px';
 
       function assert(condition, message) {
         if (!condition) throw new Error(message);
@@ -220,6 +225,12 @@
         assert(warmColor !== 'rgb(10 120 240)', 'temperature feedback reused the RGB color');
         assert(!style.transitionProperty.includes('box-shadow'), 'light still transitions a glow');
         assert(style.boxShadow === 'none', 'light still renders a glow');
+        const compactMainStyle = getComputedStyle(compact.shadowRoot.querySelector('.main'));
+        assert(
+          compactMainStyle.paddingLeft === '10px' && compactMainStyle.paddingRight === '10px' &&
+            compactMainStyle.columnGap === '10px',
+          'narrow light layout does not reclaim horizontal text space'
+        );
 
         const controls = light.shadowRoot.querySelector('.controls');
         const more = light.shadowRoot.querySelector('.more');

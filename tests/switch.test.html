@@ -66,6 +66,11 @@
         title_position: 'right',
       });
       const offline = create({ entity: 'switch.offline' });
+      const compact = create({
+        entity: 'switch.coffee',
+        name: 'Coffee machine with a deliberately long mobile label',
+      });
+      compact.style.width = '240px';
 
       function assert(condition, message) {
         if (!condition) throw new Error(message);
@@ -102,6 +107,12 @@
         assert(
           active.style.getPropertyValue('--terminal-card-accent') === 'var(--green-color, #4caf50)',
           'switch HA theme accent is missing'
+        );
+        const compactMainStyle = getComputedStyle(compact.shadowRoot.querySelector('.main'));
+        assert(
+          compactMainStyle.paddingLeft === '10px' && compactMainStyle.paddingRight === '10px' &&
+            compactMainStyle.columnGap === '10px',
+          'narrow switch layout does not reclaim horizontal text space'
         );
 
         active.shadowRoot.querySelector('.main').click();

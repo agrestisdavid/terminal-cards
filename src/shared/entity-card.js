@@ -18,6 +18,7 @@ const STYLES = `
   :host {
     ${TERMINAL_COLORS}
     box-sizing: border-box;
+    container-type: inline-size;
     display: block;
     height: 100%;
   }
@@ -58,6 +59,12 @@ const STYLES = `
     outline: none;
     user-select: none;
     -webkit-tap-highlight-color: transparent;
+  }
+  @container (max-width: 260px) {
+    .main {
+      gap: 10px;
+      padding-inline: 10px;
+    }
   }
   .main:focus-visible {
     outline: 1px solid var(--terminal-accent);

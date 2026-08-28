@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 0.11.1 — 2026-08-28
+
+- Reduce horizontal main-content padding and icon/text gaps from 14 px to 10 px when Entity, Light, Shutter, or Navigation Cards are at most 260 px wide, preserving more label space on mobile.
+
 ## 0.11.0 — 2026-08-28
 
 - Make an entity-backed TitleCard border state an accessible popup button with a native `state_tap_action` editor and focus-safe popup lifecycle.

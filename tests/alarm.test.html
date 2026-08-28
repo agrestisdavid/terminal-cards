@@ -60,6 +60,16 @@
           code_arm_required: true,
         },
       };
+      const armedColorEntity = {
+        entity_id: 'alarm_control_panel.armed_color',
+        state: 'armed_home',
+        attributes: {
+          friendly_name: 'Armed color alarm',
+          supported_features: 7,
+          code_format: null,
+          code_arm_required: false,
+        },
+      };
       const fullFeatureEntity = {
         entity_id: 'alarm_control_panel.full',
         state: 'disarmed',
@@ -80,14 +90,35 @@
           code_arm_required: false,
         },
       };
+      const matrixEntity = {
+        entity_id: 'alarm_control_panel.matrix',
+        state: 'disarmed',
+        attributes: {
+          friendly_name: 'State color matrix',
+          supported_features: 55,
+          code_format: null,
+          code_arm_required: false,
+        },
+      };
+      const unavailableEntity = {
+        entity_id: 'alarm_control_panel.offline',
+        state: 'unavailable',
+        attributes: {
+          friendly_name: 'Offline alarm',
+          supported_features: 55,
+        },
+      };
       const hass = {
         connection: connectionA,
         states: {
           'alarm_control_panel.alarmo': disarmedEntity,
           'alarm_control_panel.defaulted': defaultCodeEntity,
           'alarm_control_panel.triggered': triggeredEntity,
+          'alarm_control_panel.armed_color': armedColorEntity,
           'alarm_control_panel.full': fullFeatureEntity,
           'alarm_control_panel.no_arm_code': noArmCodeEntity,
+          'alarm_control_panel.matrix': matrixEntity,
+          'alarm_control_panel.offline': unavailableEntity,
         },
         entities: {
           'alarm_control_panel.defaulted': { options: { default_code: '2468' } },
@@ -126,30 +157,52 @@
         await new Promise((resolve) => setTimeout(resolve, 20));
       }
 
+      async function settleColor() {
+        await new Promise((resolve) => setTimeout(resolve, 150));
+      }
+
       const card = create({
         entity: 'alarm_control_panel.alarmo',
         name: 'security system',
         border_title: 'security',
         accent_color: 'yellow',
         more_icon: 'mdi:menu',
+        disarmed_color: 'cyan',
+        away_color: 'green',
       });
       const compact = create({ entity: 'alarm_control_panel.alarmo' });
       compact.style.width = '240px';
       const triggered = create({
         entity: 'alarm_control_panel.triggered',
         controls_expanded: true,
+        triggered_color: 'pink',
       });
       const defaulted = create({
         entity: 'alarm_control_panel.defaulted',
         controls_expanded: true,
       });
+      const armedColor = create({
+        entity: 'alarm_control_panel.armed_color',
+        home_color: 'green',
+      });
       const fullFeature = create({
         entity: 'alarm_control_panel.full',
         controls_expanded: true,
+        vacation_color: 'light-blue',
+        custom_bypass_color: 'teal',
       });
       const noArmCode = create({
         entity: 'alarm_control_panel.no_arm_code',
         controls_expanded: true,
+      });
+      const matrix = create({ entity: 'alarm_control_panel.matrix' });
+      const unavailable = create({
+        entity: 'alarm_control_panel.offline',
+        border_title: 'offline',
+      });
+      const legacyAccent = create({
+        entity: 'alarm_control_panel.armed_color',
+        accent_color: 'purple',
       });
       const inert = create({
         entity: 'alarm_control_panel.alarmo',
@@ -169,6 +222,10 @@
         const expand = card.shadowRoot.querySelector('.expand');
         assert(getComputedStyle(frame).borderRadius === '0px', 'alarm corners are not square');
         assert(frame.dataset.state === 'disarmed', 'alarm state data is wrong');
+        assert(getComputedStyle(frame).borderTopColor === 'rgb(0, 188, 212)', 'configured Disarmed color did not reach the card border');
+        assert(getComputedStyle(icon).color === 'rgb(0, 188, 212)', 'configured Disarmed color did not reach the main icon');
+        assert(getComputedStyle(card.shadowRoot.querySelector('.border-title')).color === 'rgb(0, 188, 212)', 'configured Disarmed color did not reach the border title');
+        assert(getComputedStyle(card.shadowRoot.querySelector('.state')).color === 'rgb(0, 188, 212)', 'configured Disarmed color did not reach the state');
         assert(card.shadowRoot.querySelector('.name').textContent === 'security system', 'alarm name is missing');
         assert(card.shadowRoot.querySelector('.state').textContent === 'disarmed', 'alarm state is not formatted');
         assert(card.shadowRoot.querySelector('.border-title').textContent === 'security', 'alarm border title is missing');
@@ -185,6 +242,13 @@
         assert(inert.shadowRoot.querySelector('.main-target').tabIndex === -1, 'inert alarm main target is keyboard focusable');
         assert(!inert.shadowRoot.querySelector('.main-target').hasAttribute('aria-haspopup'), 'inert alarm main target claims to open a dialog');
         assert(inert.shadowRoot.querySelector('.expand').hidden, 'show_controls false did not hide the controls button');
+        assert(getComputedStyle(armedColor.shadowRoot.querySelector('.card')).borderTopColor === 'rgb(76, 175, 80)', 'active Home color did not reach a newly rendered card border');
+        assert(getComputedStyle(armedColor.shadowRoot.querySelector('.icon')).color === 'rgb(76, 175, 80)', 'active Home color did not reach a newly rendered card icon');
+        assert(getComputedStyle(legacyAccent.shadowRoot.querySelector('.card')).borderTopColor === 'rgb(156, 39, 176)', 'legacy Alarm accent_color no longer acts as the state-color fallback');
+        const unavailableFrame = unavailable.shadowRoot.querySelector('.card');
+        assert(getComputedStyle(unavailableFrame).borderTopColor === 'rgb(243, 139, 168)', 'unavailable alarm border is not Error-colored');
+        assert(getComputedStyle(unavailable.shadowRoot.querySelector('.border-title')).color === 'rgb(243, 139, 168)', 'unavailable alarm border title is not Error-colored');
+        assert(getComputedStyle(unavailable.shadowRoot.querySelector('.icon')).color === 'rgb(243, 139, 168)', 'unavailable alarm icon is not Error-colored');
         const compactMainStyle = getComputedStyle(compact.shadowRoot.querySelector('.main'));
         const compactTargetStyle = getComputedStyle(compact.shadowRoot.querySelector('.main-target'));
         assert(
@@ -196,7 +260,59 @@
         main.click();
         const popup = document.querySelector('terminal-entity-popup');
         assert(popup && !popup.hidden, 'alarm main area did not open the terminal popup');
+        assert(getComputedStyle(popup.shadowRoot.querySelector('.dialog')).borderTopColor === 'rgb(0, 188, 212)', 'Disarmed color did not reach the terminal popup border');
+        assert(getComputedStyle(popup.shadowRoot.querySelector('.border-title')).color === 'rgb(0, 188, 212)', 'Disarmed color did not reach the terminal popup title');
         assert(card.shadowRoot.querySelector('.controls').hidden, 'alarm main area also expanded inline controls');
+        popup.shadowRoot.querySelector('.close').click();
+
+        const stateColorExpectations = {
+          disarmed: '#9e9e9e', armed_home: '#2196f3', armed_away: '#ff9800',
+          armed_night: '#9c27b0', armed_vacation: '#00bcd4',
+          armed_custom_bypass: '#e91e63', arming: '#ffeb3b', pending: '#ff5722',
+          disarming: '#ffeb3b', triggered: '#f44336', unavailable: '#f38ba8',
+          unknown: '#f38ba8',
+        };
+        for (const [state, expectedColor] of Object.entries(stateColorExpectations)) {
+          matrix.hass = {
+            ...hass,
+            states: {
+              ...hass.states,
+              'alarm_control_panel.matrix': { ...matrixEntity, state },
+            },
+          };
+          assert(
+            getComputedStyle(matrix.shadowRoot.querySelector('.card'))
+              .getPropertyValue('--terminal-alarm-effective-accent').trim() === expectedColor,
+            `default Alarm state color is wrong for ${state}`
+          );
+        }
+        const matrixHomeHass = {
+          ...hass,
+          states: {
+            ...hass.states,
+            'alarm_control_panel.matrix': { ...matrixEntity, state: 'armed_home' },
+          },
+        };
+        matrix.hass = matrixHomeHass;
+        matrix.shadowRoot.querySelector('.main-target').click();
+        assert(getComputedStyle(popup.shadowRoot.querySelector('.dialog')).borderTopColor === 'rgb(33, 150, 243)', 'Home default color did not reach the open popup');
+        matrix.hass = {
+          ...hass,
+          states: {
+            ...hass.states,
+            'alarm_control_panel.matrix': { ...matrixEntity, state: 'armed_away' },
+          },
+        };
+        assert(getComputedStyle(popup.shadowRoot.querySelector('.dialog')).borderTopColor === 'rgb(255, 152, 0)', 'open popup did not follow a live Away transition');
+        matrix.hass = {
+          ...hass,
+          states: {
+            ...hass.states,
+            'alarm_control_panel.matrix': { ...matrixEntity, state: 'unavailable' },
+          },
+        };
+        assert(getComputedStyle(popup.shadowRoot.querySelector('.dialog')).borderTopColor === 'rgb(243, 139, 168)', 'unavailable popup is not Error-colored');
+        assert(getComputedStyle(popup.shadowRoot.querySelector('.border-title')).color === 'rgb(243, 139, 168)', 'unavailable popup title is not Error-colored');
         popup.shadowRoot.querySelector('.close').click();
 
         expand.click();
@@ -262,8 +378,22 @@
           states: { ...hass.states, 'alarm_control_panel.alarmo': armedEntity },
         };
         card.hass = armedHass;
+        await settleColor();
         assert(labels(card).includes('disarm'), 'armed alarm has no disarm action');
         assert(action(card, 'away').disabled, 'current alarm mode is not disabled');
+        assert(action(card, 'away').dataset.active === 'true', 'current alarm mode is not marked active');
+        assert(
+          getComputedStyle(frame).getPropertyValue('--terminal-alarm-effective-accent').trim() === '#4caf50',
+          'configured Away color did not update the card effective accent'
+        );
+        assert(getComputedStyle(action(card, 'away')).borderTopColor === 'rgb(76, 175, 80)', 'configured Away color did not reach the active mode control');
+        main.click();
+        assert(getComputedStyle(popup.shadowRoot.querySelector('.dialog')).borderTopColor === 'rgb(76, 175, 80)', 'Away color did not reach the terminal popup');
+        const popupAway = [...popup.shadowRoot.querySelectorAll('.alarm-actions .action')]
+          .find((button) => button.textContent.trim() === 'arm away');
+        assert(popupAway.dataset.active === 'true', 'current popup alarm mode is not marked active');
+        assert(getComputedStyle(popupAway).borderTopColor === 'rgb(76, 175, 80)', 'Away color did not reach the active popup control');
+        popup.shadowRoot.querySelector('.close').click();
         codeInput = card.shadowRoot.querySelector('.alarm-code input');
         codeInput.value = '0099';
         codeInput.dispatchEvent(new Event('input', { bubbles: true }));
@@ -291,7 +421,7 @@
         assert(!card._alarmBusy && card._alarmCode === '', 'stale completion changed the replacement session');
 
         assert(labels(triggered).join(',') === 'disarm', 'triggered alarm exposes actions other than disarm');
-        assert(getComputedStyle(triggered.shadowRoot.querySelector('.card')).borderTopColor === 'rgb(243, 139, 168)', 'triggered alarm does not use the error border');
+        assert(getComputedStyle(triggered.shadowRoot.querySelector('.card')).borderTopColor === 'rgb(233, 30, 99)', 'configured Triggered color did not reach the alarm border');
 
         serviceHandler = () => Promise.resolve();
         assert(labels(fullFeature).join(',') === 'home,away,night,vacation,custom', 'Vacation or Custom Bypass mode is missing');
@@ -310,7 +440,13 @@
             'alarm_control_panel.full': { ...fullFeatureEntity, state: 'armed_custom_bypass' },
           },
         };
+        await settleColor();
         assert(action(fullFeature, 'custom').disabled, 'current Custom Bypass mode is not disabled');
+        assert(
+          getComputedStyle(fullFeature.shadowRoot.querySelector('.card'))
+            .getPropertyValue('--terminal-alarm-effective-accent').trim() === '#009688',
+          'configured Custom Bypass color did not update the card effective accent'
+        );
 
         assert(!noArmCode.shadowRoot.querySelector('.alarm-code input'), 'code_arm_required false still requires a PIN for arming');
         action(noArmCode, 'home').click();
@@ -397,6 +533,14 @@
         try { document.createElement('terminal-alarm-card').setConfig({ entity: 'light.kitchen' }); }
         catch (_error) { invalid = true; }
         assert(invalid, 'non-alarm entity was accepted');
+        let invalidColor = false;
+        try {
+          document.createElement('terminal-alarm-card').setConfig({
+            entity: 'alarm_control_panel.alarmo',
+            home_color: 'chartreuse',
+          });
+        } catch (_error) { invalidColor = true; }
+        assert(invalidColor, 'invalid per-mode alarm color was accepted');
         const Card = customElements.get('terminal-alarm-card');
         const form = Card.getConfigForm();
         const fields = form.schema.flatMap((item) => item.schema || [item]);
@@ -405,6 +549,18 @@
         assert(fields.find((field) => field.name === 'controls_expanded').selector.boolean, 'alarm default expansion editor is missing');
         assert(fields.find((field) => field.name === 'more_icon').selector.icon, 'alarm controls icon editor is missing');
         assert(fields.find((field) => field.name === 'tap_action').selector.ui_action, 'alarm tap action editor is missing');
+        const colorDefaults = {
+          disarmed_color: 'grey', home_color: 'blue', away_color: 'orange',
+          night_color: 'purple', vacation_color: 'cyan', custom_bypass_color: 'pink',
+          arming_color: 'yellow', pending_color: 'deep-orange',
+          disarming_color: 'yellow', triggered_color: 'red',
+        };
+        for (const [name, defaultColor] of Object.entries(colorDefaults)) {
+          assert(
+            fields.find((field) => field.name === name)?.selector.ui_color.default_color === defaultColor,
+            `${name} native mode-color selector is missing or has the wrong default`
+          );
+        }
         assert(Card.getStubConfig(hass).entity === 'alarm_control_panel.alarmo', 'alarm stub did not find a real alarm entity');
         assert(window.customCards.some((entry) => entry.type === 'terminal-alarm-card'), 'alarm picker metadata is missing');
         assert(defaulted.getGridOptions().min_columns === 3, 'alarm grid options are missing');
@@ -415,6 +571,7 @@
           'PASS: compact alarm status, popup action and responsive inline controls',
           'PASS: supported arm modes, Disarm and no manual trigger action',
           'PASS: masked ephemeral PIN, default code, async guards and service errors',
+          'PASS: per-state native colors drive card, active controls and terminal popup',
           'PASS: native visual editor selectors and picker metadata',
         ].join('\n');
       }

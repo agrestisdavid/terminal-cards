@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 0.13.0 — 2026-08-28
+
+- Let every Alarm Card state use an individually configurable native HA theme color and apply the effective state color across the card and terminal popup.
+
 ## 0.12.0 — 2026-08-28
 
 - Add `custom:terminal-alarm-card` with a compact status row, separate expandable controls, supported arm modes, Disarm, ephemeral masked PIN entry, terminal popup action, and no manual trigger command.

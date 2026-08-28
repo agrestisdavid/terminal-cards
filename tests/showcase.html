@@ -102,7 +102,7 @@
             attributes: { friendly_name: 'family calendar' },
           },
           'alarm_control_panel.home': {
-            entity_id: 'alarm_control_panel.home', state: 'disarmed',
+            entity_id: 'alarm_control_panel.home', state: 'armed_home',
             attributes: {
               friendly_name: 'home alarm', code_format: 'number',
               code_arm_required: true, supported_features: 7,
@@ -194,7 +194,7 @@
           },
           {
             type: 'custom:terminal-alarm-card', entity: 'alarm_control_panel.home',
-            border_title: 'security', accent_color: 'red',
+            border_title: 'security',
             more_icon: 'mdi:shield-key-outline', controls_expanded: false,
           },
           {

@@ -126,7 +126,7 @@ accent_color: cyan
 
 ### `custom:terminal-alarm-card`
 
-A compact control for one `alarm_control_panel.*` entity. Tapping Icon/Name/State opens the complete terminal popup; the independent square controls button expands supported arm modes and Disarm directly inside the card. Home, Away, Night, Vacation, and Custom are derived exclusively from `supported_features`. When the entity requires a code and has no entity-registry `default_code`, the expanded card uses a masked session-only PIN/code field. Codes are cleared after success, reconnect, config change, collapse, or disconnect; errors remain visible for a retry. Manual alarm triggering is intentionally never exposed.
+A compact control for one `alarm_control_panel.*` entity. Tapping Icon/Name/State opens the complete terminal popup; the independent square controls button expands supported arm modes and Disarm directly inside the card. Home, Away, Night, Vacation, and Custom are derived exclusively from `supported_features`. When the entity requires a code and has no entity-registry `default_code`, the expanded card uses a masked session-only PIN/code field. Codes are cleared after success, reconnect, config change, collapse, or disconnect; errors remain visible for a retry. Manual alarm triggering is intentionally never exposed. Disarmed, Home, Away, Night, Vacation, Custom Bypass, Arming, Pending, Disarming, and Triggered each have their own native HA theme-color option. An explicit state color takes precedence, existing `accent_color` remains the backward-compatible fallback, and the semantic defaults apply when neither is configured. The current state's color drives the card border, border title, icon, state, focus/hover, active control, and terminal popup.
 
 ```yaml
 type: custom:terminal-alarm-card
@@ -139,6 +139,16 @@ controls_expanded: false
 accent_color: red
 more_icon: mdi:shield-key-outline
 popup_title: security
+disarmed_color: grey
+home_color: blue
+away_color: orange
+night_color: purple
+vacation_color: cyan
+custom_bypass_color: pink
+arming_color: yellow
+pending_color: deep-orange
+disarming_color: yellow
+triggered_color: red
 tap_action:
   action: more-info
 ```

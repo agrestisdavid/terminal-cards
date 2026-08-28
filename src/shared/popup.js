@@ -1,6 +1,7 @@
 import {
   alarmControlModel,
   alarmDefaultCode,
+  applyAlarmStateColor,
   sanitizeAlarmCode,
 } from './alarm.js';
 import { applyAccentColor } from './appearance.js';
@@ -48,7 +49,7 @@ const STYLES = `
   .dialog-shell {
     --terminal-popup-effective-accent: var(
       --terminal-popup-light-color,
-      var(--terminal-accent)
+      var(--terminal-popup-state-color, var(--terminal-accent))
     );
     position: relative;
     z-index: 1;
@@ -308,6 +309,11 @@ const STYLES = `
   .log-context { color: var(--terminal-dim); }
   .log-status { color: var(--terminal-dim); white-space: pre-wrap; }
   .action:disabled { cursor: not-allowed; opacity: .45; }
+  .action[data-active="true"] {
+    border-color: var(--terminal-popup-effective-accent);
+    color: var(--terminal-popup-effective-accent);
+    opacity: 1;
+  }
   .range {
     display: grid;
     grid-template-columns: minmax(0, 1fr) 34px;
@@ -645,6 +651,16 @@ export class TerminalEntityPopup extends HTMLElement {
       : null;
     if (lightColor) this.style.setProperty('--terminal-popup-light-color', lightColor);
     else this.style.removeProperty('--terminal-popup-light-color');
+    if (domain === 'alarm_control_panel') {
+      applyAlarmStateColor(
+        this,
+        entity?.state,
+        this._config,
+        '--terminal-popup-state-color'
+      );
+    } else {
+      this.style.removeProperty('--terminal-popup-state-color');
+    }
 
     const name = this._config?.name || attributes.friendly_name || this._entityId || 'entity';
     const popupTitle = this._config?.popup_title || 'more-info';
@@ -1260,6 +1276,7 @@ export class TerminalEntityPopup extends HTMLElement {
         () => this._callAlarmService(service, needsArmCode && !hasDefaultCode),
         unavailable || this._alarmBusy || state === targetState
       );
+      button.dataset.active = String(state === targetState);
       button.dataset.focusKey = `action:${service}`;
       buttons.push(button);
     }

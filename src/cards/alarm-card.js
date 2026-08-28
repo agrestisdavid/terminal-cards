@@ -1,7 +1,11 @@
 import {
+  ALARM_COLOR_OPTIONS,
+  alarmColorSchema,
   alarmControlModel,
   alarmDefaultCode,
+  applyAlarmStateColor,
   sanitizeAlarmCode,
+  validateAlarmColors,
 } from '../shared/alarm.js';
 import {
   appearanceSchema,
@@ -56,19 +60,32 @@ const STYLES = `
     font-family: ${TERMINAL_FONT};
     font-size: 13px;
     line-height: 1.4;
+    --terminal-alarm-effective-accent: var(
+      --terminal-alarm-state-color,
+      var(--terminal-accent)
+    );
+    --terminal-effective-accent: var(--terminal-alarm-effective-accent);
     overflow: visible;
     transition: border-color 120ms ease;
   }
-  .card:not([data-state="disarmed"]):not([data-state="unavailable"]):not([data-state="triggered"]) {
-    border-color: var(--terminal-accent);
+  .card:not([data-state="unavailable"]) {
+    border-color: var(--terminal-alarm-effective-accent);
   }
-  .card[data-state="unavailable"],
-  .card[data-state="triggered"] { border-color: var(--terminal-error); }
-  .card:not([data-state="unavailable"]):not([data-state="triggered"]):hover {
-    border-color: var(--terminal-accent);
+  .card[data-state="unavailable"] { border-color: var(--terminal-error); }
+  .card:not([data-state="unavailable"]):hover {
+    border-color: var(--terminal-alarm-effective-accent);
   }
   .card:not([data-state="unavailable"]):hover .icon,
-  .card:not([data-state="unavailable"]):hover .name { color: var(--terminal-accent); }
+  .card:not([data-state="unavailable"]):hover .name {
+    color: var(--terminal-alarm-effective-accent);
+  }
+  .card:not([data-state="unavailable"]) .border-title,
+  .card:not([data-state="unavailable"]) .state {
+    color: var(--terminal-alarm-effective-accent);
+  }
+  .card:not([data-state="disarmed"]):not([data-state="unavailable"]) .name {
+    color: var(--terminal-alarm-effective-accent);
+  }
   .main {
     box-sizing: border-box;
     display: flex;
@@ -93,7 +110,7 @@ const STYLES = `
     -webkit-tap-highlight-color: transparent;
   }
   .main-target:focus-visible {
-    outline: 1px solid var(--terminal-accent);
+    outline: 1px solid var(--terminal-alarm-effective-accent);
     outline-offset: 3px;
   }
   .main-target[aria-disabled="true"],
@@ -105,11 +122,11 @@ const STYLES = `
     color: var(--terminal-dim);
     pointer-events: none;
   }
-  .card:not([data-state="disarmed"]):not([data-state="unavailable"]) .icon {
-    color: var(--terminal-accent);
+  .card:not([data-state="unavailable"]) .icon {
+    color: var(--terminal-alarm-effective-accent);
   }
   .card[data-state="unavailable"] .icon,
-  .card[data-state="triggered"] .icon { color: var(--terminal-error); }
+  .card[data-state="unavailable"] .border-title { color: var(--terminal-error); }
   .text { flex: 1 1 auto; min-width: 0; pointer-events: none; }
   .name, .state {
     overflow: hidden;
@@ -119,8 +136,7 @@ const STYLES = `
   .name { font-weight: 600; }
   .state { color: var(--terminal-dim); font-size: 12px; }
   .state[hidden] { display: none; }
-  .card[data-state="unavailable"] .state,
-  .card[data-state="triggered"] .state { color: var(--terminal-error); }
+  .card[data-state="unavailable"] .state { color: var(--terminal-error); }
   .expand {
     box-sizing: border-box;
     flex: 0 0 auto;
@@ -140,7 +156,7 @@ const STYLES = `
   .expand[hidden] { display: none; }
   .expand:hover, .expand:focus-visible, .expand[aria-expanded="true"] {
     border-color: currentColor;
-    color: var(--terminal-accent);
+    color: var(--terminal-alarm-effective-accent);
     outline: none;
   }
   .expand:disabled { cursor: default; opacity: .55; }
@@ -177,7 +193,7 @@ const STYLES = `
   }
   .alarm-code input:hover,
   .alarm-code input:focus-visible {
-    border-color: var(--terminal-accent);
+    border-color: var(--terminal-alarm-effective-accent);
     outline: none;
   }
   .alarm-actions {
@@ -204,11 +220,17 @@ const STYLES = `
   }
   .alarm-action:last-child:nth-child(odd) { grid-column: 1 / -1; }
   .alarm-action:hover, .alarm-action:focus-visible {
-    border-color: var(--terminal-accent);
-    color: var(--terminal-accent);
+    border-color: var(--terminal-alarm-effective-accent);
+    color: var(--terminal-alarm-effective-accent);
     outline: none;
   }
+  .alarm-action[data-active="true"] {
+    border-color: var(--terminal-alarm-effective-accent);
+    color: var(--terminal-alarm-effective-accent);
+    opacity: 1;
+  }
   .alarm-action:disabled { cursor: default; opacity: .55; }
+  .alarm-action[data-active="true"]:disabled { opacity: 1; }
   .alarm-action ha-icon {
     flex: 0 0 auto;
     width: 18px;
@@ -256,6 +278,7 @@ export class TerminalAlarmCard extends HTMLElement {
       tap_action: 'Tap action',
       hold_action: 'Hold action',
     };
+    for (const { key, label } of ALARM_COLOR_OPTIONS) labels[key] = label;
     return {
       schema: [
         {
@@ -298,6 +321,13 @@ export class TerminalAlarmCard extends HTMLElement {
             borderTitle: true,
             titlePosition: true,
           }),
+        },
+        {
+          type: 'expandable',
+          name: '',
+          title: 'Alarm state colors',
+          flatten: true,
+          schema: alarmColorSchema(),
         },
         {
           type: 'expandable',
@@ -453,6 +483,7 @@ export class TerminalAlarmCard extends HTMLElement {
       borderTitle: true,
       titlePosition: true,
     });
+    validateAlarmColors(config, TAG);
     const previousDefault = this._config?.controls_expanded;
     const previousEntity = this._config?.entity;
     this._config = { ...config };
@@ -504,6 +535,7 @@ export class TerminalAlarmCard extends HTMLElement {
     const entity = this._entity();
     const attributes = entity?.attributes || {};
     const state = this._dataState();
+    applyAlarmStateColor(this, state, this._config);
     const unavailable = state === 'unavailable';
     const name = this._config.name || attributes.friendly_name || this._config.entity;
     const formattedState = entity
@@ -613,7 +645,8 @@ export class TerminalAlarmCard extends HTMLElement {
         mode.icon,
         mode.service,
         model.needsArmCode && !model.hasDefaultCode,
-        unavailable || this._alarmBusy || model.state === mode.targetState
+        unavailable || this._alarmBusy || model.state === mode.targetState,
+        model.state === mode.targetState
       ));
     }
     if (model.canDisarm) {
@@ -623,7 +656,8 @@ export class TerminalAlarmCard extends HTMLElement {
         'mdi:shield-off-outline',
         'alarm_disarm',
         model.needsDisarmCode && !model.hasDefaultCode,
-        unavailable || this._alarmBusy
+        unavailable || this._alarmBusy,
+        false
       ));
     }
     if (actions.childElementCount) this._controls.append(actions);
@@ -638,11 +672,20 @@ export class TerminalAlarmCard extends HTMLElement {
     this._alarmErrorElement = error;
   }
 
-  _alarmActionButton(label, accessibleLabel, icon, service, requiresCode, disabled) {
+  _alarmActionButton(
+    label,
+    accessibleLabel,
+    icon,
+    service,
+    requiresCode,
+    disabled,
+    active
+  ) {
     const button = document.createElement('button');
     button.className = 'alarm-action';
     button.type = 'button';
     button.disabled = disabled;
+    button.dataset.active = String(active);
     button.dataset.focusKey = `action:${service}`;
     button.setAttribute('aria-label', accessibleLabel);
     const iconElement = document.createElement('ha-icon');

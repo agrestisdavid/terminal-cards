@@ -351,6 +351,162 @@
         );
         popup.close();
 
+        const alarmCalls = [];
+        const alarmConnection = {};
+        let alarmServiceHandler = () => Promise.resolve();
+        const alarmEntity = {
+          entity_id: 'alarm_control_panel.alarmo',
+          state: 'disarmed',
+          attributes: {
+            friendly_name: 'Alarmo',
+            code_format: 'number',
+            code_arm_required: true,
+            supported_features: 15,
+          },
+        };
+        const alarmHass = {
+          ...hass,
+          connection: alarmConnection,
+          states: { 'alarm_control_panel.alarmo': alarmEntity },
+          entities: {},
+          callService: (...args) => {
+            alarmCalls.push(args);
+            return alarmServiceHandler();
+          },
+        };
+        popup.show(card, alarmHass, {
+          entity: 'alarm_control_panel.alarmo',
+          popup_title: 'alarm controls',
+        });
+        assert(popup.shadowRoot.querySelector('.border-title').textContent === 'alarm controls', 'alarm popup title is wrong');
+        assert(popup.shadowRoot.querySelector('.entity-name').textContent === 'Alarmo', 'alarm friendly name is missing');
+        const alarmLabels = [...popup.shadowRoot.querySelectorAll('.alarm-actions .action')]
+          .map((button) => button.textContent.trim());
+        assert(alarmLabels.includes('arm home'), 'supported arm-home mode is missing');
+        assert(alarmLabels.includes('arm away'), 'supported arm-away mode is missing');
+        assert(alarmLabels.includes('arm night'), 'supported arm-night mode is missing');
+        assert(!alarmLabels.includes('vacation') && !alarmLabels.includes('custom'), 'unsupported alarm mode is visible');
+        assert(!alarmLabels.some((label) => label.includes('trigger')), 'unsafe alarm trigger action is visible');
+        assert(!alarmLabels.includes('disarm'), 'disarm is visible while already disarmed');
+        [...popup.shadowRoot.querySelectorAll('.alarm-actions .action')]
+          .find((button) => button.textContent.trim() === 'arm away').click();
+        assert(alarmCalls.length === 0, 'alarm command ran without its required PIN');
+        assert(popup.shadowRoot.querySelector('.alarm-error').textContent === 'code required', 'missing alarm PIN is not reported');
+        assert(
+          popup.shadowRoot.activeElement === popup.shadowRoot.querySelector('.alarm-code input'),
+          'missing PIN did not move focus to the code field'
+        );
+
+        let alarmCode = popup.shadowRoot.querySelector('.alarm-code input');
+        assert(alarmCode?.type === 'password', 'alarm code is not masked');
+        assert(alarmCode.inputMode === 'numeric', 'numeric alarm code lacks a numeric keyboard hint');
+        alarmCode.value = '01a23';
+        alarmCode.dispatchEvent(new Event('input', { bubbles: true }));
+        assert(alarmCode.value === '0123' && popup._alarmCode === '0123', 'numeric alarm PIN was not sanitized without losing its leading zero');
+        alarmCode.focus();
+        popup.updateHass({ ...alarmHass });
+        alarmCode = popup.shadowRoot.querySelector('.alarm-code input');
+        assert(alarmCode.value === '0123', 'alarm PIN was lost during a normal HASS refresh');
+        assert(popup.shadowRoot.activeElement === alarmCode, 'alarm PIN focus was lost during a normal HASS refresh');
+
+        let resolveAlarmService;
+        alarmServiceHandler = () => new Promise((resolve) => { resolveAlarmService = resolve; });
+        [...popup.shadowRoot.querySelectorAll('.alarm-actions .action')]
+          .find((button) => button.textContent.trim() === 'arm away').click();
+        assert(typeof resolveAlarmService === 'function', 'alarm service did not start');
+        assert(
+          [...popup.shadowRoot.querySelectorAll('.alarm-actions .action')].every((button) => button.disabled),
+          'alarm controls stayed enabled during a service call'
+        );
+        assert(popup.shadowRoot.activeElement === popupDialog, 'alarm service call left focus on a removed control');
+        assert(alarmCalls[0][0] === 'alarm_control_panel' && alarmCalls[0][1] === 'alarm_arm_away', 'wrong alarm arm service');
+        assert(alarmCalls[0][2].code === '0123', 'alarm arm service lost the PIN');
+        assert(alarmCalls[0][3].entity_id === 'alarm_control_panel.alarmo', 'alarm arm service targets the wrong entity');
+        popup.updateHass({
+          ...alarmHass,
+          states: {
+            'alarm_control_panel.alarmo': { ...alarmEntity },
+          },
+        });
+        assert(popup._alarmBusy, 'normal HASS update cancelled the active alarm service');
+        resolveAlarmService();
+        await wait(1);
+        assert(!popup._alarmBusy && popup._alarmCode === '', 'successful alarm command after HASS refresh retained busy state or PIN');
+
+        const armedAlarmHass = {
+          ...alarmHass,
+          states: {
+            'alarm_control_panel.alarmo': { ...alarmEntity, state: 'armed_away' },
+          },
+        };
+        popup.updateHass(armedAlarmHass);
+        const armedLabels = [...popup.shadowRoot.querySelectorAll('.alarm-actions .action')]
+          .map((button) => button.textContent.trim());
+        assert(armedLabels.includes('disarm'), 'armed alarm has no disarm action');
+        alarmCode = popup.shadowRoot.querySelector('.alarm-code input');
+        alarmCode.value = '0099';
+        alarmCode.dispatchEvent(new Event('input', { bubbles: true }));
+        alarmCode.focus();
+        popup.updateHass({ ...armedAlarmHass });
+        alarmCode = popup.shadowRoot.querySelector('.alarm-code input');
+        assert(alarmCode.value === '0099' && popup.shadowRoot.activeElement === alarmCode, 'armed alarm refresh lost PIN or focus');
+        alarmServiceHandler = () => Promise.reject(new Error('invalid code'));
+        [...popup.shadowRoot.querySelectorAll('.alarm-actions .action')]
+          .find((button) => button.textContent.trim() === 'disarm').click();
+        await wait(1);
+        assert(alarmCalls[1][1] === 'alarm_disarm' && alarmCalls[1][2].code === '0099', 'wrong alarm disarm call');
+        assert(popup.shadowRoot.querySelector('.alarm-error').textContent === 'invalid code', 'alarm service error is not visible');
+        assert(popup.shadowRoot.querySelector('.alarm-code input').value === '0099', 'failed alarm command cleared the PIN before retry');
+
+        alarmCode = popup.shadowRoot.querySelector('.alarm-code input');
+        alarmCode.value = '0042';
+        alarmCode.dispatchEvent(new Event('input', { bubbles: true }));
+        let resolveStaleAlarmService;
+        alarmServiceHandler = () => new Promise((resolve) => { resolveStaleAlarmService = resolve; });
+        [...popup.shadowRoot.querySelectorAll('.alarm-actions .action')]
+          .find((button) => button.textContent.trim() === 'disarm').click();
+        assert(popup._alarmBusy && typeof resolveStaleAlarmService === 'function', 'stale alarm service test did not start');
+        const replacementConnection = {};
+        const replacedAlarmHass = { ...armedAlarmHass, connection: replacementConnection };
+        popup.updateHass(replacedAlarmHass);
+        assert(!popup._alarmBusy, 'connection replacement retained alarm busy state');
+        assert(popup.shadowRoot.querySelector('.alarm-code input').value === '', 'connection replacement retained the alarm PIN');
+        resolveStaleAlarmService();
+        await wait(1);
+        assert(!popup._alarmBusy && popup._alarmCode === '', 'stale alarm completion changed the replacement session');
+
+        popup.updateHass({
+          ...replacedAlarmHass,
+          states: {
+            'alarm_control_panel.alarmo': { ...alarmEntity, state: 'triggered' },
+          },
+        });
+        const triggeredLabels = [...popup.shadowRoot.querySelectorAll('.alarm-actions .action')]
+          .map((button) => button.textContent.trim());
+        assert(triggeredLabels.length === 1 && triggeredLabels[0] === 'disarm', 'triggered alarm exposes actions other than disarm');
+        const closingAlarmInput = popup.shadowRoot.querySelector('.alarm-code input');
+        closingAlarmInput.value = '0088';
+        closingAlarmInput.dispatchEvent(new Event('input', { bubbles: true }));
+        popup.close();
+        assert(closingAlarmInput.value === '', 'detached alarm PIN input retained its value after close');
+        assert(popup._alarmCode === '' && popup._alarmInput === null, 'closing alarm popup retained PIN state');
+
+        alarmServiceHandler = () => Promise.resolve();
+        const defaultCodeHass = {
+          ...alarmHass,
+          entities: {
+            'alarm_control_panel.alarmo': { options: { default_code: '2468' } },
+          },
+        };
+        popup.show(card, defaultCodeHass, { entity: 'alarm_control_panel.alarmo' });
+        assert(!popup.shadowRoot.querySelector('.alarm-code input'), 'configured default alarm code still shows a PIN field');
+        [...popup.shadowRoot.querySelectorAll('.alarm-actions .action')]
+          .find((button) => button.textContent.trim() === 'arm home').click();
+        await wait(1);
+        assert(alarmCalls[3][1] === 'alarm_arm_home', 'default-code alarm used the wrong service');
+        assert(alarmCalls[3][2].code === '2468', 'configured default alarm code was not sent');
+        popup.close();
+
         popup.remove();
         assert(popup.hidden, 'removing the popup host did not close it');
         assert(popup._hass === null && popup._config === null && popup._trigger === null, 'popup host disconnect retained session references');
@@ -384,6 +540,7 @@
           'PASS: configurable more-info border title, entity name, state and capability-aware controls',
           'PASS: six-entry Logbook tree shows service · on/off in its expanded wrapper',
           'PASS: open Logbook refreshes live while retry/reconnect guards reject stale results',
+          'PASS: capability-aware alarm modes, secure PIN lifecycle and service errors',
           'PASS: services, Escape, focus restoration and disconnect cleanup',
         ].join('\n');
       }

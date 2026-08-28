@@ -28,15 +28,17 @@ cards:
 
 ### `custom:terminal-title-card`
 
-A compact terminal heading frame for dashboard sections. Its large title remains embedded slightly inside the upper border and can be positioned left or right. Font size is configurable from 14 to 48 px. An optional `subtitle` accepts Markdown and reactive Home Assistant templates in the same field; rendered template output is passed to Home Assistant's Markdown component. With a left-aligned title, the subtitle uses the same text inset and sits compactly with equal vertical space between the title and lower border. Right-aligned titles retain the centered subtitle layout. Like the Wrapper, TitleCard can embed a formatted entity state or reactive template result in any frame corner without overlapping its title.
+A compact terminal heading frame for dashboard sections. Its large title remains embedded slightly inside the upper border and can be positioned left or right. Font size is configurable from 14 to 48 px. An optional `subtitle` accepts Markdown and reactive Home Assistant templates in the same field; rendered template output is passed to Home Assistant's Markdown component. With a left-aligned title, the subtitle uses the same text inset and sits compactly with equal vertical space between the title and lower border. Right-aligned titles retain the centered subtitle layout. Like the Wrapper, TitleCard can embed a formatted entity state or reactive template result in any frame corner without overlapping its title. When an entity is configured, that border state becomes an accessible popup button; `state_tap_action` defaults to the terminal `more-info` popup.
 
 ```yaml
 type: custom:terminal-title-card
 title: home status
 subtitle: "**power:** {{ states('sensor.house_power') }} W"
-entity: sensor.house_power
-state_template: "{{ states(config.entity) }} W"
+entity: alarm_control_panel.home
 state_position: bottom-right
+state_tap_action:
+  action: more-info
+popup_title: security
 font_size: 28
 title_position: left
 accent_color: blue
@@ -173,7 +175,7 @@ Every card uses Home Assistant's native theme-color palette for `accent_color` (
 
 Every card with a border title supports `title_position: left|right`. Wrapper and TitleCard border state support `state_position: top-left|top-right|bottom-left|bottom-right`; labels sharing a corner shrink without overlapping. Light, Switch, Sensor, Shutter, and continuous Navigation Cards support an optional independent `border_title` without moving or replacing the internal entity name. Their domain-aware `off_icon` is used for `off`, and for `closed` covers. Every visible icon receives the same square hover border, including Navigation's trailing icon. Entity icons remain vertically centered against their name/state stack.
 
-A `more-info` action opens the bundle's own terminal-style entity popup instead of Home Assistant's native dialog. On desktop, its borderless terminal-background shell uses the former 14 px top padding equally on all four sides. Its TitleCard-style border title defaults to `more-info` and can be changed with `popup_title`. The card name or entity friendly name is shown separately above the formatted state. On mobile the popup becomes a near-full-width bottom sheet with an 8 px gap on both sides. The layer order is standard `--card-background-color` outer area → 1 px accent border → card surface. The outer area measures 12 vh above and below the popup (or the larger device safe area), protecting rounded phone corners; title/header stay fixed and only the content scrolls. Capability-aware Light and Cover ranges use the same responsive square segments as the cards.
+A `more-info` action opens the bundle's own terminal-style entity popup instead of Home Assistant's native dialog. On desktop, its borderless terminal-background shell uses the former 14 px top padding equally on all four sides. Its TitleCard-style border title defaults to `more-info` and can be changed with `popup_title`. The card name or entity friendly name is shown separately above the formatted state. On mobile the popup becomes a near-full-width bottom sheet with an 8 px gap on both sides. The layer order is standard `--card-background-color` outer area → 1 px accent border → card surface. The outer area measures 12 vh above and below the popup (or the larger device safe area), protecting rounded phone corners; title/header stay fixed and only the content scrolls. Capability-aware Light and Cover ranges use the same responsive square segments as the cards. For `alarm_control_panel.*`, the terminal popup derives Home/Away/Night/Vacation/Custom modes from `supported_features`, offers Disarm when applicable, and uses a masked numeric/text code field only when the entity requires one. Alarm trigger is intentionally never exposed; PIN values are kept only for the active popup session and cleared after success, reconnect, or close.
 
 The collapsed `logs` field loads on demand and displays up to six entity changes from Home Assistant's last 24 hours of Logbook data. When expanded, the complete terminal tree is enclosed by its own square Wrapper-style frame with `logs` embedded on the left and the dropdown icon fixed on the right. Service-backed entries place `domain.service · on|off` on their second line. While open, selected-entity changes trigger a debounced live Logbook refresh. The popup also supports pointer and keyboard holds, traps focus, closes with Escape/backdrop/close, and returns focus to the card.
 

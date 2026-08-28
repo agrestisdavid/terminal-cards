@@ -20,6 +20,12 @@ const SUPPORT_CLOSE = 2;
 const SUPPORT_SET_POSITION = 4;
 const SUPPORT_STOP = 8;
 const SUPPORT_SET_TILT_POSITION = 64;
+const SUPPORT_ALARM_ARM_HOME = 1;
+const SUPPORT_ALARM_ARM_AWAY = 2;
+const SUPPORT_ALARM_ARM_NIGHT = 4;
+const SUPPORT_ALARM_ARM_CUSTOM_BYPASS = 16;
+const SUPPORT_ALARM_ARM_VACATION = 32;
+const ALARM_TRANSITION_STATES = new Set(['triggered', 'arming', 'pending']);
 
 const STYLES = `
   :host {
@@ -201,7 +207,37 @@ const STYLES = `
     grid-template-columns: repeat(var(--terminal-popup-action-count, 1), minmax(0, 1fr));
     gap: 8px;
   }
+  .actions.alarm-actions { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .action { width: 100%; gap: 7px; }
+  .alarm-code {
+    display: grid;
+    grid-template-columns: 64px minmax(0, 1fr);
+    align-items: center;
+    gap: 10px;
+  }
+  .alarm-code label { color: var(--terminal-dim); font-size: 11px; }
+  .alarm-code input {
+    box-sizing: border-box;
+    width: 100%;
+    min-width: 0;
+    height: 36px;
+    padding: 0 10px;
+    border: 1px solid var(--terminal-dim);
+    border-radius: 0;
+    background: transparent;
+    color: var(--terminal-text);
+    font: 13px ${TERMINAL_FONT};
+  }
+  .alarm-code input:hover,
+  .alarm-code input:focus-visible {
+    border-color: var(--terminal-popup-effective-accent);
+    outline: none;
+  }
+  .alarm-error {
+    min-height: 1.4em;
+    color: var(--terminal-error);
+    font-size: 11px;
+  }
   .logs-toggle {
     box-sizing: border-box;
     display: flex;
@@ -407,6 +443,11 @@ export class TerminalEntityPopup extends HTMLElement {
     this._logsSection = null;
     this._logsToggle = null;
     this._logsIcon = null;
+    this._alarmCode = '';
+    this._alarmError = '';
+    this._alarmBusy = false;
+    this._alarmOperationGeneration = 0;
+    this._alarmInput = null;
     this._resizeObserver = typeof ResizeObserver === 'function'
       ? new ResizeObserver(() => this._updateSegmentCounts())
       : null;
@@ -481,6 +522,12 @@ export class TerminalEntityPopup extends HTMLElement {
       this._logsSection = null;
       this._logsToggle = null;
       this._logsIcon = null;
+      if (this._alarmInput) this._alarmInput.value = '';
+      this._alarmCode = '';
+      this._alarmError = '';
+      this._alarmBusy = false;
+      ++this._alarmOperationGeneration;
+      this._alarmInput = null;
       this._body.replaceChildren();
     }
     this._resizeObserver?.disconnect();
@@ -502,6 +549,12 @@ export class TerminalEntityPopup extends HTMLElement {
     this._logLoading = false;
     this._logEntries = null;
     this._logError = null;
+    if (this._alarmInput) this._alarmInput.value = '';
+    this._alarmCode = '';
+    this._alarmError = '';
+    this._alarmBusy = false;
+    ++this._alarmOperationGeneration;
+    this._alarmInput = null;
     this._render();
     this.hidden = false;
     this._updateSegmentCounts();
@@ -523,6 +576,11 @@ export class TerminalEntityPopup extends HTMLElement {
       this._logLoading = false;
       this._logEntries = null;
       this._logError = null;
+      if (this._alarmInput) this._alarmInput.value = '';
+      this._alarmCode = '';
+      this._alarmError = '';
+      this._alarmBusy = false;
+      ++this._alarmOperationGeneration;
     }
     this._hass = hass;
     if (!this.hidden) {
@@ -556,6 +614,12 @@ export class TerminalEntityPopup extends HTMLElement {
     this._logsSection = null;
     this._logsToggle = null;
     this._logsIcon = null;
+    if (this._alarmInput) this._alarmInput.value = '';
+    this._alarmCode = '';
+    this._alarmError = '';
+    this._alarmBusy = false;
+    ++this._alarmOperationGeneration;
+    this._alarmInput = null;
     this._body.replaceChildren();
     if (this._layoutFrame !== null) {
       cancelAnimationFrame(this._layoutFrame);
@@ -600,7 +664,9 @@ export class TerminalEntityPopup extends HTMLElement {
       ? this._lightControls(entity, attributes, unavailable)
       : domain === 'cover'
         ? this._coverControls(attributes, unavailable)
-        : null;
+        : domain === 'alarm_control_panel'
+          ? this._alarmControls(entity, attributes, unavailable)
+          : null;
     if (controls) this._body.append(controls);
     this._body.append(this._logbookSection());
   }
@@ -825,13 +891,15 @@ export class TerminalEntityPopup extends HTMLElement {
       ? this._dialog
       : [...this.shadowRoot.querySelectorAll('[data-focus-key]')]
         .find((element) => element.dataset.focusKey === focusKey);
+    const usableTarget = target?.disabled ? null : target;
     const fallback = this._close?.isConnected ? this._close : this._dialog;
-    (target || fallback)?.focus?.();
+    (usableTarget || fallback)?.focus?.();
   }
 
   _defaultIcon(domain) {
     if (domain === 'light') return 'mdi:lightbulb';
     if (domain === 'cover') return 'mdi:blinds-horizontal';
+    if (domain === 'alarm_control_panel') return 'mdi:shield-home-outline';
     return 'mdi:information-outline';
   }
 
@@ -891,7 +959,7 @@ export class TerminalEntityPopup extends HTMLElement {
     actions.className = 'actions';
     actions.style.setProperty('--terminal-popup-action-count', String(Math.max(1, buttons.length)));
     buttons.forEach((button, index) => {
-      button.dataset.focusKey = `action:${index}`;
+      if (!button.dataset.focusKey) button.dataset.focusKey = `action:${index}`;
     });
     actions.append(...buttons);
     return actions;
@@ -1120,6 +1188,156 @@ export class TerminalEntityPopup extends HTMLElement {
       ));
     }
     return section;
+  }
+
+  _alarmControls(entity, attributes, unavailable) {
+    const section = this._section('alarm controls');
+    const state = entity?.state || 'unavailable';
+    const features = Number(attributes.supported_features) || 0;
+    const supports = (feature) => (features & feature) !== 0;
+    const defaultCode = this._alarmDefaultCode();
+    const hasDefaultCode = Boolean(defaultCode);
+    const codeFormat = attributes.code_format;
+    const canDisarm = state !== 'disarmed' && state !== 'disarming';
+    const canArm = !ALARM_TRANSITION_STATES.has(state) && state !== 'disarming';
+    const needsArmCode = Boolean(codeFormat && attributes.code_arm_required !== false);
+    const needsDisarmCode = Boolean(codeFormat);
+    const showCode = !hasDefaultCode && (
+      (canDisarm && needsDisarmCode) || (canArm && needsArmCode)
+    );
+
+    if (showCode) {
+      const row = document.createElement('div');
+      row.className = 'alarm-code';
+      const label = document.createElement('label');
+      label.htmlFor = 'terminal-alarm-code';
+      label.textContent = codeFormat === 'number' ? 'pin' : 'code';
+      const input = document.createElement('input');
+      input.id = 'terminal-alarm-code';
+      input.type = 'password';
+      input.autocomplete = 'off';
+      input.disabled = unavailable || this._alarmBusy;
+      input.dataset.focusKey = 'alarm-code';
+      input.setAttribute('aria-label', `alarm ${label.textContent}`);
+      if (codeFormat === 'number') {
+        input.inputMode = 'numeric';
+        input.pattern = '[0-9]*';
+      }
+      input.value = this._alarmCode;
+      input.addEventListener('input', () => {
+        const value = codeFormat === 'number'
+          ? input.value.replace(/\D/g, '')
+          : input.value;
+        if (value !== input.value) input.value = value;
+        this._alarmCode = value;
+        this._alarmError = '';
+      });
+      row.append(label, input);
+      section.append(row);
+      this._alarmInput = input;
+    } else {
+      this._alarmInput = null;
+    }
+
+    const buttons = [];
+    if (canDisarm) {
+      const button = this._actionButton(
+        'disarm',
+        'mdi:shield-off-outline',
+        () => this._callAlarmService('alarm_disarm', needsDisarmCode && !hasDefaultCode),
+        unavailable || this._alarmBusy
+      );
+      button.dataset.focusKey = 'action:alarm_disarm';
+      buttons.push(button);
+    }
+    if (canArm) {
+      const modes = [
+        [SUPPORT_ALARM_ARM_HOME, 'arm home', 'mdi:shield-home-outline', 'alarm_arm_home', 'armed_home'],
+        [SUPPORT_ALARM_ARM_AWAY, 'arm away', 'mdi:shield-lock-outline', 'alarm_arm_away', 'armed_away'],
+        [SUPPORT_ALARM_ARM_NIGHT, 'arm night', 'mdi:shield-moon-outline', 'alarm_arm_night', 'armed_night'],
+        [SUPPORT_ALARM_ARM_VACATION, 'vacation', 'mdi:shield-airplane-outline', 'alarm_arm_vacation', 'armed_vacation'],
+        [SUPPORT_ALARM_ARM_CUSTOM_BYPASS, 'custom', 'mdi:shield-half-full', 'alarm_arm_custom_bypass', 'armed_custom_bypass'],
+      ];
+      for (const [feature, label, icon, service, targetState] of modes) {
+        if (!supports(feature)) continue;
+        const button = this._actionButton(
+          label,
+          icon,
+          () => this._callAlarmService(service, needsArmCode && !hasDefaultCode),
+          unavailable || this._alarmBusy || state === targetState
+        );
+        button.dataset.focusKey = `action:${service}`;
+        buttons.push(button);
+      }
+    }
+    if (buttons.length) {
+      const actions = this._actions(buttons);
+      actions.classList.add('alarm-actions');
+      section.append(actions);
+    }
+
+    const error = document.createElement('div');
+    error.className = 'alarm-error';
+    error.setAttribute('role', 'status');
+    error.setAttribute('aria-live', 'polite');
+    error.textContent = this._alarmError;
+    section.append(error);
+    return section;
+  }
+
+  _alarmDefaultCode() {
+    const options = this._hass?.entities?.[this._entityId]?.options;
+    const code = options?.default_code ?? options?.alarm_control_panel?.default_code;
+    return code === undefined || code === null ? '' : String(code);
+  }
+
+  async _callAlarmService(service, requiresCode) {
+    if (!this._hass || !this._entityId || this._alarmBusy) return;
+    const defaultCode = this._alarmDefaultCode();
+    if (requiresCode && !this._alarmCode && !defaultCode) {
+      this._alarmError = 'code required';
+      this._render();
+      this._restoreFocusKey('alarm-code');
+      return;
+    }
+    const hass = this._hass;
+    const connection = hass.connection;
+    const entityId = this._entityId;
+    const generation = ++this._alarmOperationGeneration;
+    const code = this._alarmCode || defaultCode;
+    const focusKey = this._captureFocusKey();
+    this._alarmBusy = true;
+    this._alarmError = '';
+    this._render();
+    this._dialog.focus();
+    try {
+      await hass.callService(
+        'alarm_control_panel',
+        service,
+        code ? { code } : {},
+        { entity_id: entityId }
+      );
+      if (
+        generation !== this._alarmOperationGeneration ||
+        this._hass?.connection !== connection ||
+        this._entityId !== entityId
+      ) return;
+      if (this._alarmInput) this._alarmInput.value = '';
+      this._alarmCode = '';
+      this._alarmBusy = false;
+      this._render();
+      this._restoreFocusKey(focusKey);
+    } catch (error) {
+      if (
+        generation !== this._alarmOperationGeneration ||
+        this._hass?.connection !== connection ||
+        this._entityId !== entityId
+      ) return;
+      this._alarmBusy = false;
+      this._alarmError = String(error?.message || 'command failed').toLocaleLowerCase();
+      this._render();
+      this._restoreFocusKey('alarm-code');
+    }
   }
 
   _callService(domain, service, data = {}) {

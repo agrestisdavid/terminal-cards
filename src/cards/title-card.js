@@ -1,9 +1,18 @@
-import { DOCUMENTATION_URL, defineElement, registerCard } from '../shared/ha.js';
+import {
+  DOCUMENTATION_URL,
+  defineElement,
+  executeAction,
+  registerCard,
+} from '../shared/ha.js';
 import {
   appearanceSchema,
   applyAccentColor,
   validateAppearance,
 } from '../shared/appearance.js';
+import {
+  closeTerminalEntityPopup,
+  updateTerminalEntityPopup,
+} from '../shared/popup.js';
 import { TERMINAL_COLORS, TERMINAL_FONT } from '../shared/styles.js';
 import {
   DEFAULT_TITLE_FONT_SIZE,
@@ -104,17 +113,45 @@ const STYLES = `
     pointer-events: none;
   }
   .border-state {
+    appearance: none;
+    position: relative;
     box-sizing: border-box;
     min-width: 0;
+    max-width: 100%;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    overflow: visible;
+    white-space: nowrap;
+    background: transparent;
+    color: var(--terminal-dim);
+    font: 12px/1.4 ${TERMINAL_FONT};
+    opacity: 1;
+    pointer-events: none;
+  }
+  .border-state[data-interactive="true"] {
+    margin: -8px 0;
+    padding: 8px 0;
+    cursor: pointer;
+    pointer-events: auto;
+  }
+  .border-state-text {
+    display: block;
+    min-width: 0;
+    box-sizing: border-box;
     max-width: 100%;
     padding: 0 8px;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
     background: var(--terminal-background);
-    color: var(--terminal-dim);
-    font: 12px/1.4 ${TERMINAL_FONT};
-    pointer-events: none;
+  }
+  .border-state[data-interactive="true"]:hover,
+  .border-state[data-interactive="true"]:focus-visible {
+    color: var(--terminal-accent);
+    outline: 1px solid var(--terminal-accent);
+    outline-offset: 1px;
   }
   .border-slot > .title:first-child:nth-last-child(2),
   .border-slot > .title:first-child:nth-last-child(2) ~ .border-state {
@@ -151,6 +188,8 @@ export class TerminalTitleCard extends HTMLElement {
       entity: 'State entity',
       state_template: 'State template',
       state_position: 'State position',
+      state_tap_action: 'State tap action',
+      popup_title: 'Popup border title',
       font_size: 'Title size',
       accent_color: 'Accent color',
       title_position: 'Title position',
@@ -178,6 +217,16 @@ export class TerminalTitleCard extends HTMLElement {
                     { value: 'bottom-left', label: 'Bottom left' },
                     { value: 'bottom-right', label: 'Bottom right' },
                   ],
+                },
+              },
+            },
+            { name: 'popup_title', selector: { text: {} } },
+            {
+              name: 'state_tap_action',
+              selector: {
+                ui_action: {
+                  actions: ['more-info', 'navigate', 'url', 'perform-action', 'none'],
+                  default_action: 'more-info',
                 },
               },
             },
@@ -217,6 +266,12 @@ export class TerminalTitleCard extends HTMLElement {
         }
         if (schema.name === 'state_template') {
           return 'Rendered reactively by Home Assistant and embedded in the selected frame corner.';
+        }
+        if (schema.name === 'state_tap_action') {
+          return 'Runs when the entity-backed border state is activated. More-info opens the terminal popup.';
+        }
+        if (schema.name === 'popup_title') {
+          return 'Overrides the default “more-info” title embedded in the popup border.';
         }
         return undefined;
       },
@@ -263,9 +318,15 @@ export class TerminalTitleCard extends HTMLElement {
     );
     this._title = document.createElement('div');
     this._title.className = 'title';
-    this._state = document.createElement('div');
+    this._state = document.createElement('button');
     this._state.className = 'border-state';
+    this._state.type = 'button';
     this._state.hidden = true;
+    this._state.disabled = true;
+    this._stateText = document.createElement('span');
+    this._stateText.className = 'border-state-text';
+    this._state.append(this._stateText);
+    this._state.addEventListener('click', () => this._activateState());
     this._subtitle = document.createElement('ha-markdown');
     this._subtitle.className = 'subtitle';
     this._subtitle.hidden = true;
@@ -281,11 +342,13 @@ export class TerminalTitleCard extends HTMLElement {
   disconnectedCallback() {
     this._teardownTemplateSubscription();
     this._teardownStateTemplateSubscription();
+    closeTerminalEntityPopup(this._state);
     this._hass = null;
     this._subtitle.hass = null;
   }
 
   setConfig(config) {
+    closeTerminalEntityPopup(this._state);
     if (!config || typeof config.title !== 'string' || !config.title.trim()) {
       throw new Error('terminal-title-card: "title" is required');
     }
@@ -318,7 +381,17 @@ export class TerminalTitleCard extends HTMLElement {
         `terminal-title-card: "font_size" must be between ${MIN_TITLE_FONT_SIZE} and ${MAX_TITLE_FONT_SIZE}`
       );
     }
-    validateAppearance(config, 'terminal-title-card', { titlePosition: true });
+    if (
+      config.state_tap_action !== undefined &&
+      (!config.state_tap_action || typeof config.state_tap_action !== 'object' ||
+        Array.isArray(config.state_tap_action))
+    ) {
+      throw new Error('terminal-title-card: "state_tap_action" must be an action object');
+    }
+    validateAppearance(config, 'terminal-title-card', {
+      titlePosition: true,
+      popupTitle: true,
+    });
     this._teardownTemplateSubscription();
     this._teardownStateTemplateSubscription();
     this._config = { ...config, font_size: fontSize };
@@ -341,6 +414,7 @@ export class TerminalTitleCard extends HTMLElement {
     const connectionChanged = this._hass?.connection !== hass?.connection;
     this._hass = hass;
     this._subtitle.hass = hass;
+    updateTerminalEntityPopup(hass);
     this._renderBorderLabels();
     this._renderSubtitle();
     if (connectionChanged || this._templateSubscription === null) {
@@ -386,11 +460,36 @@ export class TerminalTitleCard extends HTMLElement {
       (this._config.entity || this._config.state_template?.trim()) &&
       stateContent !== ''
     );
+    const stateAction = this._config.state_tap_action || { action: 'more-info' };
+    const action = stateAction.action || 'none';
 
     this._slots[titlePosition].append(this._title);
-    this._state.textContent = stateContent;
+    this._stateText.textContent = stateContent;
     this._state.dataset.statePosition = statePosition;
+    const interactive = showState && Boolean(this._config.entity) && action !== 'none';
+    this._state.dataset.interactive = String(interactive);
+    this._state.disabled = !interactive;
     this._state.hidden = !showState;
+    if (interactive) {
+      const entity = this._hass?.states?.[this._config.entity];
+      const name = entity?.attributes?.friendly_name || this._config.entity;
+      const verb = action === 'more-info'
+        ? 'open controls for'
+        : action === 'navigate'
+          ? 'navigate from'
+          : action === 'url'
+            ? 'open link for'
+            : 'run action for';
+      this._state.setAttribute(
+        'aria-label',
+        `${verb} ${name}, current state ${stateContent}`
+      );
+      if (action === 'more-info') this._state.setAttribute('aria-haspopup', 'dialog');
+      else this._state.removeAttribute('aria-haspopup');
+    } else {
+      this._state.removeAttribute('aria-label');
+      this._state.removeAttribute('aria-haspopup');
+    }
     if (showState) this._slots[statePosition].append(this._state);
     else this._state.remove();
     this._frame.dataset.topSplit = String(
@@ -406,6 +505,16 @@ export class TerminalTitleCard extends HTMLElement {
     }
     const ariaState = showState ? `, ${stateContent}` : '';
     this._frame.setAttribute('aria-label', `${this._config.title}${ariaState}`);
+  }
+
+  _activateState() {
+    if (!this._config?.entity || !this._hass) return;
+    executeAction(
+      this._state,
+      this._hass,
+      this._config,
+      this._config.state_tap_action || { action: 'more-info' }
+    );
   }
 
   _renderSubtitle() {

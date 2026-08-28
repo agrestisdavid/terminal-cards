@@ -152,21 +152,67 @@
         stateTemplateCallback({ result: 'READY' });
         await Promise.resolve();
         assert(borderState.textContent === 'ready', 'reactive border state template result is missing');
+        assert(borderState.tagName === 'BUTTON', 'entity-backed border state is not a native button');
+        assert(borderState.dataset.interactive === 'true' && !borderState.disabled, 'entity-backed border state is not interactive');
+        assert(borderState.getBoundingClientRect().height >= 32, 'border state tap target is too small');
+        assert(borderState.getAttribute('aria-haspopup') === 'dialog', 'border state does not announce its popup');
         assert(borderState.parentElement.dataset.position === 'bottom-right', 'border state position is wrong');
         assert(stateCard.dataset.stateEdge === 'bottom', 'bottom border state has no outer clearance');
         const stateSubtitleRect = stateCard.shadowRoot.querySelector('.subtitle').getBoundingClientRect();
         const stateTitleRect = stateCard.shadowRoot.querySelector('.title').getBoundingClientRect();
+        const stateTextRect = borderState.querySelector('.border-state-text').getBoundingClientRect();
         assert(
-          stateSubtitleRect.bottom <= borderState.getBoundingClientRect().top + 0.5,
-          'long subtitle overlaps the lower border state'
+          stateSubtitleRect.bottom <= stateTextRect.top + 0.5,
+          'long subtitle overlaps the lower border state text'
         );
         assert(
           Math.abs(
             (stateSubtitleRect.top - stateTitleRect.bottom) -
-            (borderState.getBoundingClientRect().top - stateSubtitleRect.bottom)
+            (stateTextRect.top - stateSubtitleRect.bottom)
           ) < 2,
           'left subtitle is not balanced within the space above its lower border state'
         );
+        borderState.focus();
+        borderState.click();
+        const statePopup = document.querySelector('terminal-entity-popup');
+        assert(statePopup && !statePopup.hidden, 'border state did not open the terminal popup');
+        assert(statePopup._entityId === 'sensor.power', 'border state popup targets the wrong entity');
+        statePopup.close();
+        assert(stateCard.shadowRoot.activeElement === borderState, 'border state popup did not restore focus');
+
+        let templateOnlyCallback;
+        const templateOnlyCard = document.createElement('terminal-title-card');
+        templateOnlyCard.setConfig({ title: 'template only', state_template: '{{ status }}' });
+        document.body.prepend(templateOnlyCard);
+        templateOnlyCard.hass = {
+          ...hass,
+          connection: {
+            subscribeMessage(callback) {
+              templateOnlyCallback = callback;
+              return Promise.resolve(() => {});
+            },
+          },
+        };
+        templateOnlyCallback({ result: 'display only' });
+        await Promise.resolve();
+        const templateOnlyState = templateOnlyCard.shadowRoot.querySelector('.border-state');
+        assert(templateOnlyState.textContent === 'display only', 'template-only border state is missing');
+        assert(templateOnlyState.disabled && templateOnlyState.dataset.interactive === 'false', 'template-only border state became interactive');
+        templateOnlyState.click();
+        assert(statePopup.hidden, 'template-only border state opened a popup');
+
+        const navigateStateCard = document.createElement('terminal-title-card');
+        navigateStateCard.setConfig({
+          title: 'navigate state',
+          entity: 'sensor.power',
+          state_tap_action: { action: 'navigate', navigation_path: '/dashboard-test' },
+        });
+        document.body.prepend(navigateStateCard);
+        navigateStateCard.hass = hass;
+        const navigateState = navigateStateCard.shadowRoot.querySelector('.border-state');
+        assert(!navigateState.disabled && navigateState.dataset.interactive === 'true', 'navigate state action is not interactive');
+        assert(!navigateState.hasAttribute('aria-haspopup'), 'navigate state action incorrectly announces a dialog');
+        assert(navigateState.getAttribute('aria-label').startsWith('navigate from'), 'navigate state action has the wrong accessible name');
 
         const rightStateCard = document.createElement('terminal-title-card');
         rightStateCard.setConfig({
@@ -174,6 +220,7 @@
           subtitle: 'right subtitle remains centered',
           entity: 'sensor.power',
           state_position: 'bottom-left',
+          state_tap_action: { action: 'none' },
           font_size: 30,
           title_position: 'right',
         });
@@ -185,14 +232,20 @@
         assert(
           Math.abs(
             (rightStateSubtitleRect.top + rightStateSubtitleRect.bottom) / 2 -
-            (rightStateFrameRect.top + rightState.getBoundingClientRect().top) / 2
+            (rightStateFrameRect.top +
+              rightState.querySelector('.border-state-text').getBoundingClientRect().top) / 2
           ) < 1,
           'right-title subtitle is not centered in the space above its lower border state'
         );
         assert(
-          rightStateSubtitleRect.bottom <= rightState.getBoundingClientRect().top + 0.5,
-          'right-title subtitle overlaps the lower border state'
+          rightStateSubtitleRect.bottom <=
+            rightState.querySelector('.border-state-text').getBoundingClientRect().top + 0.5,
+          'right-title subtitle overlaps the lower border state text'
         );
+        assert(rightState.disabled && rightState.dataset.interactive === 'false', 'state_tap_action none remained interactive');
+        assert(!rightState.hasAttribute('aria-haspopup'), 'state_tap_action none announces a dialog');
+        rightState.click();
+        assert(statePopup.hidden, 'state_tap_action none opened a popup');
 
         const collisionCard = document.createElement('terminal-title-card');
         collisionCard.setConfig({
@@ -247,6 +300,8 @@
         assert(fields.find((field) => field.name === 'subtitle').selector.template, 'native Markdown/template subtitle selector missing');
         assert(fields.find((field) => field.name === 'entity').selector.entity, 'title border state entity selector missing');
         assert(fields.find((field) => field.name === 'state_template').selector.template, 'title border state template selector missing');
+        assert(fields.find((field) => field.name === 'state_tap_action').selector.ui_action, 'title border state action selector missing');
+        assert(fields.find((field) => field.name === 'popup_title').selector.text, 'title popup title selector missing');
         assert(
           fields.find((field) => field.name === 'state_position').selector.select.options.length === 4,
           'title border state does not expose all four corners'
@@ -263,6 +318,8 @@
         let invalidSubtitle = false;
         let invalidStateTemplate = false;
         let invalidStatePosition = false;
+        let invalidStateAction = false;
+        let invalidPopupTitle = false;
         try { document.createElement('terminal-title-card').setConfig({ font_size: 22 }); }
         catch (_error) { invalidTitle = true; }
         try { document.createElement('terminal-title-card').setConfig({ title: 'x', font_size: 80 }); }
@@ -282,12 +339,20 @@
         try {
           document.createElement('terminal-title-card').setConfig({ title: 'x', state_position: 'middle' });
         } catch (_error) { invalidStatePosition = true; }
+        try {
+          document.createElement('terminal-title-card').setConfig({ title: 'x', state_tap_action: 'more-info' });
+        } catch (_error) { invalidStateAction = true; }
+        try {
+          document.createElement('terminal-title-card').setConfig({ title: 'x', popup_title: ' ' });
+        } catch (_error) { invalidPopupTitle = true; }
         assert(invalidTitle, 'missing title was accepted');
         assert(invalidSize, 'invalid font size was accepted');
         assert(invalidAccent, 'custom accent outside the HA theme palette was accepted');
         assert(invalidSubtitle, 'non-string subtitle was accepted');
         assert(invalidStateTemplate, 'non-string border state template was accepted');
         assert(invalidStatePosition, 'invalid border state position was accepted');
+        assert(invalidStateAction, 'invalid border state action was accepted');
+        assert(invalidPopupTitle, 'blank TitleCard popup title was accepted');
         assert(
           window.customCards.some((entry) => entry.type === 'terminal-title-card'),
           'title card picker metadata missing'
@@ -319,6 +384,8 @@
         card.remove();
         leftCard.remove();
         stateCard.remove();
+        templateOnlyCard.remove();
+        navigateStateCard.remove();
         rightStateCard.remove();
         collisionCard.remove();
         compact.remove();
@@ -336,7 +403,7 @@
           'PASS: compact square 1px frame, lowered border title and no glow',
           'PASS: position-aware subtitle inset and balanced left-title spacing',
           'PASS: reactive Markdown/template subtitle with subscription cleanup',
-          'PASS: reactive four-corner border state with entity fallback and cleanup',
+          'PASS: reactive four-corner border state with accessible popup action and cleanup',
           'PASS: native HA theme-color editor, validation and legacy RGB rendering',
         ].join('\n');
       }

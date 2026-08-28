@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## 0.11.0 — 2026-08-28
+
+- Make an entity-backed TitleCard border state an accessible popup button with a native `state_tap_action` editor and focus-safe popup lifecycle.
+- Add capability-aware terminal alarm controls with supported arm modes, Disarm, ephemeral masked PIN entry, service-error feedback, and no manual trigger action.
+
 ## 0.10.1 — 2026-08-28
 
 - Show both start and end times for timed Calendar Card events, including both dates when an event crosses midnight.

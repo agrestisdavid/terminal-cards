@@ -43,6 +43,16 @@
                 supported_color_modes: ['hs', 'color_temp'],
               },
             },
+            'alarm_control_panel.mobile': {
+              entity_id: 'alarm_control_panel.mobile',
+              state: 'disarmed',
+              attributes: {
+                friendly_name: 'Mobile alarm',
+                code_format: 'number',
+                code_arm_required: true,
+                supported_features: 7,
+              },
+            },
           },
           formatEntityState: () => 'ON',
           callService() {},
@@ -118,12 +128,22 @@
         );
 
         popup.close();
+        popup.show(card, hass, { entity: 'alarm_control_panel.mobile' });
+        const alarmSection = popup.shadowRoot.querySelector('.alarm-code').parentElement;
+        const alarmActions = popup.shadowRoot.querySelector('.alarm-actions');
+        const alarmInput = popup.shadowRoot.querySelector('.alarm-code input');
+        assert(alarmActions.children.length === 3, 'mobile alarm lost supported modes');
+        assert(getComputedStyle(alarmActions).gridTemplateColumns.split(' ').length === 2, 'mobile alarm modes are not arranged in two columns');
+        assert(alarmSection.getBoundingClientRect().right <= body.getBoundingClientRect().right + 0.5, 'mobile alarm controls overflow the popup body');
+        assert(alarmInput.getBoundingClientRect().right <= body.getBoundingClientRect().right + 0.5, 'mobile alarm PIN overflows the popup body');
+        popup.close();
         document.body.dataset.testStatus = 'PASS';
         document.title = 'PASS terminal mobile popup';
         document.querySelector('#result').textContent = [
           'PASS: card-background outer area leads directly into accent border and card surface',
           'PASS: popup uses 8px sides and matching 12vh top/bottom clearance',
           'PASS: more-info title, entity heading and bordered expanded logs',
+          'PASS: alarm modes and masked PIN fit the mobile popup',
         ].join('\n');
       }
 

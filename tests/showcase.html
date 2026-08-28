@@ -101,6 +101,13 @@
             entity_id: 'calendar.family', state: 'off',
             attributes: { friendly_name: 'family calendar' },
           },
+          'alarm_control_panel.home': {
+            entity_id: 'alarm_control_panel.home', state: 'disarmed',
+            attributes: {
+              friendly_name: 'home alarm', code_format: 'number',
+              code_arm_required: true, supported_features: 7,
+            },
+          },
         },
         formatEntityState: (entity) => entity.state,
         callService() {},
@@ -130,8 +137,10 @@
       title.setConfig({
         title: 'home status // terminal cards',
         subtitle: '**system:** {{ states("sensor.camera_count") }}',
-        entity: 'sensor.temperature',
+        entity: 'alarm_control_panel.home',
         state_position: 'bottom-right',
+        state_tap_action: { action: 'more-info' },
+        popup_title: 'security',
         font_size: 28,
         accent_color: 'blue',
       });

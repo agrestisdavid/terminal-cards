@@ -1,3 +1,8 @@
+import {
+  alarmControlModel,
+  alarmDefaultCode,
+  sanitizeAlarmCode,
+} from './alarm.js';
 import { applyAccentColor } from './appearance.js';
 import {
   activeLightColor,
@@ -20,12 +25,6 @@ const SUPPORT_CLOSE = 2;
 const SUPPORT_SET_POSITION = 4;
 const SUPPORT_STOP = 8;
 const SUPPORT_SET_TILT_POSITION = 64;
-const SUPPORT_ALARM_ARM_HOME = 1;
-const SUPPORT_ALARM_ARM_AWAY = 2;
-const SUPPORT_ALARM_ARM_NIGHT = 4;
-const SUPPORT_ALARM_ARM_CUSTOM_BYPASS = 16;
-const SUPPORT_ALARM_ARM_VACATION = 32;
-const ALARM_TRANSITION_STATES = new Set(['triggered', 'arming', 'pending']);
 
 const STYLES = `
   :host {
@@ -565,6 +564,7 @@ export class TerminalEntityPopup extends HTMLElement {
   }
 
   updateHass(hass) {
+    if (this.hidden) return;
     const previousEntity = this._entity();
     const nextEntity = hass?.states?.[this._entityId] || null;
     const entityChanged = previousEntity !== nextEntity;
@@ -657,6 +657,7 @@ export class TerminalEntityPopup extends HTMLElement {
     this._entityName.textContent = name;
     this._state.textContent = String(formattedState).toLocaleLowerCase();
     this._rangeControls = [];
+    if (this._alarmInput) this._alarmInput.value = '';
     this._body.replaceChildren();
     this._body.append(this._detailsSection(entity, attributes, domain));
 
@@ -890,7 +891,9 @@ export class TerminalEntityPopup extends HTMLElement {
     const target = focusKey === 'dialog'
       ? this._dialog
       : [...this.shadowRoot.querySelectorAll('[data-focus-key]')]
-        .find((element) => element.dataset.focusKey === focusKey);
+        .find((element) =>
+          element.dataset.focusKey === focusKey && !element.closest('[hidden]')
+        );
     const usableTarget = target?.disabled ? null : target;
     const fallback = this._close?.isConnected ? this._close : this._dialog;
     (usableTarget || fallback)?.focus?.();
@@ -1190,21 +1193,23 @@ export class TerminalEntityPopup extends HTMLElement {
     return section;
   }
 
-  _alarmControls(entity, attributes, unavailable) {
+  _alarmControls(entity, _attributes, unavailable) {
     const section = this._section('alarm controls');
-    const state = entity?.state || 'unavailable';
-    const features = Number(attributes.supported_features) || 0;
-    const supports = (feature) => (features & feature) !== 0;
-    const defaultCode = this._alarmDefaultCode();
-    const hasDefaultCode = Boolean(defaultCode);
-    const codeFormat = attributes.code_format;
-    const canDisarm = state !== 'disarmed' && state !== 'disarming';
-    const canArm = !ALARM_TRANSITION_STATES.has(state) && state !== 'disarming';
-    const needsArmCode = Boolean(codeFormat && attributes.code_arm_required !== false);
-    const needsDisarmCode = Boolean(codeFormat);
-    const showCode = !hasDefaultCode && (
-      (canDisarm && needsDisarmCode) || (canArm && needsArmCode)
-    );
+    const {
+      state,
+      hasDefaultCode,
+      codeFormat,
+      canDisarm,
+      needsArmCode,
+      needsDisarmCode,
+      showCode,
+      modes,
+    } = alarmControlModel(entity, this._hass, this._entityId);
+    if (!showCode && (this._alarmInput || this._alarmCode)) {
+      if (this._alarmInput) this._alarmInput.value = '';
+      this._alarmCode = '';
+      this._alarmError = '';
+    }
 
     if (showCode) {
       const row = document.createElement('div');
@@ -1225,9 +1230,7 @@ export class TerminalEntityPopup extends HTMLElement {
       }
       input.value = this._alarmCode;
       input.addEventListener('input', () => {
-        const value = codeFormat === 'number'
-          ? input.value.replace(/\D/g, '')
-          : input.value;
+        const value = sanitizeAlarmCode(input.value, codeFormat);
         if (value !== input.value) input.value = value;
         this._alarmCode = value;
         this._alarmError = '';
@@ -1250,25 +1253,15 @@ export class TerminalEntityPopup extends HTMLElement {
       button.dataset.focusKey = 'action:alarm_disarm';
       buttons.push(button);
     }
-    if (canArm) {
-      const modes = [
-        [SUPPORT_ALARM_ARM_HOME, 'arm home', 'mdi:shield-home-outline', 'alarm_arm_home', 'armed_home'],
-        [SUPPORT_ALARM_ARM_AWAY, 'arm away', 'mdi:shield-lock-outline', 'alarm_arm_away', 'armed_away'],
-        [SUPPORT_ALARM_ARM_NIGHT, 'arm night', 'mdi:shield-moon-outline', 'alarm_arm_night', 'armed_night'],
-        [SUPPORT_ALARM_ARM_VACATION, 'vacation', 'mdi:shield-airplane-outline', 'alarm_arm_vacation', 'armed_vacation'],
-        [SUPPORT_ALARM_ARM_CUSTOM_BYPASS, 'custom', 'mdi:shield-half-full', 'alarm_arm_custom_bypass', 'armed_custom_bypass'],
-      ];
-      for (const [feature, label, icon, service, targetState] of modes) {
-        if (!supports(feature)) continue;
-        const button = this._actionButton(
-          label,
-          icon,
-          () => this._callAlarmService(service, needsArmCode && !hasDefaultCode),
-          unavailable || this._alarmBusy || state === targetState
-        );
-        button.dataset.focusKey = `action:${service}`;
-        buttons.push(button);
-      }
+    for (const { popupLabel, icon, service, targetState } of modes) {
+      const button = this._actionButton(
+        popupLabel,
+        icon,
+        () => this._callAlarmService(service, needsArmCode && !hasDefaultCode),
+        unavailable || this._alarmBusy || state === targetState
+      );
+      button.dataset.focusKey = `action:${service}`;
+      buttons.push(button);
     }
     if (buttons.length) {
       const actions = this._actions(buttons);
@@ -1285,15 +1278,9 @@ export class TerminalEntityPopup extends HTMLElement {
     return section;
   }
 
-  _alarmDefaultCode() {
-    const options = this._hass?.entities?.[this._entityId]?.options;
-    const code = options?.default_code ?? options?.alarm_control_panel?.default_code;
-    return code === undefined || code === null ? '' : String(code);
-  }
-
   async _callAlarmService(service, requiresCode) {
     if (!this._hass || !this._entityId || this._alarmBusy) return;
-    const defaultCode = this._alarmDefaultCode();
+    const defaultCode = alarmDefaultCode(this._hass, this._entityId);
     if (requiresCode && !this._alarmCode && !defaultCode) {
       this._alarmError = 'code required';
       this._render();
@@ -1304,7 +1291,7 @@ export class TerminalEntityPopup extends HTMLElement {
     const connection = hass.connection;
     const entityId = this._entityId;
     const generation = ++this._alarmOperationGeneration;
-    const code = this._alarmCode || defaultCode;
+    const code = defaultCode || this._alarmCode;
     const focusKey = this._captureFocusKey();
     this._alarmBusy = true;
     this._alarmError = '';
@@ -1361,7 +1348,10 @@ export class TerminalEntityPopup extends HTMLElement {
     }
     const first = focusable[0];
     const last = focusable[focusable.length - 1];
-    if (event.shiftKey && this.shadowRoot.activeElement === first) {
+    if (this.shadowRoot.activeElement === this._dialog) {
+      event.preventDefault();
+      (event.shiftKey ? last : first).focus();
+    } else if (event.shiftKey && this.shadowRoot.activeElement === first) {
       event.preventDefault();
       last.focus();
     } else if (!event.shiftKey && this.shadowRoot.activeElement === last) {

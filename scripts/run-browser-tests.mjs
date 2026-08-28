@@ -11,6 +11,7 @@ const tests = [
   'switch',
   'sensor',
   'calendar',
+  'alarm',
   'shutter',
   'navigation',
   'popup',

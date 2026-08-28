@@ -404,33 +404,51 @@
         alarmCode.dispatchEvent(new Event('input', { bubbles: true }));
         assert(alarmCode.value === '0123' && popup._alarmCode === '0123', 'numeric alarm PIN was not sanitized without losing its leading zero');
         alarmCode.focus();
+        const idleAlarmInput = alarmCode;
         popup.updateHass({ ...alarmHass });
         alarmCode = popup.shadowRoot.querySelector('.alarm-code input');
+        assert(idleAlarmInput.value === '', 'normal popup refresh did not scrub the detached PIN input');
         assert(alarmCode.value === '0123', 'alarm PIN was lost during a normal HASS refresh');
         assert(popup.shadowRoot.activeElement === alarmCode, 'alarm PIN focus was lost during a normal HASS refresh');
 
         let resolveAlarmService;
         alarmServiceHandler = () => new Promise((resolve) => { resolveAlarmService = resolve; });
+        const submittedPopupInput = alarmCode;
         [...popup.shadowRoot.querySelectorAll('.alarm-actions .action')]
           .find((button) => button.textContent.trim() === 'arm away').click();
+        assert(submittedPopupInput.value === '', 'popup service dispatch did not scrub the detached PIN input');
+        assert(popup.shadowRoot.querySelector('.alarm-code input').value === '0123', 'popup busy rerender lost the submitted PIN');
         assert(typeof resolveAlarmService === 'function', 'alarm service did not start');
         assert(
           [...popup.shadowRoot.querySelectorAll('.alarm-actions .action')].every((button) => button.disabled),
           'alarm controls stayed enabled during a service call'
         );
         assert(popup.shadowRoot.activeElement === popupDialog, 'alarm service call left focus on a removed control');
+        popupDialog.dispatchEvent(new KeyboardEvent('keydown', {
+          key: 'Tab', shiftKey: true, bubbles: true, composed: true,
+        }));
+        const busyFocusable = [...popup.shadowRoot.querySelectorAll('button, input')]
+          .filter((element) => !element.disabled && !element.closest('[hidden]'));
+        assert(
+          popup.shadowRoot.activeElement === busyFocusable.at(-1),
+          'Shift+Tab from the busy dialog escaped the modal focus trap'
+        );
         assert(alarmCalls[0][0] === 'alarm_control_panel' && alarmCalls[0][1] === 'alarm_arm_away', 'wrong alarm arm service');
         assert(alarmCalls[0][2].code === '0123', 'alarm arm service lost the PIN');
         assert(alarmCalls[0][3].entity_id === 'alarm_control_panel.alarmo', 'alarm arm service targets the wrong entity');
+        const busyPopupInput = popup.shadowRoot.querySelector('.alarm-code input');
         popup.updateHass({
           ...alarmHass,
           states: {
             'alarm_control_panel.alarmo': { ...alarmEntity },
           },
         });
+        assert(busyPopupInput.value === '', 'busy popup refresh did not scrub the detached PIN input');
         assert(popup._alarmBusy, 'normal HASS update cancelled the active alarm service');
+        const successfulPopupInput = popup.shadowRoot.querySelector('.alarm-code input');
         resolveAlarmService();
         await wait(1);
+        assert(successfulPopupInput.value === '', 'successful popup command retained PIN in a detached input');
         assert(!popup._alarmBusy && popup._alarmCode === '', 'successful alarm command after HASS refresh retained busy state or PIN');
 
         const armedAlarmHass = {
@@ -506,6 +524,28 @@
         assert(alarmCalls[3][1] === 'alarm_arm_home', 'default-code alarm used the wrong service');
         assert(alarmCalls[3][2].code === '2468', 'configured default alarm code was not sent');
         popup.close();
+
+        popup.show(card, alarmHass, { entity: 'alarm_control_panel.alarmo' });
+        const dynamicPopupInput = popup.shadowRoot.querySelector('.alarm-code input');
+        dynamicPopupInput.value = '1357';
+        dynamicPopupInput.dispatchEvent(new Event('input', { bubbles: true }));
+        dynamicPopupInput.focus();
+        popup.updateHass({
+          ...alarmHass,
+          entities: {
+            'alarm_control_panel.alarmo': { options: { default_code: '2468' } },
+          },
+        });
+        assert(dynamicPopupInput.value === '', 'dynamic popup default_code arrival retained the detached PIN');
+        assert(!popup.shadowRoot.querySelector('.alarm-code input') && popup._alarmCode === '', 'dynamic popup default_code retained hidden PIN state');
+        assert(popup.shadowRoot.activeElement === popup.shadowRoot.querySelector('.close'), 'removed popup PIN field did not restore focus inside the modal');
+        [...popup.shadowRoot.querySelectorAll('.alarm-actions .action')]
+          .find((button) => button.textContent.trim() === 'arm home').click();
+        await wait(1);
+        assert(alarmCalls[4][2].code === '2468', 'dynamic popup default_code did not take precedence over the old PIN');
+        popup.close();
+        popup.updateHass(alarmHass);
+        assert(popup._hass === null, 'hidden popup reacquired and retained HASS');
 
         popup.remove();
         assert(popup.hidden, 'removing the popup host did not close it');

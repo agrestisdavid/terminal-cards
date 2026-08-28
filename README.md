@@ -1,6 +1,6 @@
 # Terminal Cards
 
-Terminal-style Lovelace cards for Home Assistant, inspired by Herdr panes: square 1 px borders, monospace labels embedded in the top border, and theme-aware state colors. Entity, Light, Shutter, and Navigation Cards automatically reduce their horizontal content spacing from 14 px to 10 px below 261 px card width so mobile labels retain more room.
+Terminal-style Lovelace cards for Home Assistant, inspired by Herdr panes: square 1 px borders, monospace labels embedded in the top border, and theme-aware state colors. Entity, Light, Alarm, Shutter, and Navigation Cards automatically reduce their horizontal content spacing from 14 px to 10 px below 261 px card width so mobile labels retain more room.
 
 ![Terminal Cards preview](docs/terminal-cards-preview.png)
 
@@ -124,6 +124,25 @@ title_position: left
 accent_color: cyan
 ```
 
+### `custom:terminal-alarm-card`
+
+A compact control for one `alarm_control_panel.*` entity. Tapping Icon/Name/State opens the complete terminal popup; the independent square controls button expands supported arm modes and Disarm directly inside the card. Home, Away, Night, Vacation, and Custom are derived exclusively from `supported_features`. When the entity requires a code and has no entity-registry `default_code`, the expanded card uses a masked session-only PIN/code field. Codes are cleared after success, reconnect, config change, collapse, or disconnect; errors remain visible for a retry. Manual alarm triggering is intentionally never exposed.
+
+```yaml
+type: custom:terminal-alarm-card
+entity: alarm_control_panel.home
+name: security system
+border_title: security
+show_state: true
+show_controls: true
+controls_expanded: false
+accent_color: red
+more_icon: mdi:shield-key-outline
+popup_title: security
+tap_action:
+  action: more-info
+```
+
 ### `custom:terminal-shutter-card`
 
 A capability-aware control for `cover.*` entities. The square controls button reveals only the functions supported by the selected shutter or blind: open, stop, close, position, and tilt position.
@@ -173,7 +192,7 @@ show_path: true
 
 Every card uses Home Assistant's native theme-color palette for `accent_color` (for example `blue`, `green`, `purple`, or `cyan`) instead of an RGB color picker. The selected theme token controls the active border, icons, hover/focus state, and controls, and follows theme overrides such as `--blue-color`. Existing RGB-array configurations remain render-compatible but are no longer offered by the visual editor. The design intentionally has no box-shadow glow. Light state color takes precedence when `use_light_color: true`.
 
-Every card with a border title supports `title_position: left|right`. Wrapper and TitleCard border state support `state_position: top-left|top-right|bottom-left|bottom-right`; labels sharing a corner shrink without overlapping. Light, Switch, Sensor, Shutter, and continuous Navigation Cards support an optional independent `border_title` without moving or replacing the internal entity name. Their domain-aware `off_icon` is used for `off`, and for `closed` covers. Every visible icon receives the same square hover border, including Navigation's trailing icon. Entity icons remain vertically centered against their name/state stack.
+Every card with a border title supports `title_position: left|right`. Wrapper and TitleCard border state support `state_position: top-left|top-right|bottom-left|bottom-right`; labels sharing a corner shrink without overlapping. Light, Switch, Sensor, Alarm, Shutter, and continuous Navigation Cards support an optional independent `border_title` without moving or replacing the internal entity name. Their domain-aware `off_icon` is used for `off`, and for `closed` covers. Every visible icon receives the same square hover border, including Navigation's trailing icon. Entity icons remain vertically centered against their name/state stack.
 
 A `more-info` action opens the bundle's own terminal-style entity popup instead of Home Assistant's native dialog. On desktop, its borderless terminal-background shell uses the former 14 px top padding equally on all four sides. Its TitleCard-style border title defaults to `more-info` and can be changed with `popup_title`. The card name or entity friendly name is shown separately above the formatted state. On mobile the popup becomes a near-full-width bottom sheet with an 8 px gap on both sides. The layer order is standard `--card-background-color` outer area → 1 px accent border → card surface. The outer area measures 12 vh above and below the popup (or the larger device safe area), protecting rounded phone corners; title/header stay fixed and only the content scrolls. Capability-aware Light and Cover ranges use the same responsive square segments as the cards. For `alarm_control_panel.*`, the terminal popup derives Home/Away/Night/Vacation/Custom modes from `supported_features`, offers Disarm when applicable, and uses a masked numeric/text code field only when the entity requires one. Alarm trigger is intentionally never exposed; PIN values are kept only for the active popup session and cleared after success, reconnect, or close.
 
@@ -188,7 +207,7 @@ Navigation secondary content uses this precedence: a successful reactive `state_
 3. Install **Terminal Cards**.
 4. Hard-refresh Home Assistant (`Ctrl+Shift+R`).
 
-HACS loads the release asset `terminal-cards.js`; no inline `data:` resource is needed. All eight cards appear in Home Assistant's card picker and provide graphical configuration.
+HACS loads the release asset `terminal-cards.js`; no inline `data:` resource is needed. All nine cards appear in Home Assistant's card picker and provide graphical configuration.
 
 ## Development
 

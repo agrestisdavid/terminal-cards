@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 0.12.0 — 2026-08-28
+
+- Add `custom:terminal-alarm-card` with a compact status row, separate expandable controls, supported arm modes, Disarm, ephemeral masked PIN entry, terminal popup action, and no manual trigger command.
+
 ## 0.11.1 — 2026-08-28
 
 - Reduce horizontal main-content padding and icon/text gaps from 14 px to 10 px when Entity, Light, Shutter, or Navigation Cards are at most 260 px wide, preserving more label space on mobile.

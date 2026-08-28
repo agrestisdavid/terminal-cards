@@ -1,0 +1,430 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>terminal-alarm-card test running</title>
+    <style>
+      :root {
+        --card-background-color: #181825;
+        --primary-text-color: #cdd6f4;
+        --secondary-text-color: #6c7086;
+        --accent-color: #89b4fa;
+        --error-color: #f38ba8;
+      }
+      body { background: #11111b; color: #cdd6f4; padding: 24px; }
+      terminal-alarm-card { display: block; width: 420px; margin-bottom: 16px; }
+    </style>
+    <script>
+      customElements.define('ha-icon', class extends HTMLElement {
+        set icon(value) { this._icon = value; }
+        get icon() { return this._icon; }
+      });
+    </script>
+    <script type="module" src="../dist/terminal-cards.js"></script>
+  </head>
+  <body>
+    <main id="cards"></main>
+    <pre id="result">WAITING</pre>
+    <script type="module">
+      const calls = [];
+      const connectionA = {};
+      const connectionB = {};
+      let serviceHandler = () => Promise.resolve();
+      const disarmedEntity = {
+        entity_id: 'alarm_control_panel.alarmo',
+        state: 'disarmed',
+        attributes: {
+          friendly_name: 'Alarmo',
+          supported_features: 7,
+          code_format: 'number',
+          code_arm_required: true,
+        },
+      };
+      const defaultCodeEntity = {
+        entity_id: 'alarm_control_panel.defaulted',
+        state: 'disarmed',
+        attributes: {
+          friendly_name: 'Default code alarm',
+          supported_features: 1,
+          code_format: 'number',
+          code_arm_required: true,
+        },
+      };
+      const triggeredEntity = {
+        entity_id: 'alarm_control_panel.triggered',
+        state: 'triggered',
+        attributes: {
+          friendly_name: 'Triggered alarm',
+          supported_features: 55,
+          code_format: 'number',
+          code_arm_required: true,
+        },
+      };
+      const fullFeatureEntity = {
+        entity_id: 'alarm_control_panel.full',
+        state: 'disarmed',
+        attributes: {
+          friendly_name: 'Full feature alarm',
+          supported_features: 55,
+          code_format: null,
+          code_arm_required: false,
+        },
+      };
+      const noArmCodeEntity = {
+        entity_id: 'alarm_control_panel.no_arm_code',
+        state: 'disarmed',
+        attributes: {
+          friendly_name: 'No arm code alarm',
+          supported_features: 1,
+          code_format: 'number',
+          code_arm_required: false,
+        },
+      };
+      const hass = {
+        connection: connectionA,
+        states: {
+          'alarm_control_panel.alarmo': disarmedEntity,
+          'alarm_control_panel.defaulted': defaultCodeEntity,
+          'alarm_control_panel.triggered': triggeredEntity,
+          'alarm_control_panel.full': fullFeatureEntity,
+          'alarm_control_panel.no_arm_code': noArmCodeEntity,
+        },
+        entities: {
+          'alarm_control_panel.defaulted': { options: { default_code: '2468' } },
+        },
+        formatEntityState: (entity) => entity.state.toUpperCase(),
+        callService: (...args) => {
+          calls.push(args);
+          return serviceHandler();
+        },
+      };
+
+      function create(config, hassContext = hass) {
+        const card = document.createElement('terminal-alarm-card');
+        card.setConfig(config);
+        card.hass = hassContext;
+        document.querySelector('#cards').append(card);
+        return card;
+      }
+
+      function action(card, label) {
+        return [...card.shadowRoot.querySelectorAll('.alarm-action')]
+          .find((button) => button.querySelector('span')?.textContent === label);
+      }
+
+      function labels(card) {
+        return [...card.shadowRoot.querySelectorAll('.alarm-action span')]
+          .map((element) => element.textContent);
+      }
+
+      function assert(condition, message) {
+        if (!condition) throw new Error(message);
+      }
+
+      async function tick() {
+        await Promise.resolve();
+        await new Promise((resolve) => setTimeout(resolve, 20));
+      }
+
+      const card = create({
+        entity: 'alarm_control_panel.alarmo',
+        name: 'security system',
+        border_title: 'security',
+        accent_color: 'yellow',
+        more_icon: 'mdi:menu',
+      });
+      const compact = create({ entity: 'alarm_control_panel.alarmo' });
+      compact.style.width = '240px';
+      const triggered = create({
+        entity: 'alarm_control_panel.triggered',
+        controls_expanded: true,
+      });
+      const defaulted = create({
+        entity: 'alarm_control_panel.defaulted',
+        controls_expanded: true,
+      });
+      const fullFeature = create({
+        entity: 'alarm_control_panel.full',
+        controls_expanded: true,
+      });
+      const noArmCode = create({
+        entity: 'alarm_control_panel.no_arm_code',
+        controls_expanded: true,
+      });
+      const inert = create({
+        entity: 'alarm_control_panel.alarmo',
+        tap_action: { action: 'none' },
+        hold_action: { action: 'none' },
+        show_controls: false,
+      });
+
+      async function run() {
+        await customElements.whenDefined('terminal-alarm-card');
+        await tick();
+
+        const frame = card.shadowRoot.querySelector('.card');
+        const main = card.shadowRoot.querySelector('.main-target');
+        const icon = card.shadowRoot.querySelector('.icon');
+        const text = card.shadowRoot.querySelector('.text');
+        const expand = card.shadowRoot.querySelector('.expand');
+        assert(getComputedStyle(frame).borderRadius === '0px', 'alarm corners are not square');
+        assert(frame.dataset.state === 'disarmed', 'alarm state data is wrong');
+        assert(card.shadowRoot.querySelector('.name').textContent === 'security system', 'alarm name is missing');
+        assert(card.shadowRoot.querySelector('.state').textContent === 'disarmed', 'alarm state is not formatted');
+        assert(card.shadowRoot.querySelector('.border-title').textContent === 'security', 'alarm border title is missing');
+        assert(card.style.getPropertyValue('--terminal-card-accent') === 'var(--yellow-color, #ffeb3b)', 'alarm accent is missing');
+        assert(icon.icon === 'mdi:shield-off-outline', 'disarmed alarm icon is wrong');
+        assert(getComputedStyle(icon).borderTopWidth === '1px', 'alarm icon has no hover-border box');
+        assert(icon.getBoundingClientRect().width === 34 && icon.getBoundingClientRect().height === 34, 'alarm hover box is not 34px square');
+        assert(
+          Math.abs((icon.getBoundingClientRect().top + icon.getBoundingClientRect().bottom) / 2 -
+            (text.getBoundingClientRect().top + text.getBoundingClientRect().bottom) / 2) < 1,
+          'alarm icon is not vertically centered against name and state'
+        );
+        assert(main.getAttribute('aria-haspopup') === 'dialog', 'default alarm action does not expose dialog semantics');
+        assert(inert.shadowRoot.querySelector('.main-target').tabIndex === -1, 'inert alarm main target is keyboard focusable');
+        assert(!inert.shadowRoot.querySelector('.main-target').hasAttribute('aria-haspopup'), 'inert alarm main target claims to open a dialog');
+        assert(inert.shadowRoot.querySelector('.expand').hidden, 'show_controls false did not hide the controls button');
+        const compactMainStyle = getComputedStyle(compact.shadowRoot.querySelector('.main'));
+        const compactTargetStyle = getComputedStyle(compact.shadowRoot.querySelector('.main-target'));
+        assert(
+          compactMainStyle.paddingLeft === '10px' && compactMainStyle.paddingRight === '10px' &&
+            compactMainStyle.columnGap === '10px' && compactTargetStyle.columnGap === '10px',
+          'narrow alarm layout does not reclaim horizontal text space'
+        );
+
+        main.click();
+        const popup = document.querySelector('terminal-entity-popup');
+        assert(popup && !popup.hidden, 'alarm main area did not open the terminal popup');
+        assert(card.shadowRoot.querySelector('.controls').hidden, 'alarm main area also expanded inline controls');
+        popup.shadowRoot.querySelector('.close').click();
+
+        expand.click();
+        assert(!card.shadowRoot.querySelector('.controls').hidden, 'alarm controls did not expand');
+        assert(expand.getAttribute('aria-expanded') === 'true', 'alarm expand state is missing');
+        assert(expand.querySelector('ha-icon').icon === 'mdi:menu', 'custom alarm controls icon is missing');
+        assert(labels(card).join(',') === 'home,away,night', 'alarm modes are not derived from supported features');
+        assert(!labels(card).some((label) => label.includes('trigger')), 'unsafe alarm trigger action is visible');
+        assert(!labels(card).includes('disarm'), 'disarm is visible while already disarmed');
+        let codeInput = card.shadowRoot.querySelector('.alarm-code input');
+        assert(codeInput?.type === 'password', 'alarm PIN is not masked');
+        assert(codeInput.inputMode === 'numeric', 'numeric alarm PIN lacks a numeric keyboard hint');
+
+        action(card, 'away').click();
+        assert(calls.length === 0, 'alarm command ran without its required PIN');
+        assert(card.shadowRoot.querySelector('.alarm-error').textContent === 'code required', 'missing PIN is not reported');
+        assert(card.shadowRoot.activeElement === card.shadowRoot.querySelector('.alarm-code input'), 'missing PIN did not focus the input');
+
+        codeInput = card.shadowRoot.querySelector('.alarm-code input');
+        codeInput.value = '01a23';
+        codeInput.dispatchEvent(new Event('input', { bubbles: true }));
+        assert(codeInput.value === '0123' && card._alarmCode === '0123', 'numeric PIN lost its leading zero or was not sanitized');
+        const idleRefreshInput = codeInput;
+        codeInput.focus();
+        card.hass = { ...hass };
+        codeInput = card.shadowRoot.querySelector('.alarm-code input');
+        assert(idleRefreshInput.value === '', 'normal HASS refresh did not scrub the detached PIN input');
+        assert(codeInput.value === '0123' && card.shadowRoot.activeElement === codeInput, 'idle HASS refresh lost PIN or focus');
+
+        let resolveService;
+        serviceHandler = () => new Promise((resolve) => { resolveService = resolve; });
+        const submittedCodeInput = codeInput;
+        action(card, 'away').click();
+        assert(submittedCodeInput.value === '', 'service dispatch did not scrub the detached PIN input');
+        assert(card.shadowRoot.querySelector('.alarm-code input').value === '0123', 'busy rerender lost the submitted PIN');
+        assert(typeof resolveService === 'function', 'alarm service did not start');
+        assert(card._alarmBusy, 'alarm busy state is missing');
+        assert(expand.disabled, 'alarm expand control stayed enabled while busy');
+        assert([...card.shadowRoot.querySelectorAll('.alarm-action')].every((button) => button.disabled), 'alarm actions stayed enabled while busy');
+        assert(card.shadowRoot.activeElement === main, 'busy alarm operation did not preserve valid focus');
+        assert(calls[0][0] === 'alarm_control_panel' && calls[0][1] === 'alarm_arm_away', 'wrong alarm arm service');
+        assert(calls[0][2].code === '0123', 'alarm arm service lost the PIN');
+        assert(calls[0][3].entity_id === 'alarm_control_panel.alarmo', 'alarm arm service targeted the wrong entity');
+
+        const refreshedHass = {
+          ...hass,
+          states: { ...hass.states, 'alarm_control_panel.alarmo': { ...disarmedEntity } },
+        };
+        const busyRefreshInput = card.shadowRoot.querySelector('.alarm-code input');
+        card.hass = refreshedHass;
+        assert(busyRefreshInput.value === '', 'busy HASS refresh did not scrub the detached PIN input');
+        assert(card._alarmBusy && card.shadowRoot.querySelector('.alarm-code input').value === '0123', 'normal HASS refresh cancelled the operation or lost its PIN');
+        const successfulInput = card.shadowRoot.querySelector('.alarm-code input');
+        resolveService();
+        await tick();
+        assert(successfulInput.value === '', 'successful alarm service retained PIN in a detached input');
+        assert(!card._alarmBusy && card._alarmCode === '', 'successful alarm service retained busy state or PIN');
+        assert(card.shadowRoot.querySelector('.alarm-code input').value === '', 'successful alarm service left PIN in the input');
+
+        const armedEntity = { ...disarmedEntity, state: 'armed_away' };
+        const armedHass = {
+          ...hass,
+          states: { ...hass.states, 'alarm_control_panel.alarmo': armedEntity },
+        };
+        card.hass = armedHass;
+        assert(labels(card).includes('disarm'), 'armed alarm has no disarm action');
+        assert(action(card, 'away').disabled, 'current alarm mode is not disabled');
+        codeInput = card.shadowRoot.querySelector('.alarm-code input');
+        codeInput.value = '0099';
+        codeInput.dispatchEvent(new Event('input', { bubbles: true }));
+        serviceHandler = () => Promise.reject(new Error('invalid code'));
+        action(card, 'disarm').click();
+        await tick();
+        assert(calls.at(-1)[1] === 'alarm_disarm' && calls.at(-1)[2].code === '0099', 'wrong alarm disarm call');
+        assert(card.shadowRoot.querySelector('.alarm-error').textContent === 'invalid code', 'alarm service error is not visible');
+        assert(card.shadowRoot.querySelector('.alarm-code input').value === '0099', 'failed alarm command cleared the PIN');
+        assert(card.shadowRoot.activeElement === card.shadowRoot.querySelector('.alarm-code input'), 'alarm error did not return focus to PIN');
+
+        codeInput = card.shadowRoot.querySelector('.alarm-code input');
+        codeInput.value = '0042';
+        codeInput.dispatchEvent(new Event('input', { bubbles: true }));
+        let resolveStaleService;
+        serviceHandler = () => new Promise((resolve) => { resolveStaleService = resolve; });
+        action(card, 'disarm').click();
+        assert(card._alarmBusy && typeof resolveStaleService === 'function', 'stale alarm operation did not start');
+        const detachedCodeInput = card.shadowRoot.querySelector('.alarm-code input');
+        card.hass = { ...armedHass, connection: connectionB };
+        assert(!card._alarmBusy && card._alarmCode === '', 'connection replacement retained alarm operation state');
+        assert(detachedCodeInput.value === '', 'connection replacement retained PIN in the detached input');
+        resolveStaleService();
+        await tick();
+        assert(!card._alarmBusy && card._alarmCode === '', 'stale completion changed the replacement session');
+
+        assert(labels(triggered).join(',') === 'disarm', 'triggered alarm exposes actions other than disarm');
+        assert(getComputedStyle(triggered.shadowRoot.querySelector('.card')).borderTopColor === 'rgb(243, 139, 168)', 'triggered alarm does not use the error border');
+
+        serviceHandler = () => Promise.resolve();
+        assert(labels(fullFeature).join(',') === 'home,away,night,vacation,custom', 'Vacation or Custom Bypass mode is missing');
+        assert(action(fullFeature, 'vacation').getAttribute('aria-label') === 'vacation', 'vacation accessible name is wrong');
+        assert(action(fullFeature, 'home').getAttribute('aria-label') === 'arm home', 'compact home action lacks explicit arm semantics');
+        action(fullFeature, 'vacation').click();
+        await tick();
+        assert(calls.at(-1)[1] === 'alarm_arm_vacation', 'vacation mode used the wrong service');
+        action(fullFeature, 'custom').click();
+        await tick();
+        assert(calls.at(-1)[1] === 'alarm_arm_custom_bypass', 'Custom Bypass mode used the wrong service');
+        fullFeature.hass = {
+          ...hass,
+          states: {
+            ...hass.states,
+            'alarm_control_panel.full': { ...fullFeatureEntity, state: 'armed_custom_bypass' },
+          },
+        };
+        assert(action(fullFeature, 'custom').disabled, 'current Custom Bypass mode is not disabled');
+
+        assert(!noArmCode.shadowRoot.querySelector('.alarm-code input'), 'code_arm_required false still requires a PIN for arming');
+        action(noArmCode, 'home').click();
+        await tick();
+        assert(calls.at(-1)[1] === 'alarm_arm_home' && Object.keys(calls.at(-1)[2]).length === 0, 'no-code arming sent an unexpected PIN');
+        noArmCode.hass = {
+          ...hass,
+          states: {
+            ...hass.states,
+            'alarm_control_panel.no_arm_code': { ...noArmCodeEntity, state: 'armed_home' },
+          },
+        };
+        assert(noArmCode.shadowRoot.querySelector('.alarm-code input'), 'armed alarm omitted its required Disarm PIN');
+
+        assert(!defaulted.shadowRoot.querySelector('.alarm-code input'), 'configured default code still shows a PIN field');
+        action(defaulted, 'home').click();
+        await tick();
+        assert(calls.at(-1)[1] === 'alarm_arm_home', 'default-code alarm used the wrong service');
+        assert(calls.at(-1)[2].code === '2468', 'configured default alarm code was not sent');
+
+        const dynamicDefault = create({
+          entity: 'alarm_control_panel.alarmo',
+          controls_expanded: true,
+        });
+        let dynamicCodeInput = dynamicDefault.shadowRoot.querySelector('.alarm-code input');
+        dynamicCodeInput.value = '1357';
+        dynamicCodeInput.dispatchEvent(new Event('input', { bubbles: true }));
+        dynamicCodeInput.focus();
+        dynamicDefault.hass = {
+          ...hass,
+          entities: {
+            ...hass.entities,
+            'alarm_control_panel.alarmo': { options: { default_code: '2468' } },
+          },
+        };
+        assert(dynamicCodeInput.value === '', 'dynamic default_code arrival retained the detached PIN');
+        assert(!dynamicDefault.shadowRoot.querySelector('.alarm-code input') && dynamicDefault._alarmCode === '', 'dynamic default_code arrival retained hidden PIN state');
+        assert(dynamicDefault.shadowRoot.activeElement === dynamicDefault.shadowRoot.querySelector('.expand'), 'removed PIN field did not restore focus inside the card');
+        action(dynamicDefault, 'home').click();
+        await tick();
+        assert(calls.at(-1)[2].code === '2468', 'dynamic default_code did not take precedence over the old PIN');
+
+        card.hass = armedHass;
+        codeInput = card.shadowRoot.querySelector('.alarm-code input');
+        codeInput.value = '0077';
+        codeInput.dispatchEvent(new Event('input', { bubbles: true }));
+        expand.click();
+        assert(card.shadowRoot.querySelector('.controls').hidden, 'alarm controls did not collapse');
+        assert(codeInput.value === '' && card._alarmCode === '', 'collapsing alarm controls retained the PIN');
+
+        expand.click();
+        codeInput = card.shadowRoot.querySelector('.alarm-code input');
+        codeInput.value = '0088';
+        codeInput.dispatchEvent(new Event('input', { bubbles: true }));
+        const hiddenCodeInput = codeInput;
+        card.hass = {
+          ...armedHass,
+          states: {
+            ...armedHass.states,
+            'alarm_control_panel.alarmo': { ...armedEntity, state: 'disarming' },
+          },
+        };
+        assert(card.shadowRoot.querySelector('.controls').hidden, 'alarm controls stayed visible without an available action');
+        assert(hiddenCodeInput.value === '' && card._alarmCode === '', 'state-driven controls closure retained PIN data');
+
+        card.hass = armedHass;
+        codeInput = card.shadowRoot.querySelector('.alarm-code input');
+        codeInput.value = '0088';
+        codeInput.dispatchEvent(new Event('input', { bubbles: true }));
+        card.setConfig({
+          entity: 'alarm_control_panel.alarmo',
+          name: 'updated security system',
+          controls_expanded: true,
+        });
+        assert(codeInput.value === '' && card._alarmCode === '', 'alarm config update retained PIN data');
+
+        codeInput = card.shadowRoot.querySelector('.alarm-code input');
+        codeInput.value = '0011';
+        codeInput.dispatchEvent(new Event('input', { bubbles: true }));
+        card.remove();
+        assert(codeInput.value === '' && card._alarmCode === '' && card._alarmInput === null, 'alarm disconnect retained PIN data');
+
+        let invalid = false;
+        try { document.createElement('terminal-alarm-card').setConfig({ entity: 'light.kitchen' }); }
+        catch (_error) { invalid = true; }
+        assert(invalid, 'non-alarm entity was accepted');
+        const Card = customElements.get('terminal-alarm-card');
+        const form = Card.getConfigForm();
+        const fields = form.schema.flatMap((item) => item.schema || [item]);
+        assert(fields.find((field) => field.name === 'entity').selector.entity.filter.domain === 'alarm_control_panel', 'alarm editor domain is wrong');
+        assert(fields.find((field) => field.name === 'show_controls').selector.boolean, 'alarm controls editor is missing');
+        assert(fields.find((field) => field.name === 'controls_expanded').selector.boolean, 'alarm default expansion editor is missing');
+        assert(fields.find((field) => field.name === 'more_icon').selector.icon, 'alarm controls icon editor is missing');
+        assert(fields.find((field) => field.name === 'tap_action').selector.ui_action, 'alarm tap action editor is missing');
+        assert(Card.getStubConfig(hass).entity === 'alarm_control_panel.alarmo', 'alarm stub did not find a real alarm entity');
+        assert(window.customCards.some((entry) => entry.type === 'terminal-alarm-card'), 'alarm picker metadata is missing');
+        assert(defaulted.getGridOptions().min_columns === 3, 'alarm grid options are missing');
+
+        document.body.dataset.testStatus = 'PASS';
+        document.title = 'PASS terminal-alarm-card';
+        document.querySelector('#result').textContent = [
+          'PASS: compact alarm status, popup action and responsive inline controls',
+          'PASS: supported arm modes, Disarm and no manual trigger action',
+          'PASS: masked ephemeral PIN, default code, async guards and service errors',
+          'PASS: native visual editor selectors and picker metadata',
+        ].join('\n');
+      }
+
+      run().catch((error) => {
+        document.body.dataset.testStatus = 'FAIL';
+        document.title = 'FAIL terminal-alarm-card';
+        document.querySelector('#result').textContent = `FAIL: ${error.stack || error}`;
+        console.error(error);
+      });
+    </script>
+  </body>
+</html>

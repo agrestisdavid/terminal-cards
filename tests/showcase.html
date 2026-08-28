@@ -60,7 +60,7 @@
     <script type="module" src="../dist/terminal-cards.js"></script>
   </head>
   <body>
-    <h1>terminal-cards <span>// title + wrapper + light + switch + sensor + calendar + shutter + navigation</span></h1>
+    <h1>terminal-cards <span>// title + wrapper + light + switch + sensor + calendar + alarm + shutter + nav</span></h1>
     <main></main>
     <script type="module">
       const hass = {
@@ -176,7 +176,7 @@
 
       const controls = document.createElement('terminal-card-wrapper');
       controls.setConfig({
-        title: 'covers + entities + calendar + navigation',
+        title: 'covers + entities + calendar + alarm + navigation',
         accent_color: 'cyan',
         entity: 'cover.office',
         state_position: 'top-right',
@@ -191,6 +191,11 @@
             type: 'custom:terminal-switch-card', entity: 'input_boolean.guest_mode',
             icon: 'mdi:account-check', off_icon: 'mdi:account-off',
             border_title: 'presence', accent_color: 'green',
+          },
+          {
+            type: 'custom:terminal-alarm-card', entity: 'alarm_control_panel.home',
+            border_title: 'security', accent_color: 'red',
+            more_icon: 'mdi:shield-key-outline', controls_expanded: false,
           },
           {
             type: 'custom:terminal-sensor-card', entity: 'sensor.temperature',

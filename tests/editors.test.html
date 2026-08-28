@@ -108,6 +108,7 @@
         await customElements.whenDefined('terminal-switch-card');
         await customElements.whenDefined('terminal-sensor-card');
         await customElements.whenDefined('terminal-calendar-card');
+        await customElements.whenDefined('terminal-alarm-card');
         await customElements.whenDefined('terminal-shutter-card');
         await customElements.whenDefined('terminal-navigation-card');
 
@@ -312,6 +313,19 @@
         assert(calendarFields.find((field) => field.name === 'show_location').selector.boolean, 'calendar location option missing');
         assert(calendarFields.find((field) => field.name === 'accent_color').selector.ui_color, 'calendar HA color selector missing');
         assert(calendarFields.find((field) => field.name === 'title_position').selector.select, 'calendar title position missing');
+
+        const alarmForm = customElements.get('terminal-alarm-card').getConfigForm();
+        const alarmFields = alarmForm.schema.flatMap((item) => item.schema || [item]);
+        assert(
+          alarmFields.find((field) => field.name === 'entity').selector.entity.filter.domain === 'alarm_control_panel',
+          'alarm selector accepts other domains'
+        );
+        assert(alarmFields.find((field) => field.name === 'show_controls').selector.boolean, 'alarm controls option missing');
+        assert(alarmFields.find((field) => field.name === 'controls_expanded').selector.boolean, 'alarm default expansion option missing');
+        assert(alarmFields.find((field) => field.name === 'more_icon').selector.icon, 'alarm controls icon missing');
+        assert(alarmFields.find((field) => field.name === 'popup_title').selector.text, 'alarm popup title selector missing');
+        assert(alarmFields.find((field) => field.name === 'border_title').selector.text, 'alarm border title missing');
+        assert(alarmFields.find((field) => field.name === 'tap_action').selector.ui_action, 'alarm native action editor missing');
 
         const shutterForm = customElements.get('terminal-shutter-card').getConfigForm();
         const shutterFields = shutterForm.schema.flatMap((item) => item.schema || [item]);

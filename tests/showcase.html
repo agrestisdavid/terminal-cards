@@ -23,7 +23,7 @@
       h1 { margin: 0 0 30px; color: #89b4fa; font-size: 20px; font-weight: 700; }
       h1 span { color: #6c7086; font-weight: 400; }
       main { display: grid; gap: 24px; }
-      terminal-title-card, terminal-card-wrapper { max-width: 1000px; }
+      terminal-title-card, terminal-card-wrapper, terminal-vacuum-card { max-width: 1000px; }
     </style>
     <script>
       customElements.define(
@@ -66,9 +66,20 @@
     <script type="module" src="../dist/terminal-cards.js"></script>
   </head>
   <body>
-    <h1>terminal-cards <span>// title + wrapper + light + switch + sensor + calendar + waste + alarm + shutter + nav</span></h1>
+    <h1>terminal-cards <span>// title + wrapper + light + switch + sensor + calendar + waste + alarm + shutter + vacuum + nav</span></h1>
     <main></main>
     <script type="module">
+      const vacuumMap = `data:image/svg+xml,${encodeURIComponent(`
+        <svg xmlns="http://www.w3.org/2000/svg" width="720" height="400" viewBox="0 0 720 400">
+          <rect width="720" height="400" fill="#11111b"/>
+          <rect x="12" y="208" width="330" height="180" fill="#fab387" stroke="#6c7086" stroke-width="8"/>
+          <rect x="378" y="12" width="330" height="180" fill="#89b4fa" stroke="#6c7086" stroke-width="8"/>
+          <rect x="378" y="208" width="330" height="180" fill="#a6e3a1" stroke="#6c7086" stroke-width="8"/>
+          <rect x="12" y="12" width="330" height="180" fill="#cba6f7" stroke="#6c7086" stroke-width="8"/>
+          <path d="M170 208V388M378 102H708M378 298H708" stroke="#45475a" stroke-width="5"/>
+          <circle cx="520" cy="270" r="16" fill="#cdd6f4" stroke="#181825" stroke-width="4"/>
+        </svg>
+      `)}`;
       const hass = {
         states: {
           'light.kitchen': {
@@ -118,6 +129,69 @@
               code_arm_required: true, supported_features: 7,
             },
           },
+          'vacuum.robobert': {
+            entity_id: 'vacuum.robobert', state: 'docked',
+            attributes: {
+              friendly_name: 'robobert', fan_speed: 'max',
+              fan_speed_list: ['quiet', 'balanced', 'turbo', 'max', 'max_plus'],
+              supported_features: 4 + 16 + 32 + 8192 + 16384,
+            },
+          },
+          'image.robobert_map': {
+            entity_id: 'image.robobert_map', state: 'preview',
+            attributes: {
+              friendly_name: 'robobert erdgeschoss_custom',
+              entity_picture: vacuumMap,
+              calibration_points: [
+                { vacuum: { x: 0, y: 0 }, map: { x: 0, y: 400 } },
+                { vacuum: { x: 100, y: 0 }, map: { x: 720, y: 400 } },
+                { vacuum: { x: 0, y: 100 }, map: { x: 0, y: 0 } },
+              ],
+              rooms: {
+                1: { number: 1, name: 'Kuche', x0: 0, y0: 0, x1: 50, y1: 50 },
+                2: { number: 2, name: 'Esszimmer', x0: 50, y0: 50, x1: 100, y1: 100 },
+                3: { number: 3, name: 'Buro', x0: 50, y0: 0, x1: 100, y1: 50 },
+                4: { number: 4, name: 'Wohnzimmer', x0: 0, y0: 50, x1: 50, y1: 100 },
+              },
+            },
+          },
+          'select.robobert_cleaning': {
+            entity_id: 'select.robobert_cleaning', state: 'vac_and_mop',
+            attributes: { options: ['vacuum', 'vac_and_mop', 'mop'] },
+          },
+          'select.robobert_mop_mode': {
+            entity_id: 'select.robobert_mop_mode', state: 'deep',
+            attributes: { options: ['standard', 'deep', 'deep_plus', 'fast'] },
+          },
+          'select.robobert_mop_intensity': {
+            entity_id: 'select.robobert_mop_intensity', state: 'high',
+            attributes: { options: ['off', 'low', 'medium', 'high'] },
+          },
+          'sensor.robobert_battery': {
+            entity_id: 'sensor.robobert_battery', state: '87',
+            attributes: { device_class: 'battery', unit_of_measurement: '%' },
+          },
+        },
+        entities: {
+          'vacuum.robobert': {
+            options: {
+              vacuum: {
+                area_mapping: {
+                  kitchen: ['0_1'], dining: ['0_2'], office: ['0_3'], living: ['0_4'],
+                },
+                last_seen_segments: [
+                  { id: '0_1', name: 'Kuche', group: 'Erdgeschoss' },
+                  { id: '0_2', name: 'Esszimmer', group: 'Erdgeschoss' },
+                  { id: '0_3', name: 'Buro', group: 'Erdgeschoss' },
+                  { id: '0_4', name: 'Wohnzimmer', group: 'Erdgeschoss' },
+                ],
+              },
+            },
+          },
+        },
+        areas: {
+          kitchen: { name: 'küche' }, dining: { name: 'esszimmer' },
+          office: { name: 'büro' }, living: { name: 'wohnzimmer' },
         },
         formatEntityState: (entity) => entity.state,
         callService() {},
@@ -246,6 +320,24 @@
       });
       controls.hass = hass;
       document.querySelector('main').append(controls);
+
+      const vacuum = document.createElement('terminal-vacuum-card');
+      vacuum.setConfig({
+        entity: 'vacuum.robobert',
+        map_entity: 'image.robobert_map',
+        cleaning_mode_entity: 'select.robobert_cleaning',
+        mop_mode_entity: 'select.robobert_mop_mode',
+        mop_intensity_entity: 'select.robobert_mop_intensity',
+        battery_entity: 'sensor.robobert_battery',
+        name: 'robobert',
+        border_title: 'vacuum // erdgeschoss',
+        accent_color: 'cyan',
+      });
+      vacuum.hass = hass;
+      document.querySelector('main').append(vacuum);
+      setTimeout(() => {
+        vacuum.shadowRoot.querySelector('.room-zone:not(:disabled)')?.click();
+      }, 100);
 
       const waste = document.createElement('terminal-waste-card');
       waste.setConfig({

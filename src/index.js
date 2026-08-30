@@ -9,6 +9,7 @@ import './cards/waste-card.js';
 import './cards/waste-status-card.js';
 import './cards/alarm-card.js';
 import './cards/shutter-card.js';
+import './cards/vacuum-card.js';
 import './cards/navigation-card.js';
 
 const VERSION =

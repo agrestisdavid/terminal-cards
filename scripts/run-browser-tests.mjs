@@ -15,6 +15,7 @@ const tests = [
   'waste-status',
   'alarm',
   'shutter',
+  'vacuum',
   'navigation',
   'popup',
   'popup-mobile',

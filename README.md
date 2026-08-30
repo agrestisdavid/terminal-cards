@@ -206,6 +206,30 @@ hold_action:
   action: more-info
 ```
 
+### `custom:terminal-vacuum-card`
+
+A full-width terminal control for one `vacuum.*` entity. Its live `image.*` map is also the room selector: compatible map entities exposing `rooms` and `calibration_points` receive accessible clickable overlays, while Home Assistant's native Vacuum segment-to-area mapping resolves every map segment to an `area_id`. With selected rooms, Start calls `vacuum.clean_area`; without a selection it starts a complete clean. Pause, Resume, and Dock use the native Vacuum actions.
+
+Suction power is read dynamically from the vacuum's `fan_speed_list`. Optional `select.*` entities add cleaning type, mop intensity, and Normal/Thorough controls. For Roborock, Thorough maps to the native `deep` mop path; it does not run the complete cleaning twice. Missing or ambiguous area mappings never fall back to vendor commands: the map remains visible, selection is disabled, and the card explains that segments must first be assigned to Home Assistant areas in the Vacuum entity settings.
+
+```yaml
+type: custom:terminal-vacuum-card
+entity: vacuum.roborock_qrevo_curv_series
+map_entity: image.roborock_qrevo_curv_series_erdgeschoss_custom
+cleaning_mode_entity: select.gastezimmer_robobert_reinigungsmodus
+mop_mode_entity: select.roborock_qrevo_curv_series_mopp_modus
+mop_intensity_entity: select.roborock_qrevo_curv_series_wisch_intensitat
+battery_entity: sensor.roborock_qrevo_curv_series_batterie
+name: robobert
+border_title: cleaning
+title_position: left
+normal_mode: standard
+thorough_mode: deep
+accent_color: cyan
+```
+
+All public options use native Home Assistant visual-editor controls. The Vacuum and map entities are required; mode and battery entities are optional, so unsupported groups simply stay hidden. The map adapter validates its affine calibration, clips room rectangles to the image, keeps room targets at least 34×34 px, cache-busts stable image URLs when the Image entity publishes a new state, preserves room selection across normal state refreshes, renders all labels through `textContent`, and blocks stale image, registry, or service results after reconnects and configuration changes.
+
 ### `custom:terminal-navigation-card`
 
 An internal Home Assistant navigation card. The native Name placement selector keeps the name inside the card or uses it as the border title; border-title mode leaves only the secondary content inside. The trailing navigation icon can be hidden to reclaim its complete layout width, and the remaining icon gap is compact so long labels and paths have more room. The visual editor uses Home Assistant's native navigation-path picker. The optional state `entity` can also power a separate `icon_tap_action`: clicking the main icon runs a native Home Assistant action or service while clicking the remaining card still navigates.
@@ -232,7 +256,7 @@ show_path: true
 
 Every card uses Home Assistant's native theme-color palette for `accent_color` (for example `blue`, `green`, `purple`, or `cyan`) instead of an RGB color picker. The selected theme token controls the active border, icons, hover/focus state, and controls, and follows theme overrides such as `--blue-color`. Existing RGB-array configurations remain render-compatible but are no longer offered by the visual editor. The design intentionally has no box-shadow glow. Light state color takes precedence when `use_light_color: true`.
 
-Every card with a border title supports `title_position: left|right`. Wrapper and TitleCard border state support `state_position: top-left|top-right|bottom-left|bottom-right`; labels sharing a corner shrink without overlapping. Light, Switch, Sensor, Alarm, Shutter, and continuous Navigation Cards support an optional independent `border_title` without moving or replacing the internal entity name. Their domain-aware `off_icon` is used for `off`, and for `closed` covers. Every visible icon receives the same square hover border, including Navigation's trailing icon. Entity icons remain vertically centered against their name/state stack.
+Every card with a border title supports `title_position: left|right`. Wrapper and TitleCard border state support `state_position: top-left|top-right|bottom-left|bottom-right`; labels sharing a corner shrink without overlapping. Light, Switch, Sensor, Alarm, Shutter, Vacuum, and continuous Navigation Cards support an optional independent `border_title` without moving or replacing the internal entity name. Their domain-aware `off_icon` is used for `off`, and for `closed` covers. Every visible icon receives the same square hover border, including Navigation's trailing icon. Entity icons remain vertically centered against their name/state stack.
 
 A `more-info` action opens the bundle's own terminal-style entity popup instead of Home Assistant's native dialog. On desktop, its borderless terminal-background shell uses the former 14 px top padding equally on all four sides. Its TitleCard-style border title defaults to `more-info` and can be changed with `popup_title`. The card name or entity friendly name is shown separately above the formatted state. On mobile the popup becomes a near-full-width bottom sheet with an 8 px gap on both sides. The layer order is standard `--card-background-color` outer area → 1 px accent border → card surface. The outer area measures 12 vh above and below the popup (or the larger device safe area), protecting rounded phone corners; title/header stay fixed and only the content scrolls. Capability-aware Light and Cover ranges use the same responsive square segments as the cards. For `alarm_control_panel.*`, the terminal popup derives Home/Away/Night/Vacation/Custom modes from `supported_features`, offers Disarm when applicable, and uses a masked numeric/text code field only when the entity requires one. Alarm trigger is intentionally never exposed; PIN values are kept only for the active popup session and cleared after success, reconnect, or close.
 
@@ -247,7 +271,7 @@ Navigation secondary content uses this precedence: a successful reactive `state_
 3. Install **Terminal Cards**.
 4. Hard-refresh Home Assistant (`Ctrl+Shift+R`).
 
-HACS loads the release asset `terminal-cards.js`; no inline `data:` resource is needed. All ten cards appear in Home Assistant's card picker and provide graphical configuration.
+HACS loads the release asset `terminal-cards.js`; no inline `data:` resource is needed. All eleven cards appear in Home Assistant's card picker and provide graphical configuration.
 
 ## Development
 

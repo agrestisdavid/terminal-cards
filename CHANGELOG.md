@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## 0.18.0 — 2026-08-31
+
+- Add `custom:terminal-vacuum-card` with a live calibrated map, accessible room selection through native Home Assistant area mappings, and full-width responsive Terminal styling.
+- Add native controls for cleaning type, suction power, mop intensity, Roborock normal/deep cleaning, Start/Resume, Pause, and Dock.
+- Guard live image revisions, registry lookups, and service calls against stale entities, reconnects, duplicate submissions, invalid map geometry, and unavailable devices; keep map-room touch targets at least 34×34 px.
+
 ## 0.17.0 — 2026-08-30
 
 - Clarify the Navigation Card's name-placement control so the name can become the border title while only secondary content remains inside.

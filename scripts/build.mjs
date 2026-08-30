@@ -32,6 +32,7 @@ for (const element of [
   'terminal-waste-status-card',
   'terminal-alarm-card',
   'terminal-shutter-card',
+  'terminal-vacuum-card',
   'terminal-navigation-card',
   'terminal-entity-popup',
 ]) {

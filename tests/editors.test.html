@@ -110,6 +110,7 @@
         await customElements.whenDefined('terminal-calendar-card');
         await customElements.whenDefined('terminal-alarm-card');
         await customElements.whenDefined('terminal-shutter-card');
+        await customElements.whenDefined('terminal-vacuum-card');
         await customElements.whenDefined('terminal-navigation-card');
 
         const hass = {
@@ -341,6 +342,33 @@
         assert(shutterFields.find((field) => field.name === 'popup_title').selector.text, 'shutter popup title selector missing');
         assert(shutterFields.some((field) => field.name === 'hold_action'), 'shutter hold action missing');
 
+        const vacuumForm = customElements.get('terminal-vacuum-card').getConfigForm();
+        const vacuumFields = vacuumForm.schema.flatMap((item) => item.schema || [item]);
+        assert(
+          vacuumFields.find((field) => field.name === 'entity').selector.entity.filter.domain === 'vacuum',
+          'vacuum selector accepts other domains'
+        );
+        assert(
+          vacuumFields.find((field) => field.name === 'map_entity').selector.entity.filter.domain === 'image',
+          'vacuum map selector accepts other domains'
+        );
+        for (const fieldName of ['cleaning_mode_entity', 'mop_intensity_entity', 'mop_mode_entity']) {
+          assert(
+            vacuumFields.find((field) => field.name === fieldName).selector.entity.filter.domain === 'select',
+            `${fieldName} does not use a native select-entity selector`
+          );
+        }
+        assert(
+          vacuumFields.find((field) => field.name === 'battery_entity').selector.entity.filter.domain === 'sensor',
+          'vacuum battery selector accepts other domains'
+        );
+        assert(vacuumFields.find((field) => field.name === 'show_room_labels').selector.boolean, 'vacuum room-label option missing');
+        assert(vacuumFields.find((field) => field.name === 'normal_mode').selector.text, 'vacuum normal-mode mapping missing');
+        assert(vacuumFields.find((field) => field.name === 'thorough_mode').selector.text, 'vacuum thorough-mode mapping missing');
+        assert(vacuumFields.find((field) => field.name === 'accent_color').selector.ui_color, 'vacuum HA color selector missing');
+        assert(vacuumFields.find((field) => field.name === 'border_title').selector.text, 'vacuum border title missing');
+        assert(vacuumFields.find((field) => field.name === 'title_position').selector.select, 'vacuum title position missing');
+
         const navigationForm = customElements.get('terminal-navigation-card').getConfigForm();
         const navigationFields = navigationForm.schema.flatMap((item) => item.schema || [item]);
         assert(
@@ -405,6 +433,7 @@
           'PASS: light, switch, sensor and calendar forms use native controls',
           'PASS: navigation main icon exposes native HA services',
           'PASS: all cards use the native HA theme color selector instead of RGB pickers',
+          'PASS: vacuum map, mode and appearance fields use native HA selectors',
           'PASS: wrapper state, shutter and navigation forms use native HA selectors',
         ].join('\n');
       }

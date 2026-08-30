@@ -1,0 +1,626 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>terminal-vacuum-card test running</title>
+    <style>
+      :root {
+        --card-background-color: #181825;
+        --primary-text-color: #cdd6f4;
+        --secondary-text-color: #6c7086;
+        --accent-color: #89b4fa;
+        --error-color: #f38ba8;
+      }
+      body { margin: 20px; background: #11111b; }
+      terminal-vacuum-card { display: block; width: 600px; }
+    </style>
+    <script>
+      customElements.define(
+        'ha-icon',
+        class extends HTMLElement {
+          set icon(value) { this._icon = value; }
+          get icon() { return this._icon; }
+        }
+      );
+    </script>
+    <script type="module" src="../dist/terminal-cards.js"></script>
+  </head>
+  <body>
+    <pre id="result">WAITING</pre>
+    <script type="module">
+      function assert(condition, message) {
+        if (!condition) throw new Error(message);
+      }
+
+      async function tick() {
+        await Promise.resolve();
+        await new Promise((resolve) => setTimeout(resolve, 20));
+      }
+
+      async function waitFor(condition, message) {
+        const deadline = performance.now() + 3000;
+        while (!condition() && performance.now() < deadline) await tick();
+        assert(condition(), message);
+      }
+
+      const mapSource = `data:image/svg+xml,${encodeURIComponent(
+        '<svg xmlns="http://www.w3.org/2000/svg" width="400" height="300" viewBox="0 0 400 300"><rect width="400" height="300" fill="#1e3a5f"/><rect x="0" y="150" width="200" height="150" fill="#fab387"/><rect x="200" y="0" width="200" height="150" fill="#89b4fa"/></svg>'
+      )}`;
+      const rooms = {
+        1: { number: 1, name: 'Küche', x0: 0, y0: 0, x1: 50, y1: 50 },
+        2: { number: 2, name: 'Büro <b>unsafe</b>', x0: 50, y0: 50, x1: 100, y1: 100 },
+      };
+      const calibration_points = [
+        { vacuum: { x: 0, y: 0 }, map: { x: 0, y: 300 } },
+        { vacuum: { x: 100, y: 0 }, map: { x: 400, y: 300 } },
+        { vacuum: { x: 0, y: 100 }, map: { x: 0, y: 0 } },
+      ];
+      const states = {
+        'vacuum.robobert': {
+          entity_id: 'vacuum.robobert',
+          state: 'docked',
+          attributes: {
+            friendly_name: 'Robobert',
+            fan_speed: 'max',
+            fan_speed_list: ['quiet', 'balanced', 'turbo', 'max', 'max_plus'],
+            supported_features: 4 + 16 + 32 + 8192 + 16384,
+          },
+        },
+        'image.robobert_map': {
+          entity_id: 'image.robobert_map',
+          state: '2026-08-30T20:00:00Z',
+          attributes: {
+            friendly_name: 'Robobert Erdgeschoss_custom',
+            entity_picture: mapSource,
+            rooms,
+            calibration_points,
+          },
+        },
+        'select.cleaning_mode': {
+          entity_id: 'select.cleaning_mode',
+          state: 'vac_and_mop',
+          attributes: { options: ['vacuum', 'vac_and_mop', 'mop', 'custom'] },
+        },
+        'select.mop_mode': {
+          entity_id: 'select.mop_mode',
+          state: 'standard',
+          attributes: { options: ['standard', 'deep', 'deep_plus', 'fast'] },
+        },
+        'select.mop_intensity': {
+          entity_id: 'select.mop_intensity',
+          state: 'high',
+          attributes: { options: ['off', 'low', 'medium', 'high'] },
+        },
+        'sensor.robobert_battery': {
+          entity_id: 'sensor.robobert_battery',
+          state: '87',
+          attributes: { device_class: 'battery', unit_of_measurement: '%' },
+        },
+      };
+      const registryEntry = {
+        options: {
+          vacuum: {
+            area_mapping: { kuche: ['0_1'], buro: ['0_2'] },
+            last_seen_segments: [
+              { id: '0_1', name: 'Kuche', group: 'Erdgeschoss' },
+              { id: '0_2', name: 'Buro', group: 'Erdgeschoss' },
+            ],
+          },
+        },
+      };
+      const connection = {};
+      const calls = [];
+      let serviceImplementation = (...args) => Promise.resolve(args);
+      let registryCalls = 0;
+      const hass = {
+        states,
+        entities: { 'vacuum.robobert': registryEntry },
+        areas: { kuche: { name: 'Küche' }, buro: { name: 'Büro' } },
+        connection,
+        formatEntityState: (entity) => entity.state,
+        callService: (...args) => {
+          calls.push(args);
+          return serviceImplementation(...args);
+        },
+        callWS: () => {
+          registryCalls += 1;
+          return Promise.resolve(registryEntry);
+        },
+      };
+      const config = {
+        entity: 'vacuum.robobert',
+        map_entity: 'image.robobert_map',
+        cleaning_mode_entity: 'select.cleaning_mode',
+        mop_mode_entity: 'select.mop_mode',
+        mop_intensity_entity: 'select.mop_intensity',
+        battery_entity: 'sensor.robobert_battery',
+        border_title: 'cleaning',
+        accent_color: 'cyan',
+      };
+
+      function makeCard(localHass = hass, localConfig = config) {
+        const card = document.createElement('terminal-vacuum-card');
+        card.setConfig(localConfig);
+        card.hass = localHass;
+        document.body.append(card);
+        return card;
+      }
+
+      async function run() {
+        await customElements.whenDefined('terminal-vacuum-card');
+        const card = makeCard();
+        await waitFor(
+          () => card.shadowRoot.querySelectorAll('.room-zone').length === 2,
+          'clickable map rooms did not render'
+        );
+
+        const rootStyle = getComputedStyle(card.shadowRoot.querySelector('.card'));
+        assert(rootStyle.borderRadius === '0px', 'vacuum frame is rounded');
+        assert(rootStyle.boxShadow === 'none', 'vacuum frame has a glow');
+        assert(card.shadowRoot.querySelector('.border-title').textContent === 'cleaning', 'border title missing');
+        assert(card.shadowRoot.querySelector('.name').textContent === 'Robobert', 'friendly name missing');
+        assert(card.shadowRoot.querySelector('.state').textContent.includes('angedockt'), 'localized vacuum state missing');
+        assert(card.shadowRoot.querySelector('.state').textContent.includes('87%'), 'battery state missing');
+        assert(card.shadowRoot.querySelector('.icon').icon === 'mdi:robot-vacuum', 'default vacuum icon is wrong');
+        assert(registryCalls === 0, 'registry websocket fallback ran despite hass.entities data');
+
+        const kitchen = [...card.shadowRoot.querySelectorAll('.room-zone')]
+          .find((button) => button.getAttribute('aria-label') === 'Küche auswählen');
+        const office = [...card.shadowRoot.querySelectorAll('.room-zone')]
+          .find((button) => button.getAttribute('aria-label') === 'Büro auswählen');
+        assert(kitchen && office, 'mapped HA area names are missing');
+        assert(kitchen.style.left === '25%' && kitchen.style.top === '75%', 'affine kitchen projection is wrong');
+        assert(kitchen.style.width === '50%' && kitchen.style.height === '50%', 'projected kitchen size is wrong');
+        assert(office.style.left === '75%' && office.style.top === '25%', 'inverted-Y office projection is wrong');
+        assert(getComputedStyle(kitchen).minWidth === '34px', 'room touch target is smaller than 34px');
+        assert(!office.querySelector('b'), 'room name was rendered as HTML');
+        assert(office.querySelector('.room-label').textContent === 'Büro', 'HA area label was not rendered safely');
+
+        kitchen.click();
+        assert(kitchen.getAttribute('aria-pressed') === 'true', 'room click did not select the area');
+        card.hass = { ...hass };
+        assert(kitchen.getAttribute('aria-pressed') === 'true', 'room selection did not survive a normal HASS refresh');
+        card.shadowRoot.querySelector('[data-focus-key="start"]').click();
+        await tick();
+        let call = calls.at(-1);
+        assert(call[0] === 'vacuum' && call[1] === 'clean_area', 'selected room did not call vacuum.clean_area');
+        assert(JSON.stringify(call[2]) === JSON.stringify({ cleaning_area_id: ['kuche'] }), 'clean_area payload is wrong');
+        assert(call[3].entity_id === 'vacuum.robobert', 'clean_area target is wrong');
+
+        card.shadowRoot.querySelector('.clear-selection').click();
+        card.shadowRoot.querySelector('[data-focus-key="start"]').click();
+        await tick();
+        call = calls.at(-1);
+        assert(call[0] === 'vacuum' && call[1] === 'start', 'empty selection did not start the whole map');
+        assert(JSON.stringify(call[2]) === '{}', 'whole-map start sent unexpected data');
+
+        const cleaningSelect = card.shadowRoot.querySelector('[data-focus-key="cleaning-mode"]');
+        cleaningSelect.value = 'mop';
+        cleaningSelect.dispatchEvent(new Event('change'));
+        await tick();
+        call = calls.at(-1);
+        assert(call[0] === 'select' && call[1] === 'select_option', 'cleaning mode used the wrong service');
+        assert(call[2].option === 'mop' && call[3].entity_id === 'select.cleaning_mode', 'cleaning mode payload is wrong');
+
+        const fanSelect = card.shadowRoot.querySelector('[data-focus-key="fan-speed"]');
+        assert([...fanSelect.options].some((option) => option.textContent === 'max+'), 'fan options were not localized');
+        fanSelect.value = 'max_plus';
+        fanSelect.dispatchEvent(new Event('change'));
+        await tick();
+        call = calls.at(-1);
+        assert(call[0] === 'vacuum' && call[1] === 'set_fan_speed', 'fan setting used the wrong service');
+        assert(call[2].fan_speed === 'max_plus' && call[3].entity_id === 'vacuum.robobert', 'fan payload is wrong');
+
+        const mopSelect = card.shadowRoot.querySelector('[data-focus-key="mop-intensity"]');
+        mopSelect.value = 'medium';
+        mopSelect.dispatchEvent(new Event('change'));
+        await tick();
+        call = calls.at(-1);
+        assert(call[0] === 'select' && call[2].option === 'medium', 'mop intensity service is wrong');
+        assert(call[3].entity_id === 'select.mop_intensity', 'mop intensity target is wrong');
+
+        const thorough = card.shadowRoot.querySelector('[data-focus-key="thorough-mode"]');
+        thorough.click();
+        await tick();
+        call = calls.at(-1);
+        assert(call[0] === 'select' && call[2].option === 'deep', 'thorough mode is not Roborock deep');
+        assert(call[3].entity_id === 'select.mop_mode', 'thorough mode target is wrong');
+
+        states['select.cleaning_mode'] = {
+          ...states['select.cleaning_mode'], state: 'vacuum',
+        };
+        card.hass = { ...hass };
+        assert(thorough.disabled, 'thorough mop mode stayed enabled for vacuum-only cleaning');
+        states['select.cleaning_mode'] = {
+          ...states['select.cleaning_mode'], state: 'vac_and_mop',
+        };
+
+        states['vacuum.robobert'] = {
+          ...states['vacuum.robobert'], state: 'cleaning',
+        };
+        card.hass = { ...hass };
+        const pause = card.shadowRoot.querySelector('[data-focus-key="pause"]');
+        assert(!pause.disabled, 'pause is disabled while cleaning');
+        pause.click();
+        await tick();
+        assert(calls.at(-1)[1] === 'pause', 'pause called the wrong service');
+        const dock = card.shadowRoot.querySelector('[data-focus-key="dock"]');
+        dock.click();
+        await tick();
+        assert(calls.at(-1)[1] === 'return_to_base', 'dock called the wrong service');
+
+        states['vacuum.robobert'] = {
+          ...states['vacuum.robobert'], state: 'paused',
+        };
+        card.hass = { ...hass };
+        kitchen.click();
+        card.shadowRoot.querySelector('[data-focus-key="start"]').click();
+        await tick();
+        assert(calls.at(-1)[1] === 'start', 'paused vacuum did not resume with vacuum.start');
+        assert(card.shadowRoot.querySelector('[data-focus-key="start"] span').textContent === 'fortsetzen', 'resume label missing');
+
+        states['vacuum.robobert'] = {
+          ...states['vacuum.robobert'], state: 'docked',
+        };
+        card.hass = { ...hass };
+        let resolveBusy;
+        serviceImplementation = () => new Promise((resolve) => { resolveBusy = resolve; });
+        const callCount = calls.length;
+        const start = card.shadowRoot.querySelector('[data-focus-key="start"]');
+        start.click();
+        start.click();
+        assert(calls.length === callCount + 1, 'busy guard allowed a duplicate start');
+        assert(card.shadowRoot.querySelector('.card').getAttribute('aria-busy') === 'true', 'busy state is not exposed');
+        start.focus();
+        resolveBusy();
+        await tick();
+        assert(card.shadowRoot.activeElement === start, 'service completion did not restore command focus');
+        serviceImplementation = (...args) => Promise.resolve(args);
+
+        let rejectStaleService;
+        serviceImplementation = () => new Promise((_resolve, reject) => {
+          rejectStaleService = reject;
+        });
+        card.shadowRoot.querySelector('[data-focus-key="start"]').click();
+        card.setConfig({ ...config, name: 'robobert refreshed' });
+        rejectStaleService(new Error('stale failure'));
+        await tick();
+        assert(
+          !card.shadowRoot.querySelector('.operation-status').textContent.includes('stale'),
+          'stale service failure survived a config change'
+        );
+        assert(card.shadowRoot.querySelector('.card').getAttribute('aria-busy') === 'false', 'config change kept stale busy state');
+        serviceImplementation = (...args) => Promise.resolve(args);
+
+        serviceImplementation = () => Promise.reject(new Error('Robot blocked'));
+        card.shadowRoot.querySelector('[data-focus-key="start"]').click();
+        await tick();
+        assert(card.shadowRoot.querySelector('.operation-status').textContent === 'robot blocked', 'service error is not visible');
+        assert(card.shadowRoot.querySelector('.operation-status').dataset.error === 'true', 'service error style state missing');
+        serviceImplementation = (...args) => Promise.resolve(args);
+
+        states['vacuum.robobert'] = {
+          ...states['vacuum.robobert'], state: 'unavailable',
+        };
+        card.hass = { ...hass };
+        assert(card.shadowRoot.querySelector('[data-focus-key="start"]').disabled, 'start is enabled while unavailable');
+        assert(card.shadowRoot.querySelector('[data-focus-key="dock"]').disabled, 'dock is enabled while unavailable');
+        const unavailableCard = card.shadowRoot.querySelector('.card');
+        assert(unavailableCard.dataset.state === 'unavailable', 'unavailable state was not applied to the frame');
+        assert(
+          /error-color|#f38ba8|243/.test(
+            getComputedStyle(unavailableCard).getPropertyValue('--terminal-error').trim()
+          ),
+          'unavailable vacuum lost the terminal error color variable'
+        );
+
+        states['vacuum.robobert'] = {
+          ...states['vacuum.robobert'], state: 'docked',
+        };
+        const fallbackHass = {
+          ...hass,
+          entities: {},
+          callWS: () => {
+            registryCalls += 1;
+            return Promise.resolve(registryEntry);
+          },
+        };
+        const beforeFallback = registryCalls;
+        const fallback = makeCard(fallbackHass);
+        await waitFor(
+          () => [...fallback.shadowRoot.querySelectorAll('.room-zone')].some((button) => !button.disabled),
+          'registry websocket fallback did not enable mapped rooms'
+        );
+        assert(registryCalls === beforeFallback + 1, 'registry fallback did not run exactly once');
+        fallback.hass = { ...fallbackHass };
+        await tick();
+        assert(registryCalls === beforeFallback + 1, 'normal HASS update repeated registry lookup');
+
+        const unmapped = makeCard({ ...hass, entities: {}, callWS: undefined });
+        await waitFor(
+          () => unmapped.shadowRoot.querySelectorAll('.room-zone').length === 2,
+          'unmapped map overlays did not render'
+        );
+        assert(
+          [...unmapped.shadowRoot.querySelectorAll('.room-zone')].every((button) => button.disabled),
+          'unmapped room remained actionable'
+        );
+        assert(
+          unmapped.shadowRoot.querySelector('.selection-summary').textContent.includes('ha-räumen'),
+          'missing area mapping guidance is absent'
+        );
+
+        const ambiguousRegistry = {
+          options: {
+            vacuum: {
+              area_mapping: { kuche: ['0_1'], duplicate: ['0_1'], buro: ['0_2'] },
+              last_seen_segments: registryEntry.options.vacuum.last_seen_segments,
+            },
+          },
+        };
+        const ambiguous = makeCard({
+          ...hass,
+          entities: { 'vacuum.robobert': ambiguousRegistry },
+        });
+        await waitFor(
+          () => ambiguous.shadowRoot.querySelectorAll('.room-zone').length === 2,
+          'ambiguous map overlays did not render'
+        );
+        const ambiguousKitchen = [...ambiguous.shadowRoot.querySelectorAll('.room-zone')]
+          .find((button) => button.getAttribute('aria-label').includes('Küche'));
+        assert(ambiguousKitchen.disabled, 'ambiguous segment mapping remained actionable');
+
+        const cleanAreaOnlyStates = {
+          ...states,
+          'vacuum.clean_area_only': {
+            ...states['vacuum.robobert'],
+            entity_id: 'vacuum.clean_area_only',
+            attributes: {
+              ...states['vacuum.robobert'].attributes,
+              supported_features: 16 + 16384,
+            },
+          },
+        };
+        const cleanAreaOnly = makeCard(
+          {
+            ...hass,
+            states: cleanAreaOnlyStates,
+            entities: { 'vacuum.clean_area_only': registryEntry },
+          },
+          { ...config, entity: 'vacuum.clean_area_only' }
+        );
+        await waitFor(
+          () => [...cleanAreaOnly.shadowRoot.querySelectorAll('.room-zone')].some((button) => !button.disabled),
+          'clean-area-only vacuum did not expose mapped rooms'
+        );
+        const mappedRoom = [...cleanAreaOnly.shadowRoot.querySelectorAll('.room-zone')]
+          .find((button) => !button.disabled);
+        mappedRoom.click();
+        const cleanAreaStart = cleanAreaOnly.shadowRoot.querySelector('[data-focus-key="start"]');
+        assert(!cleanAreaStart.disabled, 'clean-area-only vacuum cannot start a selected room');
+        cleanAreaStart.click();
+        await tick();
+        assert(calls.at(-1)[1] === 'clean_area', 'clean-area-only vacuum used whole-map start');
+        cleanAreaOnly.shadowRoot.querySelector('.clear-selection').click();
+        assert(cleanAreaStart.disabled, 'whole-map start ignored missing START feature');
+
+        let resolveRegistry;
+        const staleRegistry = makeCard({
+          ...hass,
+          entities: {},
+          callWS: () => new Promise((resolve) => { resolveRegistry = resolve; }),
+        });
+        await tick();
+        staleRegistry.remove();
+        resolveRegistry(registryEntry);
+        await tick();
+        assert(
+          [...staleRegistry.shadowRoot.querySelectorAll('.room-zone')].every((button) => button.disabled),
+          'stale registry result enabled rooms after disconnect'
+        );
+
+        const liveMapStates = {
+          ...states,
+          'image.live_map': {
+            entity_id: 'image.live_map',
+            state: 'revision-1',
+            last_updated: '2026-08-30T20:00:00Z',
+            attributes: {
+              entity_picture: 'https://example.test/map.png?token=stable',
+              rooms,
+              calibration_points,
+            },
+          },
+        };
+        const liveMap = makeCard(
+          { ...hass, states: liveMapStates },
+          { ...config, map_entity: 'image.live_map' }
+        );
+        const firstLiveImage = liveMap.shadowRoot.querySelector('.map-image');
+        const firstLiveSource = firstLiveImage.src;
+        liveMapStates['image.live_map'] = {
+          ...liveMapStates['image.live_map'],
+          state: 'revision-2',
+          last_updated: '2026-08-30T20:01:00Z',
+        };
+        liveMap.hass = { ...hass, states: liveMapStates };
+        const secondLiveImage = liveMap.shadowRoot.querySelector('.map-image');
+        assert(secondLiveImage !== firstLiveImage, 'same-URL map revision reused the stale image element');
+        assert(secondLiveImage.src !== firstLiveSource, 'same-URL map revision did not issue a cache-busted request');
+        assert(secondLiveImage.src.includes('_terminal_cards_rev='), 'live map request has no revision token');
+        assert(
+          !secondLiveImage.src.includes('revision-2'),
+          'raw map state leaked into the image request URL'
+        );
+
+        const invalidMapStates = {
+          ...states,
+          'image.invalid_map': {
+            entity_id: 'image.invalid_map', state: 'on',
+            attributes: {
+              entity_picture: mapSource,
+              rooms,
+              calibration_points: [
+                { vacuum: { x: 0, y: 0 }, map: { x: 0, y: 0 } },
+                { vacuum: { x: 1, y: 1 }, map: { x: 1, y: 1 } },
+                { vacuum: { x: 2, y: 2 }, map: { x: 2, y: 2 } },
+              ],
+            },
+          },
+        };
+        const invalidMap = makeCard(
+          { ...hass, states: invalidMapStates },
+          { ...config, map_entity: 'image.invalid_map' }
+        );
+        await tick();
+        assert(invalidMap.shadowRoot.querySelectorAll('.room-zone').length === 0, 'collinear calibration created room buttons');
+
+        const rotatedRooms = {
+          1: { number: 1, name: 'Küche', x0: 0, y0: 0, x1: 50, y1: 50 },
+          2: { number: 2, name: 'Büro', x0: -50, y0: 0, x1: 0, y1: 50 },
+        };
+        const rotatedStates = {
+          ...states,
+          'image.rotated_map': {
+            entity_id: 'image.rotated_map', state: 'on',
+            attributes: {
+              entity_picture: mapSource,
+              rooms: rotatedRooms,
+              calibration_points: [
+                { vacuum: { x: 0, y: 0 }, map: { x: 100, y: 0 } },
+                { vacuum: { x: 100, y: 0 }, map: { x: 200, y: 100 } },
+                { vacuum: { x: 0, y: 100 }, map: { x: 0, y: 100 } },
+              ],
+            },
+          },
+        };
+        const rotatedMap = makeCard(
+          { ...hass, states: rotatedStates },
+          { ...config, map_entity: 'image.rotated_map' }
+        );
+        await waitFor(
+          () => rotatedMap.shadowRoot.querySelectorAll('.room-zone').length === 2,
+          'rotated affine map did not render rooms'
+        );
+        const rotatedKitchen = [...rotatedMap.shadowRoot.querySelectorAll('.room-zone')]
+          .find((button) => button.getAttribute('aria-label') === 'Küche auswählen');
+        const clippedOffice = [...rotatedMap.shadowRoot.querySelectorAll('.room-zone')]
+          .find((button) => button.getAttribute('aria-label') === 'Büro auswählen');
+        assert(Math.abs(parseFloat(rotatedKitchen.style.left) - 25) < 0.01, 'rotated map X projection is wrong');
+        assert(Math.abs(parseFloat(rotatedKitchen.style.top) - 16.6667) < 0.01, 'rotated map Y projection is wrong');
+        assert(Math.abs(parseFloat(clippedOffice.style.top) - 8.3333) < 0.01, 'partially outside room was not clipped');
+        assert(parseFloat(clippedOffice.style.height) < parseFloat(rotatedKitchen.style.height), 'clipped room kept its outside height');
+
+        const unsafeStates = {
+          ...states,
+          'image.unsafe_map': {
+            entity_id: 'image.unsafe_map', state: 'on',
+            attributes: { entity_picture: 'javascript:alert(1)', rooms, calibration_points },
+          },
+        };
+        const unsafe = makeCard(
+          { ...hass, states: unsafeStates },
+          { ...config, map_entity: 'image.unsafe_map' }
+        );
+        assert(!unsafe.shadowRoot.querySelector('.map-image').getAttribute('src'), 'unsafe map URL was accepted');
+
+        const Card = customElements.get('terminal-vacuum-card');
+        const stub = Card.getStubConfig(hass);
+        assert(stub.entity === 'vacuum.robobert', 'vacuum stub did not find the vacuum');
+        assert(stub.map_entity === 'image.robobert_map', 'vacuum stub did not find the calibrated map');
+        assert(stub.cleaning_mode_entity === 'select.cleaning_mode', 'vacuum stub missed cleaning mode');
+        assert(stub.mop_mode_entity === 'select.mop_mode', 'vacuum stub missed mop mode');
+        assert(stub.mop_intensity_entity === 'select.mop_intensity', 'vacuum stub missed mop intensity');
+
+        const multiStates = {
+          ...states,
+          'vacuum.second_robot': {
+            entity_id: 'vacuum.second_robot', state: 'docked',
+            attributes: {
+              friendly_name: 'Second Robot', supported_features: 8192 + 16384,
+            },
+          },
+          'image.second_robot_map': {
+            entity_id: 'image.second_robot_map', state: 'preview',
+            attributes: { entity_picture: mapSource, rooms, calibration_points },
+          },
+          'select.second_cleaning': {
+            entity_id: 'select.second_cleaning', state: 'vacuum',
+            attributes: { options: ['vacuum', 'vac_and_mop', 'mop'] },
+          },
+          'select.second_mop_mode': {
+            entity_id: 'select.second_mop_mode', state: 'standard',
+            attributes: { options: ['standard', 'deep'] },
+          },
+          'select.second_mop_intensity': {
+            entity_id: 'select.second_mop_intensity', state: 'low',
+            attributes: { options: ['off', 'low', 'high'] },
+          },
+          'sensor.second_robot_battery': {
+            entity_id: 'sensor.second_robot_battery', state: '55',
+            attributes: { device_class: 'battery' },
+          },
+        };
+        const multiHass = {
+          ...hass,
+          states: multiStates,
+          entities: {
+            'vacuum.robobert': { ...registryEntry, device_id: 'device-a' },
+            'select.cleaning_mode': { device_id: 'device-a' },
+            'select.mop_mode': { device_id: 'device-a' },
+            'select.mop_intensity': { device_id: 'device-a' },
+            'sensor.robobert_battery': { device_id: 'device-a' },
+            'vacuum.second_robot': { device_id: 'device-b' },
+            'select.second_cleaning': { device_id: 'device-b' },
+            'select.second_mop_mode': { device_id: 'device-b' },
+            'select.second_mop_intensity': { device_id: 'device-b' },
+            'sensor.second_robot_battery': { device_id: 'device-b' },
+          },
+        };
+        const multiStub = Card.getStubConfig(multiHass);
+        assert(multiStub.entity === 'vacuum.robobert', 'multi-vacuum stub changed its primary vacuum');
+        assert(multiStub.map_entity === 'image.robobert_map', 'multi-vacuum stub mixed the map entity');
+        assert(multiStub.cleaning_mode_entity === 'select.cleaning_mode', 'multi-vacuum stub mixed cleaning mode');
+        assert(multiStub.mop_mode_entity === 'select.mop_mode', 'multi-vacuum stub mixed mop mode');
+        assert(multiStub.mop_intensity_entity === 'select.mop_intensity', 'multi-vacuum stub mixed mop intensity');
+        assert(multiStub.battery_entity === 'sensor.robobert_battery', 'multi-vacuum stub mixed battery entities');
+
+        assert(Card.prototype.getGridOptions().columns === 12, 'vacuum card is not full-width by default');
+        assert(window.customCards.some((entry) => entry.type === 'terminal-vacuum-card'), 'vacuum picker metadata missing');
+
+        const form = Card.getConfigForm();
+        const fields = form.schema.flatMap((item) => item.schema || [item]);
+        assert(fields.find((field) => field.name === 'entity').selector.entity.filter.domain === 'vacuum', 'vacuum editor entity filter is wrong');
+        assert(fields.find((field) => field.name === 'map_entity').selector.entity.filter.domain === 'image', 'map editor filter is wrong');
+        assert(fields.find((field) => field.name === 'cleaning_mode_entity').selector.entity.filter.domain === 'select', 'cleaning mode editor filter is wrong');
+        assert(fields.find((field) => field.name === 'accent_color').selector.ui_color, 'vacuum editor color selector missing');
+        assert(fields.find((field) => field.name === 'normal_mode').selector.text, 'normal-mode mapping editor missing');
+
+        const invalidConfigs = [
+          {},
+          { entity: 'light.nope', map_entity: 'image.map' },
+          { entity: 'vacuum.x', map_entity: 'camera.map' },
+          { entity: 'vacuum.x', map_entity: 'image.map', cleaning_mode_entity: 'sensor.mode' },
+          { entity: 'vacuum.x', map_entity: 'image.map', show_room_labels: 'yes' },
+          { entity: 'vacuum.x', map_entity: 'image.map', normal_mode: 'deep', thorough_mode: 'deep' },
+        ];
+        for (const invalidConfig of invalidConfigs) {
+          let invalid = false;
+          try { document.createElement('terminal-vacuum-card').setConfig(invalidConfig); }
+          catch (_error) { invalid = true; }
+          assert(invalid, `invalid vacuum config was accepted: ${JSON.stringify(invalidConfig)}`);
+        }
+
+        document.body.dataset.testStatus = 'PASS';
+        document.querySelector('#result').textContent =
+          'PASS: calibrated room selection, native vacuum controls, Roborock deep mode, async guards and editor';
+      }
+
+      run().catch((error) => {
+        document.body.dataset.testStatus = 'FAIL';
+        document.querySelector('#result').textContent = `FAIL: ${error.stack || error}`;
+        console.error(error);
+      });
+    </script>
+  </body>
+</html>

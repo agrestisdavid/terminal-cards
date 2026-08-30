@@ -129,8 +129,10 @@
               const events = params.entity_id === 'calendar.waste'
                 ? [
                   { summary: 'gelber sack', start: future(24) },
+                  { summary: 'kunststoff', start: future(48) },
                   { summary: 'papier', start: future(96) },
                   { summary: 'biomüll', start: future(168) },
+                  { summary: 'bioabfuhr', start: future(192) },
                   { summary: 'restmüll', start: future(240) },
                 ]
                 : [

@@ -61,8 +61,10 @@
 
       const events = [
         { summary: '<b>Gelber Sack</b>', start: { date: '2026-09-01' }, end: { date: '2026-09-02' } },
+        { summary: 'Kunststoff', start: { date: '2026-09-04' }, end: { date: '2026-09-05' } },
         { summary: '<i>Papier</i>', start: { date: '2026-09-07' }, end: { date: '2026-09-08' } },
         { summary: 'Biomüll', start: { date: '2026-09-09' }, end: { date: '2026-09-10' } },
+        { summary: 'Bioabfuhr', start: { date: '2026-09-12' }, end: { date: '2026-09-13' } },
         { summary: 'Restmüll', start: { date: '2026-09-16' }, end: { date: '2026-09-17' } },
         { summary: 'Altglas', start: { date: '2026-09-23' }, end: { date: '2026-09-24' } },
       ];
@@ -129,7 +131,9 @@
         assert(card.shadowRoot.querySelector('.tiles').getAttribute('role') === 'list', 'status tiles do not expose list semantics');
         assert(tiles.length === 4, 'status tiles were not limited to four additional collections');
         assert(tiles.every((tile) => tile.getAttribute('role') === 'listitem'), 'status tile listitem semantics are missing');
-        assert(tiles.map((tile) => tile.dataset.wasteType).join(',') === 'paper,bio,residual,glass', 'status tile types are wrong');
+        assert(tiles.map((tile) => tile.dataset.wasteType).join(',') === 'paper,bio,residual,glass', 'status tiles were not deduplicated and backfilled by waste type');
+        assert(tiles.filter((tile) => tile.dataset.wasteType === 'bio').length === 1, 'organic waste appears more than once');
+        assert(!tiles.some((tile) => tile.dataset.wasteType === 'plastic'), 'main waste type was repeated by a later collection');
         assert(tiles[0].querySelector('.tile-icon').icon === 'mdi:newspaper-variant-outline', 'paper tile icon is wrong');
         assert(tiles[1].querySelector('.tile-icon').icon === 'mdi:leaf', 'organic tile icon is wrong');
         assert(tiles[2].querySelector('.tile-icon').icon === 'mdi:trash-can-outline', 'residual tile icon is wrong');
@@ -292,7 +296,7 @@
         document.title = 'PASS terminal-waste-card';
         document.querySelector('#result').textContent = [
           'PASS: compact next-collection icon/name/date/countdown row',
-          'PASS: expanded tiles start after the main collection without repetition',
+          'PASS: expanded tiles show only the earliest collection per waste type',
           'PASS: always-expanded and expanded-by-default modes',
           'PASS: semantic native colors/icons, lifecycle and safe text',
         ].join('\n');

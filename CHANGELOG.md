@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 0.16.2 — 2026-08-30
+
+- Show only the earliest upcoming collection for each semantic waste type across the Waste Card, skipping later duplicates while backfilling the list with other bin types.
+
 ## 0.16.1 — 2026-08-30
 
 - Start the expanded Waste Card list with the collection after the compact main status, avoiding a duplicate while retaining up to four additional tiles.

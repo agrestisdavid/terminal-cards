@@ -479,11 +479,22 @@ export class TerminalWasteCard extends WasteCalendarCardBase {
   }
 
   _visibleCardEvents() {
-    return visibleWasteEvents(
+    const maximum = (this._config?.max_entries || DEFAULT_MAX_ENTRIES) + 1;
+    const sorted = visibleWasteEvents(
       this._events,
       this._hass,
-      (this._config?.max_entries || DEFAULT_MAX_ENTRIES) + 1
+      Math.max(this._events.length, maximum)
     );
+    const types = new Set();
+    const unique = [];
+    for (const event of sorted) {
+      const { type } = wasteColorForSummary(event?.summary, this._config);
+      if (types.has(type)) continue;
+      types.add(type);
+      unique.push(event);
+      if (unique.length === maximum) break;
+    }
+    return unique;
   }
 
   _formatStatusParts(event) {

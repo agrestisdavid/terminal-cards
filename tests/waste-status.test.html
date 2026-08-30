@@ -77,6 +77,7 @@
         callback({
           events: [
             { summary: 'Gelber Sack', start: { date: '2026-09-01' }, end: { date: '2026-09-02' } },
+            { summary: 'Papier', start: { date: '2026-09-07' }, end: { date: '2026-09-08' } },
           ],
         });
         await Promise.resolve();
@@ -85,7 +86,8 @@
         assert(card.shadowRoot.querySelector('.main-name').textContent === 'gelber sack', 'legacy alias does not render the new status layout');
         assert(card.shadowRoot.querySelector('.main-icon').icon === 'mdi:recycle', 'legacy alias lost semantic waste icons');
         assert(!card.shadowRoot.querySelector('.tiles-frame').hidden, 'legacy alias lost expansion settings');
-        assert(card.shadowRoot.querySelectorAll('.tile').length === 1, 'legacy alias did not render status tiles');
+        assert(card.shadowRoot.querySelectorAll('.tile').length === 1, 'legacy alias did not render the additional status tile');
+        assert(card.shadowRoot.querySelector('.tile-name').textContent === 'papier', 'legacy alias repeated the main collection in its list');
 
         const fields = LegacyCard.getConfigForm().schema.flatMap((item) => item.schema || [item]);
         assert(fields.some((field) => field.name === 'controls_expanded'), 'legacy alias did not inherit the current editor');

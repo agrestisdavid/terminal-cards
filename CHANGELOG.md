@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 0.16.1 — 2026-08-30
+
+- Start the expanded Waste Card list with the collection after the compact main status, avoiding a duplicate while retaining up to four additional tiles.
+
 ## 0.16.0 — 2026-08-30
 
 - Make the compact next-collection row with expandable full-width tiles the primary `custom:terminal-waste-card` presentation, replacing the former Calendar-style tree list.

@@ -24,6 +24,7 @@ import {
   WasteCalendarCardBase,
   findWasteCalendarEntity,
   normalizedWasteNumber,
+  visibleWasteEvents,
 } from '../shared/waste-calendar.js';
 
 const TAG = 'terminal-waste-card';
@@ -234,7 +235,7 @@ export class TerminalWasteCard extends WasteCalendarCardBase {
       entity: 'Waste calendar entity',
       title: 'Border title',
       tiles_title: 'Expanded list title',
-      max_entries: 'Maximum entries',
+      max_entries: 'Maximum list entries',
       days_to_show: 'Days to search',
       controls_expanded: 'Expand list by default',
       always_expanded: 'Always expanded',
@@ -329,7 +330,7 @@ export class TerminalWasteCard extends WasteCalendarCardBase {
           return 'Sets the initial list state when Always expanded is off.';
         }
         if (schema.name === 'max_entries') {
-          return `Show between 1 and ${MAX_ENTRIES} upcoming collections.`;
+          return `Show between 1 and ${MAX_ENTRIES} additional collections after the main status.`;
         }
         return undefined;
       },
@@ -474,8 +475,15 @@ export class TerminalWasteCard extends WasteCalendarCardBase {
 
   getCardSize() {
     if (!this._tilesExpanded && this._config?.always_expanded !== true) return 1;
-    const visibleCount = this._visibleEvents().length;
-    return visibleCount ? 1 + visibleCount : 1;
+    return Math.max(1, this._visibleCardEvents().length);
+  }
+
+  _visibleCardEvents() {
+    return visibleWasteEvents(
+      this._events,
+      this._hass,
+      (this._config?.max_entries || DEFAULT_MAX_ENTRIES) + 1
+    );
   }
 
   _formatStatusParts(event) {
@@ -490,17 +498,19 @@ export class TerminalWasteCard extends WasteCalendarCardBase {
     const unavailable = !entity || entity.state === 'unavailable' || entity.state === 'unknown';
     const title = this._config.title || entity?.attributes?.friendly_name || 'müllstatus';
     const alwaysExpanded = this._config.always_expanded === true;
-    const events = unavailable || this._loading || this._error ? [] : this._visibleEvents();
+    const events = unavailable || this._loading || this._error ? [] : this._visibleCardEvents();
     const nextEvent = events[0];
+    const tileEvents = events.slice(1);
+    const listExpanded = Boolean(tileEvents.length && (alwaysExpanded || this._tilesExpanded));
 
     this._borderTitle.textContent = title;
     this._borderTitle.dataset.titlePosition = this._config.title_position || 'left';
     this._tilesTitle.textContent = this._config.tiles_title || DEFAULT_TILES_TITLE;
     this._expandIcon.icon = this._config.more_icon || DEFAULT_MORE_ICON;
     this._expand.hidden = alwaysExpanded;
-    this._expand.disabled = unavailable || this._loading || Boolean(this._error) || !events.length;
-    this._expand.setAttribute('aria-expanded', String(alwaysExpanded || this._tilesExpanded));
-    this._tilesFrame.hidden = !events.length || !(alwaysExpanded || this._tilesExpanded);
+    this._expand.disabled = unavailable || this._loading || Boolean(this._error) || !tileEvents.length;
+    this._expand.setAttribute('aria-expanded', String(listExpanded));
+    this._tilesFrame.hidden = !listExpanded;
     this._tiles.replaceChildren();
     this.style.removeProperty('--terminal-next-waste-color');
 
@@ -534,8 +544,8 @@ export class TerminalWasteCard extends WasteCalendarCardBase {
       `${this._mainName.textContent}: ${this._mainStatus.textContent}`.replace(/:\s*$/, '')
     );
 
-    if (!events.length || !(alwaysExpanded || this._tilesExpanded)) return;
-    for (const event of events) {
+    if (!listExpanded) return;
+    for (const event of tileEvents) {
       const { type, color } = wasteColorForSummary(event.summary, this._config);
       const { date, relative } = this._formatStatusParts(event);
       const tile = document.createElement('div');

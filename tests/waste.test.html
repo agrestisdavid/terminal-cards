@@ -61,7 +61,7 @@
 
       const events = [
         { summary: '<b>Gelber Sack</b>', start: { date: '2026-09-01' }, end: { date: '2026-09-02' } },
-        { summary: 'Papier', start: { date: '2026-09-07' }, end: { date: '2026-09-08' } },
+        { summary: '<i>Papier</i>', start: { date: '2026-09-07' }, end: { date: '2026-09-08' } },
         { summary: 'Biomüll', start: { date: '2026-09-09' }, end: { date: '2026-09-10' } },
         { summary: 'Restmüll', start: { date: '2026-09-16' }, end: { date: '2026-09-17' } },
         { summary: 'Altglas', start: { date: '2026-09-23' }, end: { date: '2026-09-24' } },
@@ -127,19 +127,20 @@
         assert(expand.getAttribute('aria-expanded') === 'true', 'status expand button did not update aria-expanded');
         assert(!tilesFrame.hidden, 'status tiles did not expand');
         assert(card.shadowRoot.querySelector('.tiles').getAttribute('role') === 'list', 'status tiles do not expose list semantics');
-        assert(tiles.length === 4, 'status tiles were not limited to four');
+        assert(tiles.length === 4, 'status tiles were not limited to four additional collections');
         assert(tiles.every((tile) => tile.getAttribute('role') === 'listitem'), 'status tile listitem semantics are missing');
-        assert(tiles.map((tile) => tile.dataset.wasteType).join(',') === 'plastic,paper,bio,residual', 'status tile types are wrong');
-        assert(tiles[0].querySelector('.tile-icon').icon === 'mdi:recycle', 'plastic tile icon is wrong');
-        assert(tiles[1].querySelector('.tile-icon').icon === 'mdi:newspaper-variant-outline', 'paper tile icon is wrong');
-        assert(tiles[2].querySelector('.tile-icon').icon === 'mdi:leaf', 'organic tile icon is wrong');
-        assert(tiles[3].querySelector('.tile-icon').icon === 'mdi:trash-can-outline', 'residual tile icon is wrong');
-        assert(tiles[0].querySelector('.tile-name').textContent === '<b>gelber sack</b>', 'status tile summary is wrong');
-        assert(!tiles[0].querySelector('b'), 'status tile interpreted summary HTML');
-        assert(tiles[0].querySelector('.tile-date').textContent.includes('01.'), 'status tile date is missing');
-        assert(tiles[0].querySelector('.tile-days').textContent === 'in 4 tagen', 'status tile countdown is wrong');
-        assert(tiles[0].style.getPropertyValue('--terminal-entry-color') === 'var(--yellow-color, #ffeb3b)', 'plastic tile color is wrong');
-        assert(tiles[1].style.getPropertyValue('--terminal-entry-color') === 'var(--blue-color, #2196f3)', 'paper tile color is wrong');
+        assert(tiles.map((tile) => tile.dataset.wasteType).join(',') === 'paper,bio,residual,glass', 'status tile types are wrong');
+        assert(tiles[0].querySelector('.tile-icon').icon === 'mdi:newspaper-variant-outline', 'paper tile icon is wrong');
+        assert(tiles[1].querySelector('.tile-icon').icon === 'mdi:leaf', 'organic tile icon is wrong');
+        assert(tiles[2].querySelector('.tile-icon').icon === 'mdi:trash-can-outline', 'residual tile icon is wrong');
+        assert(tiles[3].querySelector('.tile-icon').icon === 'mdi:bottle-soda-classic-outline', 'glass tile icon is wrong');
+        assert(tiles[0].querySelector('.tile-name').textContent === '<i>papier</i>', 'status tile summary is wrong');
+        assert(!tiles[0].querySelector('i'), 'status tile interpreted summary HTML');
+        assert(!tiles.some((tile) => tile.querySelector('.tile-name').textContent === '<b>gelber sack</b>'), 'main collection was repeated in the expanded list');
+        assert(tiles[0].querySelector('.tile-date').textContent.includes('07.'), 'status tile date is missing');
+        assert(tiles[0].querySelector('.tile-days').textContent === 'in 10 tagen', 'status tile countdown is wrong');
+        assert(tiles[0].style.getPropertyValue('--terminal-entry-color') === 'var(--blue-color, #2196f3)', 'paper tile color is wrong');
+        assert(tiles[1].style.getPropertyValue('--terminal-entry-color') === 'var(--green-color, #4caf50)', 'organic tile color is wrong');
         assert(getComputedStyle(tiles[0]).borderRadius === '0px', 'status tile corners are not square');
         assert(getComputedStyle(tiles[0].querySelector('.tile-icon')).width === '34px', 'status tile icon box is not 34px');
         assert(tiles[1].offsetTop > tiles[0].offsetTop, 'status tiles are not a full-width vertical list');
@@ -164,6 +165,8 @@
           always_expanded: true,
           plastic_icon: 'mdi:trash-can',
           plastic_color: 'purple',
+          paper_icon: 'mdi:trash-can',
+          paper_color: 'purple',
         });
         card.hass = hass;
         await Promise.resolve();
@@ -200,7 +203,16 @@
         assert(!card.shadowRoot.querySelector('.expand').hidden, 'expanded-default mode hid the expand button');
         assert(card.shadowRoot.querySelector('.expand').getAttribute('aria-expanded') === 'true', 'expanded-default mode is not expanded');
         assert(!card.shadowRoot.querySelector('.tiles-frame').hidden, 'expanded-default mode hid the list');
-        assert(card.shadowRoot.querySelectorAll('.tile').length === 1, 'expanded-default entry limit is wrong');
+        assert(card.shadowRoot.querySelectorAll('.tile').length === 1, 'expanded-default additional-entry limit is wrong');
+        assert(card.shadowRoot.querySelector('.tile-name').textContent === '<i>papier</i>', 'expanded list did not start after the main collection');
+
+        callbacks[2]({ events: [events[0]] });
+        assert(card.shadowRoot.querySelector('.main-name').textContent === '<b>gelber sack</b>', 'single collection disappeared from the main status');
+        assert(card.shadowRoot.querySelector('.expand').disabled, 'single collection still enables an empty expanded list');
+        assert(card.shadowRoot.querySelector('.expand').getAttribute('aria-expanded') === 'false', 'single collection reports an expanded empty list');
+        assert(card.shadowRoot.querySelector('.tiles-frame').hidden, 'single collection still shows an empty list frame');
+        assert(card.shadowRoot.querySelectorAll('.tile').length === 0, 'single collection was repeated as a list tile');
+        assert(card.getCardSize() === 1, 'single collection card size includes an empty list');
 
         callbacks[2]({ events: [] });
         assert(card.shadowRoot.querySelector('.card').dataset.state === 'empty', 'empty status state is missing');
@@ -226,7 +238,10 @@
         const form = Card.getConfigForm();
         const fields = form.schema.flatMap((item) => item.schema || [item]);
         assert(fields.find((field) => field.name === 'entity').selector.entity.filter.domain === 'calendar', 'status editor entity selector is wrong');
-        assert(fields.find((field) => field.name === 'max_entries').selector.number.max === 4, 'status editor entry limit is wrong');
+        const maxEntriesField = fields.find((field) => field.name === 'max_entries');
+        assert(maxEntriesField.selector.number.max === 4, 'status editor entry limit is wrong');
+        assert(form.computeLabel(maxEntriesField) === 'Maximum list entries', 'status editor entry label is ambiguous');
+        assert(form.computeHelper(maxEntriesField).includes('additional collections'), 'status editor entry helper does not explain the non-repeating list');
         assert(fields.find((field) => field.name === 'controls_expanded').selector.boolean, 'expanded-default editor option is missing');
         assert(fields.find((field) => field.name === 'always_expanded').selector.boolean, 'always-expanded editor option is missing');
         assert(fields.find((field) => field.name === 'more_icon').selector.icon, 'status expand icon selector is missing');
@@ -277,7 +292,7 @@
         document.title = 'PASS terminal-waste-card';
         document.querySelector('#result').textContent = [
           'PASS: compact next-collection icon/name/date/countdown row',
-          'PASS: accessible expandable full-width status tiles',
+          'PASS: expanded tiles start after the main collection without repetition',
           'PASS: always-expanded and expanded-by-default modes',
           'PASS: semantic native colors/icons, lifecycle and safe text',
         ].join('\n');

@@ -2,7 +2,7 @@
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    <title>terminal-waste-status-card test running</title>
+    <title>terminal-waste-status-card compatibility test running</title>
     <style>
       :root {
         --card-background-color: #181825;
@@ -10,15 +10,10 @@
         --secondary-text-color: #6c7086;
         --accent-color: #89b4fa;
         --yellow-color: #ffeb3b;
-        --blue-color: #2196f3;
-        --green-color: #4caf50;
-        --grey-color: #9e9e9e;
-        --cyan-color: #00bcd4;
-        --purple-color: #9c27b0;
         --error-color: #f38ba8;
       }
       body { background: #11111b; color: #cdd6f4; padding: 24px; }
-      terminal-waste-status-card { display: block; width: 240px; margin-bottom: 16px; }
+      terminal-waste-status-card { display: block; width: 240px; }
     </style>
     <script type="module" src="../dist/terminal-cards.js"></script>
   </head>
@@ -26,31 +21,26 @@
     <main id="cards"></main>
     <pre id="result">WAITING</pre>
     <script type="module">
-      const callbacks = [];
-      const params = [];
+      let callback;
       let unsubscribeCount = 0;
-      const connection = {
-        subscribeMessage(callback, request) {
-          callbacks.push(callback);
-          params.push(request);
-          return Promise.resolve(() => { unsubscribeCount += 1; });
-        },
-      };
       const originalDateNow = Date.now;
       const hass = {
         locale: { language: 'de-AT' },
         config: { time_zone: 'Europe/Vienna' },
-        connection,
+        connection: {
+          subscribeMessage(next, request) {
+            callback = next;
+            if (request.type !== 'calendar/event/subscribe') {
+              throw new Error('legacy alias uses the wrong calendar API');
+            }
+            return Promise.resolve(() => { unsubscribeCount += 1; });
+          },
+        },
         states: {
           'calendar.nickelsdorf': {
             entity_id: 'calendar.nickelsdorf',
             state: 'off',
             attributes: { friendly_name: 'Waste Collection Schedule Nickelsdorf' },
-          },
-          'calendar.offline_waste': {
-            entity_id: 'calendar.offline_waste',
-            state: 'unavailable',
-            attributes: { friendly_name: 'Offline waste calendar' },
           },
         },
       };
@@ -59,231 +49,68 @@
         if (!condition) throw new Error(message);
       }
 
-      const events = [
-        { summary: '<b>Gelber Sack</b>', start: { date: '2026-09-01' }, end: { date: '2026-09-02' } },
-        { summary: 'Papier', start: { date: '2026-09-07' }, end: { date: '2026-09-08' } },
-        { summary: 'Biomüll', start: { date: '2026-09-09' }, end: { date: '2026-09-10' } },
-        { summary: 'Restmüll', start: { date: '2026-09-16' }, end: { date: '2026-09-17' } },
-        { summary: 'Altglas', start: { date: '2026-09-23' }, end: { date: '2026-09-24' } },
-      ];
-
       async function run() {
-        await customElements.whenDefined('terminal-waste-status-card');
         Date.now = () => Date.parse('2026-08-28T10:00:00+02:00');
+        await Promise.all([
+          customElements.whenDefined('terminal-waste-card'),
+          customElements.whenDefined('terminal-waste-status-card'),
+        ]);
+
+        const PrimaryCard = customElements.get('terminal-waste-card');
+        const LegacyCard = customElements.get('terminal-waste-status-card');
+        assert(PrimaryCard !== LegacyCard, 'legacy alias reused the same custom-element constructor');
+        assert(LegacyCard.prototype instanceof PrimaryCard, 'legacy alias does not inherit the primary waste card');
 
         const card = document.createElement('terminal-waste-status-card');
         card.setConfig({
           entity: 'calendar.nickelsdorf',
           title: 'müllstatus',
           tiles_title: 'nächste abholungen',
-          max_entries: 4,
-          days_to_show: 90,
-          more_icon: 'mdi:dots-horizontal',
-          controls_expanded: false,
-          always_expanded: false,
+          controls_expanded: true,
         });
         card.hass = hass;
         document.querySelector('#cards').append(card);
         await Promise.resolve();
-
-        assert(callbacks.length === 1, 'status card calendar subscription was not created');
-        assert(params[0].type === 'calendar/event/subscribe', 'status card uses the wrong calendar API');
-        assert(params[0].entity_id === 'calendar.nickelsdorf', 'status card targets the wrong calendar');
-        callbacks[0]({ events });
         await Promise.resolve();
+        assert(typeof callback === 'function', 'legacy alias did not subscribe to the waste calendar');
 
-        const frame = card.shadowRoot.querySelector('.card');
-        const title = card.shadowRoot.querySelector('.border-title');
-        const main = card.shadowRoot.querySelector('.main');
-        const mainIcon = card.shadowRoot.querySelector('.main-icon');
-        const mainName = card.shadowRoot.querySelector('.main-name');
-        const mainStatus = card.shadowRoot.querySelector('.main-status');
-        const expand = card.shadowRoot.querySelector('.expand');
-        const tilesFrame = card.shadowRoot.querySelector('.tiles-frame');
-        assert(getComputedStyle(frame).borderRadius === '0px', 'status card corners are not square');
-        assert(getComputedStyle(frame).borderTopWidth === '1px', 'status card border is not 1px');
-        assert(getComputedStyle(frame).borderTopColor === 'rgb(255, 235, 59)', 'next collection does not color the status frame');
-        assert(title.textContent === 'müllstatus', 'status card border title is missing');
-        assert(mainIcon.icon === 'mdi:recycle', 'next collection icon is wrong');
-        assert(mainName.textContent === '<b>gelber sack</b>', 'next collection name is wrong');
-        assert(!mainName.querySelector('b'), 'status card interpreted summary HTML');
-        assert(mainStatus.textContent.includes('01.'), 'next collection date is missing');
-        assert(mainStatus.textContent.includes('in 4 tagen'), 'next collection day countdown is missing');
-        assert(expand.tagName === 'BUTTON' && expand.type === 'button', 'status expand control is not a real button');
-        assert(expand.getAttribute('aria-controls') === tilesFrame.id, 'status expand button does not target its list');
-        assert(expand.getAttribute('aria-expanded') === 'false', 'status list starts expanded unexpectedly');
-        assert(mainStatus.getAttribute('aria-live') === 'polite', 'status updates are not announced politely');
-        assert(tilesFrame.getAttribute('role') === 'region', 'expanded status frame is not an accessible region');
-        assert(!expand.hidden && !expand.disabled, 'status expand button is not available');
-        assert(tilesFrame.hidden, 'status tiles are visible while collapsed');
-        assert(card.getCardSize() === 1, 'collapsed status card size is wrong');
-        assert(getComputedStyle(main).paddingLeft === '10px', 'status card mobile padding is not compact');
-        assert(getComputedStyle(mainIcon).width === '34px', 'main waste icon box is not 34px');
-        assert(getComputedStyle(mainIcon).height === '34px', 'main waste icon box height is not 34px');
-
-        expand.click();
-        await Promise.resolve();
-        const tiles = [...card.shadowRoot.querySelectorAll('.tile')];
-        assert(expand.getAttribute('aria-expanded') === 'true', 'status expand button did not update aria-expanded');
-        assert(!tilesFrame.hidden, 'status tiles did not expand');
-        assert(card.shadowRoot.querySelector('.tiles').getAttribute('role') === 'list', 'status tiles do not expose list semantics');
-        assert(tiles.length === 4, 'status tiles were not limited to four');
-        assert(tiles.every((tile) => tile.getAttribute('role') === 'listitem'), 'status tile listitem semantics are missing');
-        assert(tiles.map((tile) => tile.dataset.wasteType).join(',') === 'plastic,paper,bio,residual', 'status tile types are wrong');
-        assert(tiles[0].querySelector('.tile-icon').icon === 'mdi:recycle', 'plastic tile icon is wrong');
-        assert(tiles[1].querySelector('.tile-icon').icon === 'mdi:newspaper-variant-outline', 'paper tile icon is wrong');
-        assert(tiles[2].querySelector('.tile-icon').icon === 'mdi:leaf', 'organic tile icon is wrong');
-        assert(tiles[3].querySelector('.tile-icon').icon === 'mdi:trash-can-outline', 'residual tile icon is wrong');
-        assert(tiles[0].querySelector('.tile-name').textContent === '<b>gelber sack</b>', 'status tile summary is wrong');
-        assert(!tiles[0].querySelector('b'), 'status tile interpreted summary HTML');
-        assert(tiles[0].querySelector('.tile-date').textContent.includes('01.'), 'status tile date is missing');
-        assert(tiles[0].querySelector('.tile-days').textContent === 'in 4 tagen', 'status tile countdown is wrong');
-        assert(tiles[0].style.getPropertyValue('--terminal-entry-color') === 'var(--yellow-color, #ffeb3b)', 'plastic tile color is wrong');
-        assert(tiles[1].style.getPropertyValue('--terminal-entry-color') === 'var(--blue-color, #2196f3)', 'paper tile color is wrong');
-        assert(getComputedStyle(tiles[0]).borderRadius === '0px', 'status tile corners are not square');
-        assert(getComputedStyle(tiles[0].querySelector('.tile-icon')).width === '34px', 'status tile icon box is not 34px');
-        assert(tiles[1].offsetTop > tiles[0].offsetTop, 'status tiles are not a full-width vertical list');
-        assert(Math.abs(tiles[1].offsetWidth - tiles[0].offsetWidth) <= 1, 'status list tiles do not share a width');
-        assert(card.getCardSize() === 5, 'expanded status card size is wrong');
-
-        expand.focus();
-        card.hass = { ...hass };
-        assert(card.shadowRoot.activeElement === expand, 'normal HASS refresh lost expand-button focus');
-        assert(!card.shadowRoot.querySelector('.tiles-frame').hidden, 'normal HASS refresh collapsed the status list');
-        card.shadowRoot.querySelector('.expand').click();
-        assert(card.shadowRoot.querySelector('.tiles-frame').hidden, 'status list did not collapse');
-
-        const firstCallback = callbacks[0];
-        card.setConfig({
-          entity: 'calendar.nickelsdorf',
-          title: 'müllstatus',
-          tiles_title: 'abholungen',
-          max_entries: 2,
-          days_to_show: 30,
-          controls_expanded: false,
-          always_expanded: true,
-          plastic_icon: 'mdi:trash-can',
-          plastic_color: 'purple',
+        callback({
+          events: [
+            { summary: 'Gelber Sack', start: { date: '2026-09-01' }, end: { date: '2026-09-02' } },
+          ],
         });
-        card.hass = hass;
         await Promise.resolve();
-        await Promise.resolve();
-        assert(callbacks.length === 2, 'always-expanded config did not resubscribe');
-        assert(unsubscribeCount === 1, 'always-expanded config did not clean up the old subscription');
-        firstCallback({ events: [{ summary: 'stale waste', start: { date: '2026-08-29' } }] });
-        assert(!card.shadowRoot.textContent.includes('stale waste'), 'stale status callback rendered after config change');
-        callbacks[1]({ events });
-        await Promise.resolve();
-        assert(card.shadowRoot.querySelector('.expand').hidden, 'always-expanded mode still shows the expand button');
-        assert(!card.shadowRoot.querySelector('.tiles-frame').hidden, 'always-expanded mode hid the status tiles');
-        assert(card.shadowRoot.querySelectorAll('.tile').length === 2, 'always-expanded entry limit is wrong');
-        assert(card.shadowRoot.querySelector('.main-icon').icon === 'mdi:trash-can', 'custom waste icon did not reach the main row');
-        assert(card.shadowRoot.querySelector('.tile-icon').icon === 'mdi:trash-can', 'custom waste icon did not reach the tile');
-        assert(card.style.getPropertyValue('--terminal-next-waste-color') === 'var(--purple-color, #9c27b0)', 'custom status type color did not reach the frame');
-        assert(card.shadowRoot.querySelector('.tiles-title').textContent === 'abholungen', 'expanded list title is wrong');
-        assert(card.getCardSize() === 3, 'always-expanded card size is wrong');
 
-        card.setConfig({
-          entity: 'calendar.nickelsdorf',
-          max_entries: 1,
-          days_to_show: 14,
-          controls_expanded: true,
-          always_expanded: false,
-        });
-        card.hass = hass;
-        await Promise.resolve();
-        await Promise.resolve();
-        assert(callbacks.length === 3, 'expanded-default config did not resubscribe');
-        assert(unsubscribeCount === 2, 'expanded-default config did not clean up the old subscription');
-        callbacks[2]({ events });
-        await Promise.resolve();
-        assert(!card.shadowRoot.querySelector('.expand').hidden, 'expanded-default mode hid the expand button');
-        assert(card.shadowRoot.querySelector('.expand').getAttribute('aria-expanded') === 'true', 'expanded-default mode is not expanded');
-        assert(!card.shadowRoot.querySelector('.tiles-frame').hidden, 'expanded-default mode hid the list');
-        assert(card.shadowRoot.querySelectorAll('.tile').length === 1, 'expanded-default entry limit is wrong');
+        assert(card.shadowRoot.querySelector('.border-title').textContent === 'müllstatus', 'legacy alias lost the configured title');
+        assert(card.shadowRoot.querySelector('.main-name').textContent === 'gelber sack', 'legacy alias does not render the new status layout');
+        assert(card.shadowRoot.querySelector('.main-icon').icon === 'mdi:recycle', 'legacy alias lost semantic waste icons');
+        assert(!card.shadowRoot.querySelector('.tiles-frame').hidden, 'legacy alias lost expansion settings');
+        assert(card.shadowRoot.querySelectorAll('.tile').length === 1, 'legacy alias did not render status tiles');
 
-        callbacks[2]({ events: [] });
-        assert(card.shadowRoot.querySelector('.card').dataset.state === 'empty', 'empty status state is missing');
-        assert(card.shadowRoot.querySelector('.main-name').textContent === 'no upcoming collections', 'empty status message is wrong');
-        assert(card.shadowRoot.querySelector('.expand').disabled, 'empty status expand control remains enabled');
-        assert(card.shadowRoot.querySelector('.tiles-frame').hidden, 'empty status still shows tiles');
-        assert(card.getCardSize() === 1, 'empty expanded status size is wrong');
-
-        callbacks[2]({ events: null });
-        assert(card.shadowRoot.querySelector('.card').dataset.state === 'error', 'subscription error status is missing');
-        assert(card.shadowRoot.querySelector('.main-status').textContent === 'waste collections unavailable', 'subscription error message is wrong');
-
-        const offline = document.createElement('terminal-waste-status-card');
-        offline.setConfig({ entity: 'calendar.offline_waste' });
-        offline.hass = hass;
-        document.querySelector('#cards').append(offline);
-        assert(offline.shadowRoot.querySelector('.card').dataset.state === 'unavailable', 'offline status state is missing');
-        assert(offline.shadowRoot.querySelector('.main-status').textContent === 'waste calendar unavailable', 'offline status text is wrong');
-        assert(getComputedStyle(offline.shadowRoot.querySelector('.card')).borderTopColor === 'rgb(243, 139, 168)', 'offline status card does not use Error');
-        assert(offline.shadowRoot.querySelector('.expand').disabled, 'offline status controls remain enabled');
-
-        const Card = customElements.get('terminal-waste-status-card');
-        const form = Card.getConfigForm();
-        const fields = form.schema.flatMap((item) => item.schema || [item]);
-        assert(fields.find((field) => field.name === 'entity').selector.entity.filter.domain === 'calendar', 'status editor entity selector is wrong');
-        assert(fields.find((field) => field.name === 'max_entries').selector.number.max === 4, 'status editor entry limit is wrong');
-        assert(fields.find((field) => field.name === 'controls_expanded').selector.boolean, 'expanded-default editor option is missing');
-        assert(fields.find((field) => field.name === 'always_expanded').selector.boolean, 'always-expanded editor option is missing');
-        assert(fields.find((field) => field.name === 'more_icon').selector.icon, 'status expand icon selector is missing');
-        assert(fields.find((field) => field.name === 'tiles_title').selector.text, 'status list-title editor option is missing');
-        const defaultIcons = {
-          plastic: 'mdi:recycle',
-          paper: 'mdi:newspaper-variant-outline',
-          bio: 'mdi:leaf',
-          residual: 'mdi:trash-can-outline',
-          glass: 'mdi:bottle-soda-classic-outline',
-          other: 'mdi:delete-outline',
-        };
-        for (const type of Object.keys(defaultIcons)) {
-          assert(fields.find((field) => field.name === `${type}_color`).selector.ui_color, `${type} status color selector is missing`);
-          const iconField = fields.find((field) => field.name === `${type}_icon`);
-          assert(iconField.selector.icon, `${type} status icon selector is missing`);
-          assert(iconField.default === defaultIcons[type], `${type} status icon default is wrong`);
-        }
-        assert(Card.getStubConfig(hass).entity === 'calendar.nickelsdorf', 'status stub did not prefer the waste calendar');
-        assert(window.customCards.some((entry) => entry.type === 'terminal-waste-status-card'), 'status card picker metadata is missing');
-        assert(window.customCards.some((entry) => entry.type === 'terminal-waste-card'), 'original waste card was removed');
-
-        for (const invalidConfig of [
-          { entity: 'sensor.waste' },
-          { entity: 'calendar.nickelsdorf', max_entries: 5 },
-          { entity: 'calendar.nickelsdorf', controls_expanded: 'yes' },
-          { entity: 'calendar.nickelsdorf', always_expanded: 'yes' },
-          { entity: 'calendar.nickelsdorf', tiles_title: '' },
-          { entity: 'calendar.nickelsdorf', plastic_icon: '' },
-        ]) {
-          let invalid = false;
-          try { document.createElement('terminal-waste-status-card').setConfig(invalidConfig); }
-          catch (_error) { invalid = true; }
-          assert(invalid, `invalid status config was accepted: ${JSON.stringify(invalidConfig)}`);
-        }
+        const fields = LegacyCard.getConfigForm().schema.flatMap((item) => item.schema || [item]);
+        assert(fields.some((field) => field.name === 'controls_expanded'), 'legacy alias did not inherit the current editor');
+        assert(window.customCards.some((entry) => entry.type === 'terminal-waste-card'), 'primary waste card is missing from the picker');
+        assert(!window.customCards.some((entry) => entry.type === 'terminal-waste-status-card'), 'legacy alias is still exposed in the picker');
 
         card.remove();
-        offline.remove();
         await Promise.resolve();
         await Promise.resolve();
+        assert(unsubscribeCount === 1, 'legacy alias did not clean up its subscription');
         Date.now = originalDateNow;
-        assert(unsubscribeCount === 4, 'status card subscriptions were not cleaned up');
 
         document.body.dataset.testStatus = 'PASS';
-        document.title = 'PASS terminal-waste-status-card';
+        document.title = 'PASS terminal-waste-status-card compatibility';
         document.querySelector('#result').textContent = [
-          'PASS: compact next-collection icon/name/date/countdown row',
-          'PASS: accessible expandable full-width status tiles',
-          'PASS: always-expanded and expanded-by-default modes',
-          'PASS: semantic native colors/icons, lifecycle and safe text',
+          'PASS: v0.15 waste-status configs retain the new status layout',
+          'PASS: compatibility alias inherits editor and lifecycle behavior',
+          'PASS: only terminal-waste-card appears in the card picker',
         ].join('\n');
       }
 
       run().catch((error) => {
         Date.now = originalDateNow;
         document.body.dataset.testStatus = 'FAIL';
-        document.title = 'FAIL terminal-waste-status-card';
+        document.title = 'FAIL terminal-waste-status-card compatibility';
         document.querySelector('#result').textContent = `FAIL: ${error.stack || error}`;
         console.error(error);
       });

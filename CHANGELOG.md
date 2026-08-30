@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## 0.16.0 — 2026-08-30
+
+- Make the compact next-collection row with expandable full-width tiles the primary `custom:terminal-waste-card` presentation, replacing the former Calendar-style tree list.
+- Keep `custom:terminal-waste-status-card` as a hidden compatibility alias for dashboards created with v0.15 while directing all new cards to the shorter primary type.
+- Use `müllstatus` and `nächste abholungen` as the primary Waste Card's default visible labels.
+
 ## 0.15.0 — 2026-08-30
 
 - Add `custom:terminal-waste-status-card` as a second waste presentation with a compact next-collection row, expandable full-width list tiles, semantic icons/colors, and an always-expanded option.

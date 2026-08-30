@@ -66,7 +66,7 @@
     <script type="module" src="../dist/terminal-cards.js"></script>
   </head>
   <body>
-    <h1>terminal-cards <span>// title + wrapper + light + switch + sensor + calendar + waste + waste-status + alarm + shutter + nav</span></h1>
+    <h1>terminal-cards <span>// title + wrapper + light + switch + sensor + calendar + waste + alarm + shutter + nav</span></h1>
     <main></main>
     <script type="module">
       const hass = {
@@ -244,29 +244,21 @@
       controls.hass = hass;
       document.querySelector('main').append(controls);
 
-      const wasteComparison = document.createElement('terminal-card-wrapper');
-      wasteComparison.setConfig({
-        title: 'waste card comparison',
-        accent_color: 'yellow',
-        columns: 2,
-        cards: [
-          {
-            type: 'custom:terminal-waste-card', entity: 'calendar.waste',
-            title: 'calendar list', max_entries: 4, days_to_show: 90,
-            plastic_color: 'yellow', paper_color: 'blue',
-            bio_color: 'green', residual_color: 'grey',
-          },
-          {
-            type: 'custom:terminal-waste-status-card', entity: 'calendar.waste',
-            title: 'status + list tiles', tiles_title: 'next collections',
-            max_entries: 4, days_to_show: 90, controls_expanded: true,
-            plastic_color: 'yellow', paper_color: 'blue',
-            bio_color: 'green', residual_color: 'grey',
-          },
-        ],
+      const waste = document.createElement('terminal-waste-card');
+      waste.setConfig({
+        entity: 'calendar.waste',
+        title: 'müllstatus',
+        tiles_title: 'nächste abholungen',
+        max_entries: 4,
+        days_to_show: 90,
+        controls_expanded: true,
+        plastic_color: 'yellow',
+        paper_color: 'blue',
+        bio_color: 'green',
+        residual_color: 'grey',
       });
-      wasteComparison.hass = hass;
-      document.querySelector('main').append(wasteComparison);
+      waste.hass = hass;
+      document.querySelector('main').append(waste);
     </script>
   </body>
 </html>

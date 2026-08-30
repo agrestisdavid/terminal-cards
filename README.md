@@ -1,6 +1,6 @@
 # Terminal Cards
 
-Terminal-style Lovelace cards for Home Assistant, inspired by Herdr panes: square 1 px borders, monospace labels embedded in the top border, and theme-aware state colors. Entity, Light, Alarm, Shutter, and Navigation Cards automatically reduce their horizontal content spacing from 14 px to 10 px below 261 px card width so mobile labels retain more room.
+Terminal-style Lovelace cards for Home Assistant, inspired by Herdr panes: square 1 px borders, monospace labels embedded in the top border, and theme-aware state colors. Entity, Light, Waste, Alarm, Shutter, and Navigation Cards automatically reduce their horizontal content spacing from 14 px to 10 px below 261 px card width so mobile labels retain more room.
 
 ![Terminal Cards preview](docs/terminal-cards-preview.png)
 
@@ -126,32 +126,10 @@ accent_color: cyan
 
 ### `custom:terminal-waste-card`
 
-A compact waste-status list backed by one `calendar.*` entity. It shows one to four upcoming collections in chronological order and refreshes through Home Assistant's live calendar API. Each row uses a semantic HA theme color derived from the event summary: yellow bag/plastic, paper, organic waste, residual waste, glass, or a configurable fallback. Explicit type colors take precedence over `accent_color`, followed by the semantic defaults. The nearest collection also colors the card border and border title. German and common English waste labels are recognized; all summaries remain safely rendered as text.
+A compact waste status backed by one `calendar.*` entity. Its 72 px main row shows the nearest collection as a semantic 34 px icon, lower-case waste name, localized date, and relative countdown. A separate square button expands up to four full-width Terminal list tiles; each tile carries its own waste icon, name, date, countdown, and type-specific border color. `controls_expanded` sets the initial state, while `always_expanded` keeps the list visible and hides the button. Colors and icons for plastic/yellow bag, paper, organic, residual, glass, and other waste all use native Home Assistant editor selectors.
 
 ```yaml
 type: custom:terminal-waste-card
-entity: calendar.nickelsdorf
-title: müllstatus
-max_entries: 4
-days_to_show: 90
-plastic_color: yellow
-paper_color: blue
-bio_color: green
-residual_color: grey
-glass_color: cyan
-other_color: accent
-accent_color: purple
-title_position: left
-```
-
-All options use Home Assistant's native visual-editor controls. Missing, unknown, or unavailable calendar entities and subscription errors retain the fixed Error color.
-
-### `custom:terminal-waste-status-card`
-
-An alternative waste presentation that keeps the original Calendar-style Waste Card available. Its compact header shows the nearest collection as a semantic 34 px icon, lower-case waste name, localized date, and relative countdown. A separate square button expands up to four full-width Terminal list tiles; each tile carries its own waste icon, name, date, countdown, and type-specific border color. `controls_expanded` sets the initial state, while `always_expanded` keeps the list visible and hides the button. Colors and icons for plastic/yellow bag, paper, organic, residual, glass, and other waste all use native Home Assistant editor selectors.
-
-```yaml
-type: custom:terminal-waste-status-card
 entity: calendar.nickelsdorf
 title: müllstatus
 tiles_title: nächste abholungen
@@ -174,7 +152,7 @@ glass_icon: mdi:bottle-soda-classic-outline
 other_icon: mdi:delete-outline
 ```
 
-The compact state survives normal Home Assistant refreshes, calendar updates remain lifecycle-guarded, and all event content is rendered through `textContent`.
+The card recognizes German and common English waste labels. Its manual expansion state survives normal Home Assistant refreshes, calendar updates remain lifecycle-guarded, and all event content is rendered through `textContent`. Missing, unknown, or unavailable calendar entities and subscription errors retain the fixed Error color. Configurations created with the temporary v0.15 type `custom:terminal-waste-status-card` remain functional through a hidden compatibility alias, but new cards should use `custom:terminal-waste-card`.
 
 ### `custom:terminal-alarm-card`
 
@@ -269,7 +247,7 @@ Navigation secondary content uses this precedence: a successful reactive `state_
 3. Install **Terminal Cards**.
 4. Hard-refresh Home Assistant (`Ctrl+Shift+R`).
 
-HACS loads the release asset `terminal-cards.js`; no inline `data:` resource is needed. All eleven cards appear in Home Assistant's card picker and provide graphical configuration.
+HACS loads the release asset `terminal-cards.js`; no inline `data:` resource is needed. All ten cards appear in Home Assistant's card picker and provide graphical configuration.
 
 ## Development
 

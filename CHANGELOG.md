@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 0.15.0 — 2026-08-30
+
+- Add `custom:terminal-waste-status-card` as a second waste presentation with a compact next-collection row, expandable full-width list tiles, semantic icons/colors, and an always-expanded option.
+
 ## 0.14.0 — 2026-08-30
 
 - Add `custom:terminal-waste-card` for up to four live calendar-backed waste collections with semantic per-type HA theme colors and native visual configuration.

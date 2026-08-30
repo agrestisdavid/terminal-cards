@@ -6,6 +6,9 @@ export const WASTE_TYPES = Object.freeze([
     colorKey: 'plastic_color',
     label: 'Plastic / yellow bag color',
     defaultColor: 'yellow',
+    iconKey: 'plastic_icon',
+    iconLabel: 'Plastic / yellow bag icon',
+    defaultIcon: 'mdi:recycle',
     keywords: Object.freeze([
       'gelber sack', 'gelbe tonne', 'leichtverpack', 'kunststoff',
       'plastic', 'packaging', 'yellow bag', 'yellow bin',
@@ -16,6 +19,9 @@ export const WASTE_TYPES = Object.freeze([
     colorKey: 'paper_color',
     label: 'Paper color',
     defaultColor: 'blue',
+    iconKey: 'paper_icon',
+    iconLabel: 'Paper icon',
+    defaultIcon: 'mdi:newspaper-variant-outline',
     keywords: Object.freeze([
       'papier', 'karton', 'paper', 'cardboard', 'blaue tonne', 'blue bin',
     ]),
@@ -25,6 +31,9 @@ export const WASTE_TYPES = Object.freeze([
     colorKey: 'bio_color',
     label: 'Organic waste color',
     defaultColor: 'green',
+    iconKey: 'bio_icon',
+    iconLabel: 'Organic waste icon',
+    defaultIcon: 'mdi:leaf',
     keywords: Object.freeze([
       'biomull', 'bioabfall', 'bioabfuhr', 'biotonne', 'braune tonne',
       'bio', 'organic', 'compost', 'green waste',
@@ -35,6 +44,9 @@ export const WASTE_TYPES = Object.freeze([
     colorKey: 'residual_color',
     label: 'Residual waste color',
     defaultColor: 'grey',
+    iconKey: 'residual_icon',
+    iconLabel: 'Residual waste icon',
+    defaultIcon: 'mdi:trash-can-outline',
     keywords: Object.freeze([
       'restmull', 'restabfall', 'graue tonne', 'schwarze tonne',
       'residual', 'general waste', 'black bin', 'grey bin',
@@ -45,6 +57,9 @@ export const WASTE_TYPES = Object.freeze([
     colorKey: 'glass_color',
     label: 'Glass color',
     defaultColor: 'cyan',
+    iconKey: 'glass_icon',
+    iconLabel: 'Glass icon',
+    defaultIcon: 'mdi:bottle-soda-classic-outline',
     keywords: Object.freeze(['altglas', 'glas', 'glass']),
   }),
   Object.freeze({
@@ -52,6 +67,9 @@ export const WASTE_TYPES = Object.freeze([
     colorKey: 'other_color',
     label: 'Other waste color',
     defaultColor: 'accent',
+    iconKey: 'other_icon',
+    iconLabel: 'Other waste icon',
+    defaultIcon: 'mdi:delete-outline',
     keywords: Object.freeze([]),
   }),
 ]);
@@ -68,6 +86,30 @@ export function wasteTypeForSummary(summary) {
   return WASTE_TYPES.find(({ key, keywords }) => (
     key !== 'other' && keywords.some((keyword) => normalized.includes(keyword))
   )) || WASTE_TYPES[WASTE_TYPES.length - 1];
+}
+
+export function wasteIconSchema() {
+  return WASTE_TYPES.map(({ iconKey, defaultIcon }) => ({
+    name: iconKey,
+    default: defaultIcon,
+    selector: { icon: {} },
+  }));
+}
+
+export function validateWasteIcons(config, cardName) {
+  for (const { iconKey } of WASTE_TYPES) {
+    if (
+      config?.[iconKey] !== undefined &&
+      (typeof config[iconKey] !== 'string' || !config[iconKey].trim())
+    ) {
+      throw new Error(`${cardName}: "${iconKey}" must be a non-empty icon name`);
+    }
+  }
+}
+
+export function wasteIconForSummary(summary, config) {
+  const type = wasteTypeForSummary(summary);
+  return config?.[type.iconKey] || type.defaultIcon;
 }
 
 export function wasteColorSchema() {

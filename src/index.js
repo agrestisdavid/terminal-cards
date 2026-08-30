@@ -6,6 +6,7 @@ import './cards/switch-card.js';
 import './cards/sensor-card.js';
 import './cards/calendar-card.js';
 import './cards/waste-card.js';
+import './cards/waste-status-card.js';
 import './cards/alarm-card.js';
 import './cards/shutter-card.js';
 import './cards/navigation-card.js';

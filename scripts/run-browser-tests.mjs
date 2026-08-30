@@ -12,6 +12,7 @@ const tests = [
   'sensor',
   'calendar',
   'waste',
+  'waste-status',
   'alarm',
   'shutter',
   'navigation',

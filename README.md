@@ -146,6 +146,36 @@ title_position: left
 
 All options use Home Assistant's native visual-editor controls. Missing, unknown, or unavailable calendar entities and subscription errors retain the fixed Error color.
 
+### `custom:terminal-waste-status-card`
+
+An alternative waste presentation that keeps the original Calendar-style Waste Card available. Its compact header shows the nearest collection as a semantic 34 px icon, lower-case waste name, localized date, and relative countdown. A separate square button expands up to four full-width Terminal list tiles; each tile carries its own waste icon, name, date, countdown, and type-specific border color. `controls_expanded` sets the initial state, while `always_expanded` keeps the list visible and hides the button. Colors and icons for plastic/yellow bag, paper, organic, residual, glass, and other waste all use native Home Assistant editor selectors.
+
+```yaml
+type: custom:terminal-waste-status-card
+entity: calendar.nickelsdorf
+title: müllstatus
+tiles_title: nächste abholungen
+max_entries: 4
+days_to_show: 90
+controls_expanded: false
+always_expanded: false
+more_icon: mdi:dots-horizontal
+plastic_color: yellow
+paper_color: blue
+bio_color: green
+residual_color: grey
+glass_color: cyan
+other_color: purple
+plastic_icon: mdi:recycle
+paper_icon: mdi:newspaper-variant-outline
+bio_icon: mdi:leaf
+residual_icon: mdi:trash-can-outline
+glass_icon: mdi:bottle-soda-classic-outline
+other_icon: mdi:delete-outline
+```
+
+The compact state survives normal Home Assistant refreshes, calendar updates remain lifecycle-guarded, and all event content is rendered through `textContent`.
+
 ### `custom:terminal-alarm-card`
 
 A compact control for one `alarm_control_panel.*` entity. Tapping Icon/Name/State opens the complete terminal popup; the independent square controls button expands supported arm modes and Disarm directly inside the card. Home, Away, Night, Vacation, and Custom are derived exclusively from `supported_features`. When the entity requires a code and has no entity-registry `default_code`, the expanded card uses a masked session-only PIN/code field. Codes are cleared after success, reconnect, config change, collapse, or disconnect; errors remain visible for a retry. Manual alarm triggering is intentionally never exposed. Disarmed, Home, Away, Night, Vacation, Custom Bypass, Arming, Pending, Disarming, and Triggered each have their own native HA theme-color option. An explicit state color takes precedence, existing `accent_color` remains the backward-compatible fallback, and the semantic defaults apply when neither is configured. The current state's color drives the card border, border title, icon, state, focus/hover, active control, and terminal popup.
@@ -239,7 +269,7 @@ Navigation secondary content uses this precedence: a successful reactive `state_
 3. Install **Terminal Cards**.
 4. Hard-refresh Home Assistant (`Ctrl+Shift+R`).
 
-HACS loads the release asset `terminal-cards.js`; no inline `data:` resource is needed. All ten cards appear in Home Assistant's card picker and provide graphical configuration.
+HACS loads the release asset `terminal-cards.js`; no inline `data:` resource is needed. All eleven cards appear in Home Assistant's card picker and provide graphical configuration.
 
 ## Development
 

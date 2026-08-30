@@ -1,0 +1,302 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>terminal-waste-card test running</title>
+    <style>
+      :root {
+        --card-background-color: #181825;
+        --primary-text-color: #cdd6f4;
+        --secondary-text-color: #6c7086;
+        --accent-color: #89b4fa;
+        --yellow-color: #ffeb3b;
+        --blue-color: #2196f3;
+        --green-color: #4caf50;
+        --grey-color: #9e9e9e;
+        --cyan-color: #00bcd4;
+        --pink-color: #e91e63;
+        --orange-color: #ff9800;
+        --purple-color: #9c27b0;
+        --error-color: #f38ba8;
+      }
+      body { background: #11111b; color: #cdd6f4; padding: 24px; }
+      terminal-waste-card { display: block; width: 460px; margin-bottom: 16px; }
+    </style>
+    <script type="module" src="../dist/terminal-cards.js"></script>
+  </head>
+  <body>
+    <main id="cards"></main>
+    <pre id="result">WAITING</pre>
+    <script type="module">
+      const callbacks = [];
+      const params = [];
+      let unsubscribeCount = 0;
+      const connection = {
+        subscribeMessage(callback, request) {
+          callbacks.push(callback);
+          params.push(request);
+          return Promise.resolve(() => { unsubscribeCount += 1; });
+        },
+      };
+      const originalDateNow = Date.now;
+      const hass = {
+        locale: { language: 'de-AT' },
+        config: { time_zone: 'Europe/Vienna' },
+        connection,
+        states: {
+          'calendar.nickelsdorf': {
+            entity_id: 'calendar.nickelsdorf',
+            state: 'off',
+            attributes: { friendly_name: 'Waste Collection Schedule Nickelsdorf' },
+          },
+          'calendar.offline_waste': {
+            entity_id: 'calendar.offline_waste',
+            state: 'unavailable',
+            attributes: { friendly_name: 'Offline waste calendar' },
+          },
+          'calendar.family': {
+            entity_id: 'calendar.family',
+            state: 'off',
+            attributes: { friendly_name: 'Family' },
+          },
+        },
+      };
+
+      function assert(condition, message) {
+        if (!condition) throw new Error(message);
+      }
+
+      async function run() {
+        await customElements.whenDefined('terminal-waste-card');
+        Date.now = () => Date.parse('2026-08-28T10:00:00+02:00');
+
+        const card = document.createElement('terminal-waste-card');
+        card.setConfig({
+          entity: 'calendar.nickelsdorf',
+          title: 'müllstatus',
+          max_entries: 4,
+          days_to_show: 90,
+          title_position: 'right',
+        });
+        card.hass = hass;
+        document.querySelector('#cards').append(card);
+        await Promise.resolve();
+
+        assert(callbacks.length === 1, 'waste calendar subscription was not created');
+        assert(params[0].type === 'calendar/event/subscribe', 'wrong waste calendar websocket API');
+        assert(params[0].entity_id === 'calendar.nickelsdorf', 'waste subscription targets the wrong entity');
+        const requestedDays = (new Date(params[0].end) - new Date(params[0].start)) / 86400000;
+        assert(Math.abs(requestedDays - 90) < 0.01, 'waste card did not request the configured 90-day range');
+
+        callbacks[0]({
+          events: [
+            { summary: 'expired', start: { date: '2026-08-27' }, end: { date: '2026-08-28' } },
+            { summary: 'Restmüll', start: { date: '2026-09-16' }, end: { date: '2026-09-17' } },
+            { summary: 'Biomüll', start: { date: '2026-09-09' }, end: { date: '2026-09-10' } },
+            { summary: 'Papier', start: { date: '2026-09-07' }, end: { date: '2026-09-08' } },
+            { summary: 'Gelber Sack', start: { date: '2026-09-01' }, end: { date: '2026-09-02' } },
+            { summary: 'Altglas', start: { date: '2026-09-23' }, end: { date: '2026-09-24' } },
+          ],
+        });
+        await Promise.resolve();
+
+        const frame = card.shadowRoot.querySelector('.card');
+        const title = card.shadowRoot.querySelector('.border-title');
+        const rows = [...card.shadowRoot.querySelectorAll('.entry')];
+        assert(getComputedStyle(frame).borderRadius === '0px', 'waste card corners are not square');
+        assert(getComputedStyle(frame).borderTopWidth === '1px', 'waste card border is not 1px');
+        assert(getComputedStyle(frame).borderTopColor === 'rgb(255, 235, 59)', 'next collection does not color the frame');
+        assert(title.textContent === 'müllstatus', 'waste border title is missing');
+        assert(getComputedStyle(title).right === '12px', 'waste title cannot be positioned right');
+        assert(rows.length === 4, 'waste card did not limit the list to four entries');
+        assert(rows.map((row) => row.dataset.wasteType).join(',') === 'plastic,paper,bio,residual', 'waste types were not classified correctly');
+        assert(rows[0].querySelector('.summary').textContent === 'gelber sack', 'waste entries are not sorted or lower-case');
+        assert(rows[1].querySelector('.summary').textContent === 'papier', 'paper entry is missing');
+        assert(rows[2].querySelector('.summary').textContent === 'biomüll', 'organic entry is missing');
+        assert(rows[3].querySelector('.summary').textContent === 'restmüll', 'residual entry is missing');
+        assert(rows[3].querySelector('.branch').textContent === '└─', 'last waste tree branch is wrong');
+        assert(rows[0].style.getPropertyValue('--terminal-entry-color') === 'var(--yellow-color, #ffeb3b)', 'plastic color is wrong');
+        assert(rows[1].style.getPropertyValue('--terminal-entry-color') === 'var(--blue-color, #2196f3)', 'paper color is wrong');
+        assert(rows[2].style.getPropertyValue('--terminal-entry-color') === 'var(--green-color, #4caf50)', 'organic color is wrong');
+        assert(rows[3].style.getPropertyValue('--terminal-entry-color') === 'var(--grey-color, #9e9e9e)', 'residual color is wrong');
+        assert(rows[0].querySelector('.date').textContent.includes('in 4 tagen'), 'relative collection date is missing');
+        assert(!rows[0].querySelector('b'), 'waste summary was interpreted as HTML');
+        assert(card.getCardSize() === 4, 'waste card size does not reflect configured entries');
+        assert(card.getGridOptions().rows === 'auto', 'waste card grid rows are not dynamic');
+
+        const firstCallback = callbacks[0];
+        card.setConfig({
+          entity: 'calendar.nickelsdorf',
+          max_entries: 2,
+          days_to_show: 30,
+          plastic_color: 'pink',
+          paper_color: 'orange',
+          glass_color: 'cyan',
+          accent_color: 'purple',
+        });
+        card.hass = hass;
+        await Promise.resolve();
+        await Promise.resolve();
+        assert(callbacks.length === 2, 'waste config change did not resubscribe');
+        assert(unsubscribeCount === 1, 'old waste subscription was not cleaned up');
+        firstCallback({ events: [{ summary: 'stale event', start: { date: '2026-08-29' } }] });
+        assert(!card.shadowRoot.textContent.includes('stale event'), 'stale waste update was rendered');
+
+        callbacks[1]({
+          events: [
+            { summary: '<b>Gelber Sack</b>', start: { date: '2026-09-01' } },
+            { summary: 'Papier', start: { date: '2026-09-07' } },
+            { summary: 'unbekannt', start: { date: '2026-09-08' } },
+          ],
+        });
+        await Promise.resolve();
+        const customRows = [...card.shadowRoot.querySelectorAll('.entry')];
+        assert(customRows.length === 2, 'custom waste entry limit is wrong');
+        assert(customRows[0].dataset.wasteType === 'plastic', 'HTML-like plastic summary was not classified safely');
+        assert(!customRows[0].querySelector('b'), 'HTML-like waste summary was interpreted as HTML');
+        assert(customRows[0].style.getPropertyValue('--terminal-entry-color') === 'var(--pink-color, #e91e63)', 'custom plastic color was not applied');
+        assert(customRows[1].style.getPropertyValue('--terminal-entry-color') === 'var(--orange-color, #ff9800)', 'custom paper color was not applied');
+        assert(card.style.getPropertyValue('--terminal-next-waste-color') === 'var(--pink-color, #e91e63)', 'custom next-collection color did not reach the frame');
+        assert(card.style.getPropertyValue('--terminal-card-accent') === 'var(--purple-color, #9c27b0)', 'configured waste accent was not applied to the card');
+
+        const reconnectCallbacks = [];
+        const reconnectConnection = {
+          subscribeMessage(callback, request) {
+            reconnectCallbacks.push(callback);
+            params.push(request);
+            return Promise.resolve(() => { unsubscribeCount += 1; });
+          },
+        };
+        card.hass = { ...hass, connection: reconnectConnection };
+        await Promise.resolve();
+        await Promise.resolve();
+        assert(reconnectCallbacks.length === 1, 'waste card did not resubscribe after connection replacement');
+        assert(unsubscribeCount === 2, 'waste card did not unsubscribe from the replaced connection');
+        callbacks[1]({ events: [{ summary: 'stale connection', start: { date: '2026-08-30' } }] });
+        assert(!card.shadowRoot.textContent.includes('stale connection'), 'stale waste connection update was rendered');
+
+        reconnectCallbacks[0]({ events: [{ summary: 'Altglas', start: { date: '2026-08-29' } }] });
+        await Promise.resolve();
+        const glassRow = card.shadowRoot.querySelector('.entry');
+        assert(glassRow.dataset.wasteType === 'glass', 'glass waste was not classified');
+        assert(glassRow.style.getPropertyValue('--terminal-entry-color') === 'var(--cyan-color, #00bcd4)', 'glass color is wrong');
+
+        reconnectCallbacks[0]({
+          events: [
+            {
+              summary: 'Bioabfuhr',
+              start: { date: '2026-08-27' },
+              end: { date: '2026-08-29' },
+            },
+            {
+              summary: 'Papier',
+              start: '2026-08-28T12:00:00Z',
+              end: '2026-08-28T13:00:00Z',
+            },
+          ],
+        });
+        await Promise.resolve();
+        const mixedRows = [...card.shadowRoot.querySelectorAll('.entry')];
+        assert(mixedRows.length === 2, 'ongoing and timed waste entries are not both visible');
+        assert(mixedRows[0].dataset.wasteType === 'bio', 'Bioabfuhr was not classified as organic waste');
+        assert(mixedRows[0].querySelector('.summary').textContent === 'bioabfuhr', 'ongoing multi-day waste entry was hidden');
+        assert(mixedRows[1].querySelector('.date').textContent.includes('heute'), 'timed waste entry is not formatted in the HA timezone');
+
+        reconnectCallbacks[0]({ events: [{ summary: 'Sperrmüll', start: { date: '2026-08-30' } }] });
+        await Promise.resolve();
+        const otherRow = card.shadowRoot.querySelector('.entry');
+        assert(otherRow.dataset.wasteType === 'other', 'unknown waste does not use the other type');
+        assert(otherRow.style.getPropertyValue('--terminal-entry-color') === 'var(--purple-color, #9c27b0)', 'other waste does not use the configured accent fallback');
+
+        reconnectCallbacks[0]({ events: [] });
+        assert(card.shadowRoot.querySelector('.card').dataset.state === 'empty', 'empty waste state is missing');
+        assert(card.shadowRoot.querySelector('.status').textContent === 'no upcoming collections', 'empty waste message is missing');
+
+        card.setConfig({
+          entity: 'calendar.family',
+          max_entries: 1,
+          days_to_show: 7,
+          bio_color: [255, 0, 0],
+        });
+        await Promise.resolve();
+        await Promise.resolve();
+        assert(reconnectCallbacks.length === 2, 'waste entity change did not resubscribe');
+        assert(unsubscribeCount === 3, 'waste entity change did not clean up the old subscription');
+        reconnectCallbacks[1]({
+          events: [
+            { summary: 'Bio', start: { date: '2026-08-30' } },
+            { summary: 'Papier', start: { date: '2026-09-01' } },
+          ],
+        });
+        await Promise.resolve();
+        const singleRow = card.shadowRoot.querySelector('.entry');
+        assert(card.shadowRoot.querySelectorAll('.entry').length === 1, 'max_entries one was not enforced');
+        assert(card.shadowRoot.querySelector('.border-title').textContent === 'Family', 'waste title does not fall back to the friendly name');
+        assert(singleRow.dataset.wasteType === 'bio', 'short Bio label was not classified');
+        assert(singleRow.style.getPropertyValue('--terminal-entry-color') === 'rgb(255 0 0)', 'legacy RGB waste color did not render');
+
+        reconnectCallbacks[1]({ events: null });
+        assert(card.shadowRoot.querySelector('.card').dataset.state === 'error', 'waste subscription error state is missing');
+        assert(card.shadowRoot.querySelector('.status').textContent === 'waste collections unavailable', 'waste subscription error is not shown');
+
+        const offline = document.createElement('terminal-waste-card');
+        offline.setConfig({ entity: 'calendar.offline_waste' });
+        offline.hass = hass;
+        document.querySelector('#cards').append(offline);
+        assert(offline.shadowRoot.querySelector('.card').dataset.state === 'unavailable', 'offline waste state is missing');
+        assert(getComputedStyle(offline.shadowRoot.querySelector('.card')).borderTopColor === 'rgb(243, 139, 168)', 'offline waste card does not use the error border');
+
+        const Card = customElements.get('terminal-waste-card');
+        const form = Card.getConfigForm();
+        const fields = form.schema.flatMap((item) => item.schema || [item]);
+        assert(fields.find((field) => field.name === 'entity').selector.entity.filter.domain === 'calendar', 'waste entity selector is not domain-filtered');
+        assert(fields.find((field) => field.name === 'max_entries').selector.number.max === 4, 'waste entry-count selector is wrong');
+        assert(fields.find((field) => field.name === 'days_to_show').selector.number.max === 365, 'waste day selector is wrong');
+        for (const colorKey of ['plastic_color', 'paper_color', 'bio_color', 'residual_color', 'glass_color', 'other_color']) {
+          assert(fields.find((field) => field.name === colorKey).selector.ui_color, `${colorKey} native HA color selector missing`);
+        }
+        assert(fields.find((field) => field.name === 'accent_color').selector.ui_color, 'waste fallback accent selector missing');
+        assert(fields.find((field) => field.name === 'title_position').selector.select, 'waste title position selector missing');
+        assert(Card.getStubConfig(hass).entity === 'calendar.nickelsdorf', 'waste stub did not prefer the real waste calendar');
+        assert(window.customCards.some((entry) => entry.type === 'terminal-waste-card'), 'waste picker metadata missing');
+
+        for (const invalidConfig of [
+          { entity: 'sensor.waste' },
+          { entity: 'calendar.nickelsdorf', max_entries: 0 },
+          { entity: 'calendar.nickelsdorf', max_entries: 5 },
+          { entity: 'calendar.nickelsdorf', days_to_show: 366 },
+          { entity: 'calendar.nickelsdorf', bio_color: 'not-a-theme-color' },
+        ]) {
+          let invalid = false;
+          try { document.createElement('terminal-waste-card').setConfig(invalidConfig); }
+          catch (_error) { invalid = true; }
+          assert(invalid, `invalid waste config was accepted: ${JSON.stringify(invalidConfig)}`);
+        }
+
+        card.remove();
+        offline.remove();
+        await Promise.resolve();
+        await Promise.resolve();
+        Date.now = originalDateNow;
+        assert(unsubscribeCount === 5, 'waste subscriptions were not cleaned up on disconnect');
+
+        document.body.dataset.testStatus = 'PASS';
+        document.title = 'PASS terminal-waste-card';
+        document.querySelector('#result').textContent = [
+          'PASS: up to four waste entries sorted and rendered safely',
+          'PASS: plastic, paper, organic, residual, glass and other colors',
+          'PASS: next collection colors the frame and title',
+          'PASS: reactive calendar lifecycle, native editor and validation',
+        ].join('\n');
+      }
+
+      run().catch((error) => {
+        Date.now = originalDateNow;
+        document.body.dataset.testStatus = 'FAIL';
+        document.title = 'FAIL terminal-waste-card';
+        document.querySelector('#result').textContent = `FAIL: ${error.stack || error}`;
+        console.error(error);
+      });
+    </script>
+  </body>
+</html>

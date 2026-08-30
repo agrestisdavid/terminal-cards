@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 0.14.0 — 2026-08-30
+
+- Add `custom:terminal-waste-card` for up to four live calendar-backed waste collections with semantic per-type HA theme colors and native visual configuration.
+
 ## 0.13.0 — 2026-08-28
 
 - Let every Alarm Card state use an individually configurable native HA theme color and apply the effective state color across the card and terminal popup.

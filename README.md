@@ -124,6 +124,28 @@ title_position: left
 accent_color: cyan
 ```
 
+### `custom:terminal-waste-card`
+
+A compact waste-status list backed by one `calendar.*` entity. It shows one to four upcoming collections in chronological order and refreshes through Home Assistant's live calendar API. Each row uses a semantic HA theme color derived from the event summary: yellow bag/plastic, paper, organic waste, residual waste, glass, or a configurable fallback. Explicit type colors take precedence over `accent_color`, followed by the semantic defaults. The nearest collection also colors the card border and border title. German and common English waste labels are recognized; all summaries remain safely rendered as text.
+
+```yaml
+type: custom:terminal-waste-card
+entity: calendar.nickelsdorf
+title: müllstatus
+max_entries: 4
+days_to_show: 90
+plastic_color: yellow
+paper_color: blue
+bio_color: green
+residual_color: grey
+glass_color: cyan
+other_color: accent
+accent_color: purple
+title_position: left
+```
+
+All options use Home Assistant's native visual-editor controls. Missing, unknown, or unavailable calendar entities and subscription errors retain the fixed Error color.
+
 ### `custom:terminal-alarm-card`
 
 A compact control for one `alarm_control_panel.*` entity. Tapping Icon/Name/State opens the complete terminal popup; the independent square controls button expands supported arm modes and Disarm directly inside the card. Home, Away, Night, Vacation, and Custom are derived exclusively from `supported_features`. When the entity requires a code and has no entity-registry `default_code`, the expanded card uses a masked session-only PIN/code field. Codes are cleared after success, reconnect, config change, collapse, or disconnect; errors remain visible for a retry. Manual alarm triggering is intentionally never exposed. Disarmed, Home, Away, Night, Vacation, Custom Bypass, Arming, Pending, Disarming, and Triggered each have their own native HA theme-color option. An explicit state color takes precedence, existing `accent_color` remains the backward-compatible fallback, and the semantic defaults apply when neither is configured. The current state's color drives the card border, border title, icon, state, focus/hover, active control, and terminal popup.
@@ -217,7 +239,7 @@ Navigation secondary content uses this precedence: a successful reactive `state_
 3. Install **Terminal Cards**.
 4. Hard-refresh Home Assistant (`Ctrl+Shift+R`).
 
-HACS loads the release asset `terminal-cards.js`; no inline `data:` resource is needed. All nine cards appear in Home Assistant's card picker and provide graphical configuration.
+HACS loads the release asset `terminal-cards.js`; no inline `data:` resource is needed. All ten cards appear in Home Assistant's card picker and provide graphical configuration.
 
 ## Development
 

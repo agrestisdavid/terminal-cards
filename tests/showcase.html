@@ -60,7 +60,7 @@
     <script type="module" src="../dist/terminal-cards.js"></script>
   </head>
   <body>
-    <h1>terminal-cards <span>// title + wrapper + light + switch + sensor + calendar + alarm + shutter + nav</span></h1>
+    <h1>terminal-cards <span>// title + wrapper + light + switch + sensor + calendar + waste + alarm + shutter + nav</span></h1>
     <main></main>
     <script type="module">
       const hass = {
@@ -101,6 +101,10 @@
             entity_id: 'calendar.family', state: 'off',
             attributes: { friendly_name: 'family calendar' },
           },
+          'calendar.waste': {
+            entity_id: 'calendar.waste', state: 'off',
+            attributes: { friendly_name: 'waste collection' },
+          },
           'alarm_control_panel.home': {
             entity_id: 'alarm_control_panel.home', state: 'armed_home',
             attributes: {
@@ -116,11 +120,19 @@
           subscribeMessage(callback, params) {
             if (params?.type === 'calendar/event/subscribe') {
               const future = (hours) => new Date(Date.now() + hours * 3600000).toISOString();
-              setTimeout(() => callback({ events: [
-                { summary: 'team sync', start: future(18), end: future(19) },
-                { summary: 'dentist', start: future(42), end: future(43) },
-                { summary: 'family dinner', start: future(68), end: future(70) },
-              ] }), 0);
+              const events = params.entity_id === 'calendar.waste'
+                ? [
+                  { summary: 'gelber sack', start: future(24) },
+                  { summary: 'papier', start: future(96) },
+                  { summary: 'biomüll', start: future(168) },
+                  { summary: 'restmüll', start: future(240) },
+                ]
+                : [
+                  { summary: 'team sync', start: future(18), end: future(19) },
+                  { summary: 'dentist', start: future(42), end: future(43) },
+                  { summary: 'family dinner', start: future(68), end: future(70) },
+                ];
+              setTimeout(() => callback({ events }), 0);
             } else {
               setTimeout(() => callback({
                 result: '3 cameras online',
@@ -176,7 +188,7 @@
 
       const controls = document.createElement('terminal-card-wrapper');
       controls.setConfig({
-        title: 'covers + entities + calendar + alarm + navigation',
+        title: 'covers + entities + calendar + waste + alarm + navigation',
         accent_color: 'cyan',
         entity: 'cover.office',
         state_position: 'top-right',
@@ -205,6 +217,12 @@
             type: 'custom:terminal-calendar-card', entity: 'calendar.family',
             title: 'agenda', max_events: 3, days_to_show: 30,
             accent_color: 'purple',
+          },
+          {
+            type: 'custom:terminal-waste-card', entity: 'calendar.waste',
+            title: 'waste status', max_entries: 4, days_to_show: 90,
+            plastic_color: 'yellow', paper_color: 'blue',
+            bio_color: 'green', residual_color: 'grey',
           },
           {
             type: 'custom:terminal-navigation-card', name: 'kitchen',

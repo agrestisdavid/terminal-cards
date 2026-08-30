@@ -163,38 +163,125 @@
         assert(card.shadowRoot.querySelector('.state').textContent.includes('87%'), 'battery state missing');
         assert(card.shadowRoot.querySelector('.icon').icon === 'mdi:robot-vacuum', 'default vacuum icon is wrong');
         assert(registryCalls === 0, 'registry websocket fallback ran despite hass.entities data');
+        assert(card.getCardSize() === 1, 'vacuum card is not compact by default');
+        assert(card.shadowRoot.querySelector('.details-storage').hidden, 'vacuum details are not collapsed');
+        const mainTarget = card.shadowRoot.querySelector('.main-target');
+        assert(mainTarget.getAttribute('aria-haspopup') === 'dialog', 'compact card does not advertise its popup');
+        mainTarget.focus();
+        mainTarget.click();
+        await waitFor(() => Boolean(card._popupRoot), 'tap did not open the vacuum popup');
+        await tick();
+        const detailRoot = () => card._popupRoot || card.shadowRoot;
+        assert(mainTarget.getAttribute('aria-expanded') === 'true', 'popup open state is not exposed');
+        assert(card._popupRoot.querySelector('.popup-dialog').getAttribute('role') === 'dialog', 'vacuum popup dialog role missing');
+        const popupClose = card._popupRoot.querySelector('.popup-close');
+        assert(popupClose === card._popupRoot.activeElement, 'vacuum popup did not focus close');
+        popupClose.dispatchEvent(new KeyboardEvent('keydown', {
+          key: 'Tab', shiftKey: true, bubbles: true, composed: true,
+        }));
+        const lastFocusable = [...card._popupRoot.querySelectorAll('button, select')]
+          .filter((element) => !element.disabled && !element.closest('[hidden]')).at(-1);
+        assert(card._popupRoot.activeElement === lastFocusable, 'vacuum popup did not wrap backward focus');
+        lastFocusable.dispatchEvent(new KeyboardEvent('keydown', {
+          key: 'Tab', bubbles: true, composed: true,
+        }));
+        assert(card._popupRoot.activeElement === popupClose, 'vacuum popup did not wrap forward focus');
+        assert(card._popupRoot.querySelector('.room-prompt-title').textContent === 'räume auswählen', 'room-selection guidance missing');
 
-        const kitchen = [...card.shadowRoot.querySelectorAll('.room-zone')]
+        let kitchen = [...detailRoot().querySelectorAll('.room-zone')]
           .find((button) => button.getAttribute('aria-label') === 'Küche auswählen');
-        const office = [...card.shadowRoot.querySelectorAll('.room-zone')]
+        const office = [...detailRoot().querySelectorAll('.room-zone')]
           .find((button) => button.getAttribute('aria-label') === 'Büro auswählen');
         assert(kitchen && office, 'mapped HA area names are missing');
         assert(kitchen.style.left === '25%' && kitchen.style.top === '75%', 'affine kitchen projection is wrong');
         assert(kitchen.style.width === '50%' && kitchen.style.height === '50%', 'projected kitchen size is wrong');
         assert(office.style.left === '75%' && office.style.top === '25%', 'inverted-Y office projection is wrong');
         assert(getComputedStyle(kitchen).minWidth === '34px', 'room touch target is smaller than 34px');
+        assert(getComputedStyle(kitchen).borderTopWidth === '2px', 'unselected rooms are not visibly outlined');
+        assert(getComputedStyle(kitchen).backgroundColor !== 'rgba(0, 0, 0, 0)', 'unselected rooms have no visible fill');
         assert(!office.querySelector('b'), 'room name was rendered as HTML');
         assert(office.querySelector('.room-label').textContent === 'Büro', 'HA area label was not rendered safely');
 
         kitchen.click();
         assert(kitchen.getAttribute('aria-pressed') === 'true', 'room click did not select the area');
+        assert(detailRoot().querySelector('.selection-row').dataset.selected === 'true', 'selected-room summary is not accented');
+        assert(detailRoot().querySelector('.room-prompt-count').textContent === '1 raum', 'selected-room count is missing');
+        assert(card.shadowRoot.querySelector('.open-label').textContent === '1 gewählt', 'compact card does not expose room selection');
+        assert(mainTarget.getAttribute('aria-label').includes('1 raum ausgewählt'), 'selected-room count is missing from the accessible name');
+        card.style.width = '200px';
+        await tick();
+        assert(getComputedStyle(card.shadowRoot.querySelector('.open-label')).display === 'none', 'narrow selected-room label stayed visible');
+        assert(getComputedStyle(card.shadowRoot.querySelector('.open-count')).display !== 'none', 'narrow selected-room count disappeared');
+        assert(card.shadowRoot.querySelector('.open-count').textContent === '1', 'narrow selected-room badge is wrong');
+        card.style.removeProperty('width');
+        kitchen.focus();
+        states['image.robobert_map'] = {
+          ...states['image.robobert_map'],
+          state: 'map-revision-2',
+          last_updated: '2026-08-30T20:01:00Z',
+        };
         card.hass = { ...hass };
-        assert(kitchen.getAttribute('aria-pressed') === 'true', 'room selection did not survive a normal HASS refresh');
-        card.shadowRoot.querySelector('[data-focus-key="start"]').click();
+        assert(card._selectedAreaIds.has('kuche'), 'live map refresh cleared the selected HA area');
+        assert(
+          card._popupRoot.querySelector('.popup-dialog').contains(card._popupRoot.activeElement),
+          'live map refresh ejected keyboard focus from the popup'
+        );
+        await waitFor(
+          () => detailRoot().querySelectorAll('.room-zone').length === 2,
+          'room overlays did not return after a live map refresh'
+        );
+        kitchen = [...detailRoot().querySelectorAll('.room-zone')]
+          .find((button) => button.getAttribute('aria-label') === 'Küche auswählen');
+        assert(kitchen.getAttribute('aria-pressed') === 'true', 'room selection did not survive a live map refresh');
+        detailRoot().querySelector('[data-focus-key="start"]').click();
         await tick();
         let call = calls.at(-1);
         assert(call[0] === 'vacuum' && call[1] === 'clean_area', 'selected room did not call vacuum.clean_area');
         assert(JSON.stringify(call[2]) === JSON.stringify({ cleaning_area_id: ['kuche'] }), 'clean_area payload is wrong');
         assert(call[3].entity_id === 'vacuum.robobert', 'clean_area target is wrong');
 
-        card.shadowRoot.querySelector('.clear-selection').click();
-        card.shadowRoot.querySelector('[data-focus-key="start"]').click();
+        states['image.robobert_map'] = {
+          ...states['image.robobert_map'],
+          state: 'map-revision-3',
+          last_updated: '2026-08-30T20:02:00Z',
+          attributes: { ...states['image.robobert_map'].attributes, rooms: { 2: rooms[2] } },
+        };
+        card.hass = { ...hass };
+        await waitFor(
+          () => detailRoot().querySelectorAll('.room-zone').length === 1,
+          'replacement room model did not render'
+        );
+        assert(card._selectionNeedsReview, 'missing selected area did not enter fail-closed review state');
+        assert(detailRoot().querySelector('[data-focus-key="start"]').disabled, 'invalidated room selection left Start enabled');
+        assert(detailRoot().querySelector('.selection-summary').textContent.includes('prüfen'), 'selection review guidance is missing');
+        const blockedCallCount = calls.length;
+        detailRoot().querySelector('[data-focus-key="start"]').click();
+        assert(calls.length === blockedCallCount, 'invalidated selection issued a cleaning command');
+
+        states['image.robobert_map'] = {
+          ...states['image.robobert_map'],
+          state: 'map-revision-4',
+          last_updated: '2026-08-30T20:03:00Z',
+          attributes: { ...states['image.robobert_map'].attributes, rooms },
+        };
+        card.hass = { ...hass };
+        await waitFor(
+          () => detailRoot().querySelectorAll('.room-zone').length === 2,
+          'restored room model did not render'
+        );
+        kitchen = [...detailRoot().querySelectorAll('.room-zone')]
+          .find((button) => button.getAttribute('aria-label') === 'Küche auswählen');
+        assert(!card._selectionNeedsReview, 'restored selected area remained in review state');
+        assert(!detailRoot().querySelector('[data-focus-key="start"]').disabled, 'restored selected area did not re-enable Start');
+
+        detailRoot().querySelector('.clear-selection').click();
+        detailRoot().querySelector('[data-focus-key="start"]').click();
         await tick();
         call = calls.at(-1);
         assert(call[0] === 'vacuum' && call[1] === 'start', 'empty selection did not start the whole map');
         assert(JSON.stringify(call[2]) === '{}', 'whole-map start sent unexpected data');
 
-        const cleaningSelect = card.shadowRoot.querySelector('[data-focus-key="cleaning-mode"]');
+        const cleaningSelect = detailRoot().querySelector('[data-focus-key="cleaning-mode"]');
         cleaningSelect.value = 'mop';
         cleaningSelect.dispatchEvent(new Event('change'));
         await tick();
@@ -202,7 +289,7 @@
         assert(call[0] === 'select' && call[1] === 'select_option', 'cleaning mode used the wrong service');
         assert(call[2].option === 'mop' && call[3].entity_id === 'select.cleaning_mode', 'cleaning mode payload is wrong');
 
-        const fanSelect = card.shadowRoot.querySelector('[data-focus-key="fan-speed"]');
+        const fanSelect = detailRoot().querySelector('[data-focus-key="fan-speed"]');
         assert([...fanSelect.options].some((option) => option.textContent === 'max+'), 'fan options were not localized');
         fanSelect.value = 'max_plus';
         fanSelect.dispatchEvent(new Event('change'));
@@ -211,7 +298,7 @@
         assert(call[0] === 'vacuum' && call[1] === 'set_fan_speed', 'fan setting used the wrong service');
         assert(call[2].fan_speed === 'max_plus' && call[3].entity_id === 'vacuum.robobert', 'fan payload is wrong');
 
-        const mopSelect = card.shadowRoot.querySelector('[data-focus-key="mop-intensity"]');
+        const mopSelect = detailRoot().querySelector('[data-focus-key="mop-intensity"]');
         mopSelect.value = 'medium';
         mopSelect.dispatchEvent(new Event('change'));
         await tick();
@@ -219,7 +306,7 @@
         assert(call[0] === 'select' && call[2].option === 'medium', 'mop intensity service is wrong');
         assert(call[3].entity_id === 'select.mop_intensity', 'mop intensity target is wrong');
 
-        const thorough = card.shadowRoot.querySelector('[data-focus-key="thorough-mode"]');
+        const thorough = detailRoot().querySelector('[data-focus-key="thorough-mode"]');
         thorough.click();
         await tick();
         call = calls.at(-1);
@@ -239,12 +326,12 @@
           ...states['vacuum.robobert'], state: 'cleaning',
         };
         card.hass = { ...hass };
-        const pause = card.shadowRoot.querySelector('[data-focus-key="pause"]');
+        const pause = detailRoot().querySelector('[data-focus-key="pause"]');
         assert(!pause.disabled, 'pause is disabled while cleaning');
         pause.click();
         await tick();
         assert(calls.at(-1)[1] === 'pause', 'pause called the wrong service');
-        const dock = card.shadowRoot.querySelector('[data-focus-key="dock"]');
+        const dock = detailRoot().querySelector('[data-focus-key="dock"]');
         dock.click();
         await tick();
         assert(calls.at(-1)[1] === 'return_to_base', 'dock called the wrong service');
@@ -254,10 +341,10 @@
         };
         card.hass = { ...hass };
         kitchen.click();
-        card.shadowRoot.querySelector('[data-focus-key="start"]').click();
+        detailRoot().querySelector('[data-focus-key="start"]').click();
         await tick();
         assert(calls.at(-1)[1] === 'start', 'paused vacuum did not resume with vacuum.start');
-        assert(card.shadowRoot.querySelector('[data-focus-key="start"] span').textContent === 'fortsetzen', 'resume label missing');
+        assert(detailRoot().querySelector('[data-focus-key="start"] span').textContent === 'fortsetzen', 'resume label missing');
 
         states['vacuum.robobert'] = {
           ...states['vacuum.robobert'], state: 'docked',
@@ -266,45 +353,49 @@
         let resolveBusy;
         serviceImplementation = () => new Promise((resolve) => { resolveBusy = resolve; });
         const callCount = calls.length;
-        const start = card.shadowRoot.querySelector('[data-focus-key="start"]');
+        const start = detailRoot().querySelector('[data-focus-key="start"]');
         start.click();
         start.click();
         assert(calls.length === callCount + 1, 'busy guard allowed a duplicate start');
         assert(card.shadowRoot.querySelector('.card').getAttribute('aria-busy') === 'true', 'busy state is not exposed');
+        assert(detailRoot().querySelector('.popup-dialog').getAttribute('aria-busy') === 'true', 'popup busy state is not exposed');
         start.focus();
         resolveBusy();
         await tick();
-        assert(card.shadowRoot.activeElement === start, 'service completion did not restore command focus');
+        assert(detailRoot().activeElement === start, 'service completion did not restore command focus');
         serviceImplementation = (...args) => Promise.resolve(args);
 
         let rejectStaleService;
         serviceImplementation = () => new Promise((_resolve, reject) => {
           rejectStaleService = reject;
         });
-        card.shadowRoot.querySelector('[data-focus-key="start"]').click();
+        detailRoot().querySelector('[data-focus-key="start"]').click();
         card.setConfig({ ...config, name: 'robobert refreshed' });
         rejectStaleService(new Error('stale failure'));
         await tick();
         assert(
-          !card.shadowRoot.querySelector('.operation-status').textContent.includes('stale'),
+          !detailRoot().querySelector('.operation-status').textContent.includes('stale'),
           'stale service failure survived a config change'
         );
         assert(card.shadowRoot.querySelector('.card').getAttribute('aria-busy') === 'false', 'config change kept stale busy state');
         serviceImplementation = (...args) => Promise.resolve(args);
+        assert(!card._popupRoot, 'config change did not close the vacuum popup');
+        card.shadowRoot.querySelector('.main-target').click();
+        await waitFor(() => Boolean(card._popupRoot), 'vacuum popup did not reopen');
 
         serviceImplementation = () => Promise.reject(new Error('Robot blocked'));
-        card.shadowRoot.querySelector('[data-focus-key="start"]').click();
+        detailRoot().querySelector('[data-focus-key="start"]').click();
         await tick();
-        assert(card.shadowRoot.querySelector('.operation-status').textContent === 'robot blocked', 'service error is not visible');
-        assert(card.shadowRoot.querySelector('.operation-status').dataset.error === 'true', 'service error style state missing');
+        assert(detailRoot().querySelector('.operation-status').textContent === 'robot blocked', 'service error is not visible');
+        assert(detailRoot().querySelector('.operation-status').dataset.error === 'true', 'service error style state missing');
         serviceImplementation = (...args) => Promise.resolve(args);
 
         states['vacuum.robobert'] = {
           ...states['vacuum.robobert'], state: 'unavailable',
         };
         card.hass = { ...hass };
-        assert(card.shadowRoot.querySelector('[data-focus-key="start"]').disabled, 'start is enabled while unavailable');
-        assert(card.shadowRoot.querySelector('[data-focus-key="dock"]').disabled, 'dock is enabled while unavailable');
+        assert(detailRoot().querySelector('[data-focus-key="start"]').disabled, 'start is enabled while unavailable');
+        assert(detailRoot().querySelector('[data-focus-key="dock"]').disabled, 'dock is enabled while unavailable');
         const unavailableCard = card.shadowRoot.querySelector('.card');
         assert(unavailableCard.dataset.state === 'unavailable', 'unavailable state was not applied to the frame');
         assert(
@@ -611,9 +702,29 @@
           assert(invalid, `invalid vacuum config was accepted: ${JSON.stringify(invalidConfig)}`);
         }
 
+        const popupHost = card._popupHost;
+        popupHost.dispatchEvent(new KeyboardEvent('keydown', {
+          key: 'Escape', bubbles: true, composed: true,
+        }));
+        assert(!card._popupRoot && !popupHost.isConnected, 'Escape did not close the vacuum popup');
+        assert(card.shadowRoot.activeElement === mainTarget, 'vacuum popup did not restore trigger focus');
+        assert(mainTarget.getAttribute('aria-expanded') === 'false', 'closed popup remained aria-expanded');
+
+        mainTarget.click();
+        await waitFor(() => Boolean(card._popupRoot), 'primary popup did not reopen for coordination test');
+        const competing = makeCard();
+        const competingTrigger = competing.shadowRoot.querySelector('.main-target');
+        competingTrigger.click();
+        await waitFor(() => Boolean(competing._popupRoot), 'competing vacuum popup did not open');
+        assert(!card._popupRoot, 'opening a second vacuum left the first popup connected');
+        assert(mainTarget.getAttribute('aria-expanded') === 'false', 'replaced vacuum popup stayed expanded');
+        const competingHost = competing._popupHost;
+        competing.remove();
+        assert(!competingHost.isConnected && !competing._popupRoot, 'disconnect left the vacuum popup connected');
+
         document.body.dataset.testStatus = 'PASS';
         document.querySelector('#result').textContent =
-          'PASS: calibrated room selection, native vacuum controls, Roborock deep mode, async guards and editor';
+          'PASS: compact popup vacuum, prominent calibrated rooms, native controls, deep mode and async guards';
       }
 
       run().catch((error) => {

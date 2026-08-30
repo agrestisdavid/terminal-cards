@@ -208,9 +208,13 @@ hold_action:
 
 ### `custom:terminal-vacuum-card`
 
-A full-width terminal control for one `vacuum.*` entity. Its live `image.*` map is also the room selector: compatible map entities exposing `rooms` and `calibration_points` receive accessible clickable overlays, while Home Assistant's native Vacuum segment-to-area mapping resolves every map segment to an `area_id`. With selected rooms, Start calls `vacuum.clean_area`; without a selection it starts a complete clean. Pause, Resume, and Dock use the native Vacuum actions.
+A compact terminal status row for one `vacuum.*` entity. The card is collapsed by default; tapping its complete accessible main row opens a dedicated terminal popup with the live map, room selection, settings, and commands. The compact row keeps state, battery, and a visible room-selection indicator available without occupying a full dashboard section.
 
-Suction power is read dynamically from the vacuum's `fan_speed_list`. Optional `select.*` entities add cleaning type, mop intensity, and Normal/Thorough controls. For Roborock, Thorough maps to the native `deep` mop path; it does not run the complete cleaning twice. Missing or ambiguous area mappings never fall back to vendor commands: the map remains visible, selection is disabled, and the card explains that segments must first be assigned to Home Assistant areas in the Vacuum entity settings.
+The live `image.*` map is also the room selector. Compatible map entities exposing `rooms` and `calibration_points` receive strongly outlined, subtly filled room targets, a prominent “räume auswählen” instruction, and a selected-room counter. Home Assistant's native Vacuum segment-to-area mapping resolves every map segment to an `area_id`. Selected rooms use a stronger accent fill and label; with selected rooms, Start calls `vacuum.clean_area`, while an empty selection starts a complete clean. Pause, Resume, and Dock use the native Vacuum actions.
+
+Suction power is read dynamically from the vacuum's `fan_speed_list`. Optional `select.*` entities add cleaning type, mop intensity, and Normal/Thorough controls. For Roborock, Thorough maps to the native `deep` mop path; it does not run the complete cleaning twice. Missing or ambiguous area mappings never fall back to vendor commands: the map remains visible, selection is disabled, and the popup explains that segments must first be assigned to Home Assistant areas in the Vacuum entity settings.
+
+![Terminal Vacuum popup](docs/terminal-vacuum-popup.png)
 
 ```yaml
 type: custom:terminal-vacuum-card
@@ -228,7 +232,7 @@ thorough_mode: deep
 accent_color: cyan
 ```
 
-All public options use native Home Assistant visual-editor controls. The Vacuum and map entities are required; mode and battery entities are optional, so unsupported groups simply stay hidden. The map adapter validates its affine calibration, clips room rectangles to the image, keeps room targets at least 34×34 px, cache-busts stable image URLs when the Image entity publishes a new state, preserves room selection across normal state refreshes, renders all labels through `textContent`, and blocks stale image, registry, or service results after reconnects and configuration changes.
+All public options use native Home Assistant visual-editor controls. The Vacuum and map entities are required; mode and battery entities are optional, so unsupported groups simply stay hidden. The modal popup traps keyboard focus, closes with Escape, backdrop, or its close button, returns focus to the compact card, and follows live HASS updates. The map adapter validates its affine calibration, clips room rectangles to the image, keeps room targets at least 34×34 px, cache-busts stable image URLs when the Image entity publishes a new state, and preserves selected Home Assistant areas while a replacement image loads. If the complete replacement map can no longer validate a selection, Start fails closed until the selection is explicitly cleared or becomes valid again. Labels use `textContent`, and stale image, registry, or service results remain blocked after reconnects and configuration changes.
 
 ### `custom:terminal-navigation-card`
 

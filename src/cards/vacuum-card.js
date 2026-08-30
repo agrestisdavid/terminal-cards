@@ -74,13 +74,40 @@ const STYLES = `
   .main {
     box-sizing: border-box;
     display: flex;
+    align-items: stretch;
+    min-height: 72px;
+  }
+  .main-target {
+    box-sizing: border-box;
+    display: flex;
+    flex: 1 1 auto;
     align-items: center;
     gap: 14px;
+    min-width: 0;
     min-height: 72px;
     padding: 12px 14px;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+    outline: none;
+    user-select: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .main-target:focus-visible {
+    outline: 1px solid var(--terminal-accent);
+    outline-offset: -4px;
+  }
+  .main-target:hover .open-indicator,
+  .main-target:focus-visible .open-indicator {
+    border-color: var(--terminal-accent);
+    color: var(--terminal-accent);
   }
   @container (max-width: 420px) {
-    .main { gap: 10px; padding-inline: 10px; }
+    .main-target { gap: 10px; padding-inline: 10px; }
   }
   .icon {
     flex: 0 0 auto;
@@ -100,6 +127,71 @@ const STYLES = `
   .state { color: var(--terminal-dim); font-size: 12px; }
   .card[data-state="unavailable"] .state,
   .card[data-state="error"] .state { color: var(--terminal-error); }
+  .open-indicator {
+    box-sizing: border-box;
+    display: flex;
+    flex: 0 0 auto;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+    min-width: 34px;
+    height: 34px;
+    padding: 0 7px;
+    border: 1px solid transparent;
+    color: var(--terminal-dim);
+    pointer-events: none;
+  }
+  .open-indicator ha-icon {
+    width: 19px;
+    height: 19px;
+    --mdc-icon-size: 19px;
+  }
+  .open-label { font-size: 10px; white-space: nowrap; }
+  .open-count {
+    display: none;
+    min-width: 15px;
+    height: 15px;
+    padding: 0 3px;
+    background: var(--terminal-accent);
+    color: var(--terminal-background);
+    font: 700 9px/15px ${TERMINAL_FONT};
+    text-align: center;
+  }
+  .open-count[hidden] { display: none; }
+  @container (max-width: 260px) {
+    .open-indicator { width: 34px; min-width: 34px; padding: 0; }
+    .open-label { display: none; }
+    .open-count:not([hidden]) { display: block; }
+  }
+  .details-storage[hidden] { display: none; }
+  .vacuum-details { display: grid; min-width: 0; }
+  .room-prompt {
+    box-sizing: border-box;
+    display: grid;
+    grid-template-columns: 28px minmax(0, 1fr) max-content;
+    align-items: center;
+    gap: 9px;
+    min-height: 42px;
+    margin: 0 14px 10px;
+    padding: 5px 8px;
+    border: 1px solid var(--terminal-accent);
+    color: var(--terminal-accent);
+  }
+  .room-prompt ha-icon { width: 22px; height: 22px; --mdc-icon-size: 22px; }
+  .room-prompt-text { display: grid; min-width: 0; }
+  .room-prompt-title { font-size: 11px; font-weight: 700; }
+  .room-prompt-hint {
+    overflow: hidden;
+    color: var(--terminal-dim);
+    font-size: 10px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .room-prompt-count { font-size: 10px; font-weight: 700; white-space: nowrap; }
+  @container (max-width: 420px) {
+    .room-prompt { margin-inline: 10px; }
+    .room-prompt-hint { white-space: normal; }
+  }
   .map-frame {
     box-sizing: border-box;
     margin: 0 14px;
@@ -132,54 +224,73 @@ const STYLES = `
     min-height: 34px;
     transform: translate(-50%, -50%);
     padding: 0;
-    border: 1px solid transparent;
+    border: 2px solid color-mix(in srgb, var(--terminal-accent) 68%, var(--terminal-dim));
     border-radius: 0;
-    background: transparent;
+    background: color-mix(in srgb, var(--terminal-accent) 9%, transparent);
     color: var(--terminal-text);
     cursor: pointer;
+    transition: background 120ms ease, border-color 120ms ease;
   }
   .room-zone:not(:disabled):hover,
   .room-zone:not(:disabled):focus-visible {
     border-color: var(--terminal-accent);
-    outline: none;
+    background: color-mix(in srgb, var(--terminal-accent) 20%, transparent);
+    outline: 1px solid var(--terminal-background);
+    outline-offset: -4px;
   }
   .room-zone[aria-pressed="true"] {
     border-color: var(--terminal-accent);
-    background: color-mix(in srgb, var(--terminal-accent) 20%, transparent);
+    background: color-mix(in srgb, var(--terminal-accent) 34%, transparent);
   }
-  .room-zone:disabled { cursor: not-allowed; }
+  .room-zone:disabled {
+    border-color: var(--terminal-dim);
+    background: color-mix(in srgb, var(--terminal-dim) 8%, transparent);
+    cursor: not-allowed;
+    opacity: .72;
+  }
   .room-label {
     position: absolute;
     top: 50%;
     left: 50%;
-    max-width: calc(100% - 6px);
+    max-width: calc(100% - 8px);
     transform: translate(-50%, -50%);
-    padding: 1px 4px;
+    padding: 2px 5px;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    border: 1px solid var(--terminal-dim);
-    background: color-mix(in srgb, var(--terminal-background) 82%, transparent);
+    border: 1px solid color-mix(in srgb, var(--terminal-accent) 68%, var(--terminal-dim));
+    background: color-mix(in srgb, var(--terminal-background) 92%, transparent);
     color: var(--terminal-text);
-    font: 10px/1.4 ${TERMINAL_FONT};
+    font: 600 11px/1.4 ${TERMINAL_FONT};
     pointer-events: none;
   }
   .room-zone[aria-pressed="true"] .room-label {
     border-color: var(--terminal-accent);
-    color: var(--terminal-accent);
+    background: var(--terminal-accent);
+    color: var(--terminal-background);
     font-weight: 700;
   }
-  .room-zone:disabled .room-label { color: var(--terminal-dim); opacity: .75; }
+  .room-zone:disabled .room-label {
+    border-color: var(--terminal-dim);
+    color: var(--terminal-dim);
+  }
   .selection-row {
     box-sizing: border-box;
     display: flex;
     align-items: center;
     justify-content: space-between;
     gap: 8px;
-    min-height: 34px;
-    margin: 0 14px;
-    color: var(--terminal-dim);
+    min-height: 38px;
+    margin: 10px 14px 0;
+    padding: 5px 8px;
+    border: 1px solid var(--terminal-dim);
+    color: var(--terminal-text);
     font-size: 11px;
+  }
+  .selection-row[data-selected="true"] { border-color: var(--terminal-accent); }
+  .selection-row[data-review="true"] {
+    border-color: var(--terminal-error);
+    color: var(--terminal-error);
   }
   @container (max-width: 420px) { .selection-row { margin-inline: 10px; } }
   .selection-summary { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -213,7 +324,7 @@ const STYLES = `
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 10px;
   }
-  @container (max-width: 420px) { .setting-grid { grid-template-columns: 1fr; } }
+  @container (max-width: 520px) { .setting-grid { grid-template-columns: 1fr; } }
   .setting {
     display: grid;
     grid-template-columns: minmax(74px, auto) minmax(0, 1fr);
@@ -285,6 +396,138 @@ const STYLES = `
   ${TERMINAL_ENTITY_ALIGNMENT}
   ${TERMINAL_MAIN_ICON_HOVER}
 `;
+
+const POPUP_STYLES = `
+  :host {
+    ${TERMINAL_COLORS}
+    position: fixed;
+    inset: 0;
+    z-index: 100000;
+    box-sizing: border-box;
+    display: grid;
+    place-items: center;
+    width: auto;
+    height: auto;
+    padding: 16px;
+    color: var(--terminal-text);
+    font-family: ${TERMINAL_FONT};
+  }
+  .popup-backdrop {
+    position: absolute;
+    inset: 0;
+    background: rgb(0 0 0 / 62%);
+  }
+  .popup-shell {
+    position: relative;
+    z-index: 1;
+    box-sizing: border-box;
+    width: min(760px, calc(100vw - 32px));
+    max-height: calc(100vh - 32px);
+    padding: 14px;
+    background: var(--terminal-background);
+  }
+  .popup-frame { position: relative; box-sizing: border-box; width: 100%; }
+  .popup-dialog {
+    position: relative;
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    max-height: calc(100vh - 60px);
+    border: 1px solid var(--terminal-accent);
+    border-radius: 0;
+    background: var(--terminal-background);
+    overflow: hidden;
+    outline: none;
+  }
+  .popup-title {
+    position: absolute;
+    z-index: 2;
+    top: 0;
+    left: 12px;
+    box-sizing: border-box;
+    transform: translateY(-50%);
+    max-width: calc(100% - 72px);
+    padding: 0 8px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    background: var(--terminal-background);
+    color: var(--terminal-accent);
+    font: 700 18px/1.2 ${TERMINAL_FONT};
+  }
+  .popup-header {
+    box-sizing: border-box;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    min-height: 64px;
+    padding: 18px 14px 8px;
+  }
+  .popup-icon {
+    flex: 0 0 auto;
+    width: 32px;
+    height: 32px;
+    color: var(--terminal-accent);
+    --mdc-icon-size: 32px;
+  }
+  .popup-header-text { display: grid; flex: 1 1 auto; gap: 2px; min-width: 0; }
+  .popup-name, .popup-state {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .popup-name { font-size: 13px; font-weight: 600; }
+  .popup-state { color: var(--terminal-dim); font-size: 12px; }
+  .popup-close {
+    box-sizing: border-box;
+    display: grid;
+    flex: 0 0 36px;
+    place-items: center;
+    width: 36px;
+    min-width: 36px;
+    height: 34px;
+    padding: 0;
+    border: 1px solid var(--terminal-dim);
+    border-radius: 0;
+    background: transparent;
+    color: var(--terminal-dim);
+    cursor: pointer;
+  }
+  .popup-close:hover, .popup-close:focus-visible {
+    border-color: var(--terminal-accent);
+    color: var(--terminal-accent);
+    outline: none;
+  }
+  .popup-close ha-icon { width: 19px; height: 19px; --mdc-icon-size: 19px; }
+  .popup-body {
+    flex: 1 1 auto;
+    min-height: 0;
+    padding: 4px 0 14px;
+    overflow: auto;
+    overscroll-behavior: contain;
+  }
+  .popup-content { container-type: inline-size; display: block; min-width: 0; }
+  @media (max-width: 600px) {
+    :host {
+      padding: max(12vh, calc(env(safe-area-inset-top) + 12px)) 8px
+        max(12vh, calc(env(safe-area-inset-bottom) + 8px));
+      padding-top: max(12dvh, calc(env(safe-area-inset-top) + 12px));
+      padding-bottom: max(12dvh, calc(env(safe-area-inset-bottom) + 8px));
+      place-items: stretch;
+    }
+    .popup-backdrop { background: var(--terminal-background); }
+    .popup-shell { width: 100%; height: 100%; max-height: none; padding: 0; }
+    .popup-frame, .popup-dialog { height: 100%; max-height: none; }
+    .popup-title { max-width: calc(100% - 64px); }
+    .popup-header { min-height: 62px; padding: 17px 12px 7px; }
+    .popup-icon { width: 28px; height: 28px; --mdc-icon-size: 28px; }
+    .popup-close { flex-basis: 34px; width: 34px; min-width: 34px; }
+    .popup-body { max-height: none; padding-bottom: 14px; }
+  }
+`;
+
+let activeVacuumPopup = null;
 
 function entityField(name, domain, required = false) {
   return {
@@ -525,6 +768,11 @@ export class TerminalVacuumCard extends HTMLElement {
     this._mappingRequestKey = '';
     this._registryEntry = null;
     this._mappingError = false;
+    this._roomModelReady = false;
+    this._selectionNeedsReview = false;
+    this._popupHost = null;
+    this._popupRoot = null;
+    this._returnFocus = null;
 
     const root = this.attachShadow({ mode: 'open' });
     const style = document.createElement('style');
@@ -537,6 +785,11 @@ export class TerminalVacuumCard extends HTMLElement {
 
     this._main = document.createElement('div');
     this._main.className = 'main';
+    this._mainTarget = document.createElement('button');
+    this._mainTarget.className = 'main-target';
+    this._mainTarget.type = 'button';
+    this._mainTarget.dataset.focusKey = 'main';
+    this._mainTarget.setAttribute('aria-haspopup', 'dialog');
     this._icon = document.createElement('ha-icon');
     this._icon.className = 'icon';
     this._text = document.createElement('div');
@@ -546,7 +799,42 @@ export class TerminalVacuumCard extends HTMLElement {
     this._state = document.createElement('div');
     this._state.className = 'state';
     this._text.append(this._name, this._state);
-    this._main.append(this._icon, this._text);
+    this._openIndicator = document.createElement('span');
+    this._openIndicator.className = 'open-indicator';
+    this._openIcon = document.createElement('ha-icon');
+    this._openIcon.icon = 'mdi:floor-plan';
+    this._openLabel = document.createElement('span');
+    this._openLabel.className = 'open-label';
+    this._openLabel.textContent = 'räume';
+    this._openCount = document.createElement('span');
+    this._openCount.className = 'open-count';
+    this._openCount.hidden = true;
+    this._openIndicator.append(this._openIcon, this._openLabel, this._openCount);
+    this._mainTarget.append(this._icon, this._text, this._openIndicator);
+    this._main.append(this._mainTarget);
+
+    this._detailsStorage = document.createElement('div');
+    this._detailsStorage.className = 'details-storage';
+    this._detailsStorage.hidden = true;
+    this._details = document.createElement('div');
+    this._details.className = 'vacuum-details';
+    this._roomPrompt = document.createElement('div');
+    this._roomPrompt.className = 'room-prompt';
+    const roomPromptIcon = document.createElement('ha-icon');
+    roomPromptIcon.icon = 'mdi:gesture-tap';
+    this._roomPromptText = document.createElement('div');
+    this._roomPromptText.className = 'room-prompt-text';
+    const roomPromptTitle = document.createElement('span');
+    roomPromptTitle.className = 'room-prompt-title';
+    roomPromptTitle.textContent = 'räume auswählen';
+    const roomPromptHint = document.createElement('span');
+    roomPromptHint.className = 'room-prompt-hint';
+    roomPromptHint.textContent = 'räume direkt auf der karte antippen';
+    this._roomPromptText.append(roomPromptTitle, roomPromptHint);
+    this._roomPromptCount = document.createElement('span');
+    this._roomPromptCount.className = 'room-prompt-count';
+    this._roomPromptCount.textContent = 'gesamte karte';
+    this._roomPrompt.append(roomPromptIcon, this._roomPromptText, this._roomPromptCount);
 
     this._mapFrame = document.createElement('div');
     this._mapFrame.className = 'map-frame';
@@ -611,17 +899,20 @@ export class TerminalVacuumCard extends HTMLElement {
     this._operationStatus.setAttribute('aria-live', 'polite');
     this._settings.append(this._settingGrid, this._commands, this._operationStatus);
 
-    this._card.append(
-      this._borderTitle,
-      this._main,
+    this._details.append(
+      this._roomPrompt,
       this._mapFrame,
       this._selectionRow,
       this._settings
     );
-    root.append(style, this._card);
+    this._detailsStorage.append(this._details);
+    this._card.append(this._borderTitle, this._main);
+    root.append(style, this._card, this._detailsStorage);
 
+    this._mainTarget.addEventListener('click', () => this._openPopup());
     this._clearSelection.addEventListener('click', () => {
       this._selectedAreaIds.clear();
+      this._selectionNeedsReview = false;
       this._render();
     });
   }
@@ -631,6 +922,7 @@ export class TerminalVacuumCard extends HTMLElement {
   }
 
   disconnectedCallback() {
+    this._closePopup(false);
     this._invalidateOperations();
     ++this._mappingGeneration;
     this._hass = null;
@@ -641,9 +933,11 @@ export class TerminalVacuumCard extends HTMLElement {
     this._imageSource = '';
     this._imageRevision = null;
     this._imageLoaded = false;
+    this._roomModelReady = false;
   }
 
   setConfig(config) {
+    this._closePopup(false);
     validateEntity(config, 'entity', 'vacuum', true);
     validateEntity(config, 'map_entity', 'image', true);
     validateEntity(config, 'cleaning_mode_entity', 'select');
@@ -671,12 +965,16 @@ export class TerminalVacuumCard extends HTMLElement {
     );
     this._config = { ...config };
     this._invalidateOperations();
-    if (identityChanged) this._selectedAreaIds.clear();
+    if (identityChanged) {
+      this._selectedAreaIds.clear();
+      this._selectionNeedsReview = false;
+    }
     this._resetMapping();
     this._render();
   }
 
   set hass(hass) {
+    const focusKey = this._captureFocusKey();
     const connectionChanged = Boolean(
       this._hass && this._hass.connection !== hass?.connection
     );
@@ -686,14 +984,167 @@ export class TerminalVacuumCard extends HTMLElement {
       this._resetMapping();
     }
     this._render();
+    this._restoreFocusKey(focusKey);
   }
 
   getCardSize() {
-    return 7;
+    return 1;
   }
 
   getGridOptions() {
     return { columns: 12, rows: 'auto', min_columns: 6 };
+  }
+
+  _openPopup() {
+    if (!this._hass || !this._config || this._popupHost || !document.body) return;
+    if (activeVacuumPopup && activeVacuumPopup !== this) {
+      activeVacuumPopup._closePopup(false);
+    }
+    activeVacuumPopup = this;
+    this._returnFocus = this.shadowRoot.activeElement || this._mainTarget;
+
+    const host = document.createElement('div');
+    host.className = 'terminal-vacuum-popup-host';
+    host.setAttribute('data-terminal-vacuum-popup', '');
+    const root = host.attachShadow({ mode: 'open' });
+    const style = document.createElement('style');
+    style.textContent = `${STYLES}\n${POPUP_STYLES}`;
+    const backdrop = document.createElement('div');
+    backdrop.className = 'popup-backdrop';
+    const shell = document.createElement('div');
+    shell.className = 'popup-shell';
+    const frame = document.createElement('div');
+    frame.className = 'popup-frame';
+    const dialog = document.createElement('section');
+    dialog.className = 'popup-dialog';
+    dialog.tabIndex = -1;
+    dialog.setAttribute('role', 'dialog');
+    dialog.setAttribute('aria-modal', 'true');
+    const title = document.createElement('div');
+    title.className = 'popup-title';
+    const header = document.createElement('div');
+    header.className = 'popup-header';
+    const icon = document.createElement('ha-icon');
+    icon.className = 'popup-icon';
+    const headerText = document.createElement('div');
+    headerText.className = 'popup-header-text';
+    const name = document.createElement('div');
+    name.className = 'popup-name';
+    const state = document.createElement('div');
+    state.className = 'popup-state';
+    headerText.append(name, state);
+    const close = document.createElement('button');
+    close.className = 'popup-close';
+    close.type = 'button';
+    close.dataset.focusKey = 'popup-close';
+    close.setAttribute('aria-label', 'vacuum steuerung schließen');
+    const closeIcon = document.createElement('ha-icon');
+    closeIcon.icon = 'mdi:close';
+    close.append(closeIcon);
+    header.append(icon, headerText, close);
+    const body = document.createElement('div');
+    body.className = 'popup-body';
+    const content = document.createElement('div');
+    content.className = 'popup-content';
+    content.append(this._details);
+    body.append(content);
+    dialog.append(header, body);
+    frame.append(title, dialog);
+    shell.append(frame);
+    root.append(style, backdrop, shell);
+    document.body.append(host);
+
+    this._popupHost = host;
+    this._popupRoot = root;
+    this._popupDialog = dialog;
+    this._popupTitle = title;
+    this._popupIcon = icon;
+    this._popupName = name;
+    this._popupState = state;
+    this._popupClose = close;
+    applyAccentColor(host, this._config.accent_color);
+    this._renderPopupHeader();
+    this._mainTarget.setAttribute('aria-expanded', 'true');
+
+    close.addEventListener('click', () => this._closePopup());
+    backdrop.addEventListener('click', () => this._closePopup());
+    host.addEventListener('keydown', (event) => this._handlePopupKeydown(event));
+    close.focus();
+    requestAnimationFrame(() => {
+      if (this._popupHost === host && root.activeElement !== close) close.focus();
+    });
+  }
+
+  _renderPopupHeader(name = '') {
+    if (!this._popupHost || !this._config) return;
+    applyAccentColor(this._popupHost, this._config.accent_color);
+    const entity = this._entity();
+    const attributes = entity?.attributes || {};
+    const popupName = name || this._config.name || attributes.friendly_name || this._config.entity;
+    const state = entity
+      ? this._hass?.formatEntityState?.(entity) || vacuumStateLabel(entity.state)
+      : 'unavailable';
+    const selection = this._selectedAreaIds.size
+      ? ` · ${this._selectedAreaIds.size} ${this._selectedAreaIds.size === 1 ? 'raum' : 'räume'}`
+      : '';
+    this._popupTitle.textContent = this._config.border_title?.trim() || 'vacuum controls';
+    this._popupIcon.icon = this._config.icon || attributes.icon || 'mdi:robot-vacuum';
+    this._popupName.textContent = popupName;
+    this._popupState.textContent = `${String(state).toLocaleLowerCase()}${selection}`;
+    this._popupDialog.setAttribute('aria-label', `${popupName} vacuum controls`);
+    this._popupDialog.setAttribute('aria-busy', String(Boolean(this._busyControl)));
+  }
+
+  _closePopup(restoreFocus = true) {
+    if (!this._popupHost) return;
+    const focusTarget = this._returnFocus;
+    this._detailsStorage.append(this._details);
+    this._popupHost.remove();
+    if (activeVacuumPopup === this) activeVacuumPopup = null;
+    this._popupHost = null;
+    this._popupRoot = null;
+    this._popupDialog = null;
+    this._popupTitle = null;
+    this._popupIcon = null;
+    this._popupName = null;
+    this._popupState = null;
+    this._popupClose = null;
+    this._returnFocus = null;
+    this._mainTarget?.setAttribute('aria-expanded', 'false');
+    if (restoreFocus && focusTarget?.isConnected && typeof focusTarget.focus === 'function') {
+      focusTarget.focus();
+    }
+  }
+
+  _handlePopupKeydown(event) {
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      this._closePopup();
+      return;
+    }
+    if (event.key !== 'Tab' || !this._popupRoot) return;
+    const focusable = [...this._popupRoot.querySelectorAll('button, select, [tabindex]')]
+      .filter((element) =>
+        !element.disabled && element.tabIndex >= 0 && !element.closest('[hidden]')
+      );
+    if (!focusable.length) {
+      event.preventDefault();
+      this._popupDialog?.focus();
+      return;
+    }
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+    const active = this._popupRoot.activeElement;
+    if (active === this._popupDialog) {
+      event.preventDefault();
+      (event.shiftKey ? last : first).focus();
+    } else if (event.shiftKey && active === first) {
+      event.preventDefault();
+      last.focus();
+    } else if (!event.shiftKey && active === last) {
+      event.preventDefault();
+      first.focus();
+    }
   }
 
   _entity(entityId = this._config?.entity) {
@@ -723,6 +1174,7 @@ export class TerminalVacuumCard extends HTMLElement {
     image.addEventListener('error', () => {
       if (!current()) return;
       this._imageLoaded = false;
+      this._roomModelReady = true;
       image.hidden = true;
       this._roomLayer.replaceChildren();
       this._roomButtons = [];
@@ -807,12 +1259,16 @@ export class TerminalVacuumCard extends HTMLElement {
     this._borderTitle.textContent = borderTitle;
     this._card.dataset.state = state;
     this._card.setAttribute('aria-busy', String(Boolean(this._busyControl)));
-    this._card.setAttribute('aria-label', `${name}: ${vacuumStateLabel(state)}`);
     this._icon.icon = this._config.icon || attributes.icon || 'mdi:robot-vacuum';
     this._name.textContent = name;
     this._renderState(entity);
+    this._currentName = name;
+    this._currentStateText = this._state.textContent || vacuumStateLabel(state);
+    this._updateMainTargetLabel();
+    this._mainTarget.setAttribute('aria-expanded', String(Boolean(this._popupHost)));
     this._renderMap();
     this._renderControls(entity, unavailable);
+    this._renderPopupHeader(name);
     this._ensureRegistryOptions();
   }
 
@@ -844,6 +1300,7 @@ export class TerminalVacuumCard extends HTMLElement {
       this._imageSource = source;
       this._imageRevision = revision;
       this._imageLoaded = false;
+      this._roomModelReady = false;
       this._roomSignature = '';
       this._roomLayer.replaceChildren();
       this._roomButtons = [];
@@ -853,6 +1310,7 @@ export class TerminalVacuumCard extends HTMLElement {
         this._loadMapImage(source, revision);
       } else {
         ++this._imageGeneration;
+        this._roomModelReady = true;
         this._mapImage.removeAttribute('src');
         this._mapImage.hidden = true;
         this._mapMessage.textContent = 'karte nicht verfügbar';
@@ -863,6 +1321,7 @@ export class TerminalVacuumCard extends HTMLElement {
 
   _renderRoomLayout() {
     if (!this._config || !this._hass || !this._imageLoaded) return;
+    const focusKey = this._captureFocusKey();
     const mapEntity = this._entity(this._config.map_entity);
     if (!mapEntity) return;
     const projection = createMapProjection(mapEntity.attributes?.calibration_points);
@@ -926,9 +1385,11 @@ export class TerminalVacuumCard extends HTMLElement {
         this._roomButtons.push({ button, room });
       });
     }
+    this._roomModelReady = true;
     this._roomLayer.hidden = rooms.length === 0;
     this._mapMessage.hidden = true;
     this._renderSelection();
+    this._restoreFocusKey(focusKey);
   }
 
   _renderSelection() {
@@ -938,8 +1399,9 @@ export class TerminalVacuumCard extends HTMLElement {
     const availableAreaIds = new Set(
       this._roomButtons.map(({ room }) => room.areaId).filter(Boolean)
     );
-    for (const areaId of [...this._selectedAreaIds]) {
-      if (!availableAreaIds.has(areaId)) this._selectedAreaIds.delete(areaId);
+    if (this._roomModelReady) {
+      this._selectionNeedsReview = this._selectedAreaIds.size > 0 &&
+        [...this._selectedAreaIds].some((areaId) => !availableAreaIds.has(areaId));
     }
     for (const { button, room } of this._roomButtons) {
       const selected = Boolean(room.areaId && this._selectedAreaIds.has(room.areaId));
@@ -952,7 +1414,12 @@ export class TerminalVacuumCard extends HTMLElement {
       selectedNames.push(room?.areaName || areaId);
     }
     const mappedCount = availableAreaIds.size;
-    if (!this._roomButtons.length) {
+    const selectedCount = this._selectedAreaIds.size;
+    if (selectedCount && !this._roomModelReady) {
+      this._selectionSummary.textContent = 'karte wird aktualisiert · auswahl bleibt erhalten';
+    } else if (this._selectionNeedsReview) {
+      this._selectionSummary.textContent = 'raumauswahl prüfen oder ganze karte wählen';
+    } else if (!this._roomButtons.length) {
       this._selectionSummary.textContent = 'raumdaten oder kalibrierung nicht verfügbar';
     } else if (!mappedCount || this._mappingError) {
       this._selectionSummary.textContent = 'segmente zuerst ha-räumen zuordnen';
@@ -961,14 +1428,60 @@ export class TerminalVacuumCard extends HTMLElement {
     } else {
       this._selectionSummary.textContent = 'auswahl: gesamte karte';
     }
-    this._clearSelection.hidden = this._selectedAreaIds.size === 0;
+    this._selectionRow.dataset.selected = String(selectedCount > 0);
+    this._selectionRow.dataset.review = String(this._selectionNeedsReview);
+    this._roomPromptCount.textContent = this._selectionNeedsReview
+      ? 'auswahl prüfen'
+      : selectedCount
+        ? `${selectedCount} ${selectedCount === 1 ? 'raum' : 'räume'}`
+        : 'gesamte karte';
+    this._openLabel.textContent = this._selectionNeedsReview
+      ? 'auswahl prüfen'
+      : selectedCount ? `${selectedCount} gewählt` : 'räume';
+    this._openCount.hidden = selectedCount === 0;
+    this._openCount.textContent = this._selectionNeedsReview ? '!' : String(selectedCount);
+    this._clearSelection.hidden = selectedCount === 0;
+    this._updateMainTargetLabel();
+    this._renderPopupHeader();
+    this._syncCommandAvailability(entity, unavailable);
   }
 
   _toggleRoom(areaId) {
     if (!areaId || this._busyControl) return;
     if (this._selectedAreaIds.has(areaId)) this._selectedAreaIds.delete(areaId);
     else this._selectedAreaIds.add(areaId);
+    this._selectionNeedsReview = false;
     this._render();
+  }
+
+  _updateMainTargetLabel() {
+    if (!this._mainTarget || !this._currentName) return;
+    const selectedCount = this._selectedAreaIds.size;
+    const selection = this._selectionNeedsReview
+      ? 'raumauswahl prüfen'
+      : selectedCount
+        ? `${selectedCount} ${selectedCount === 1 ? 'raum' : 'räume'} ausgewählt`
+        : 'gesamte karte ausgewählt';
+    this._mainTarget.setAttribute(
+      'aria-label',
+      `${this._currentName}: ${this._currentStateText}; ${selection}; steuerung öffnen`
+    );
+  }
+
+  _syncCommandAvailability(entity = this._entity(), unavailable = isVacuumUnavailable(entity)) {
+    const busy = Boolean(this._busyControl);
+    const state = entity?.state || 'unavailable';
+    const startFeature = state !== 'paused' && this._selectedAreaIds.size > 0
+      ? VACUUM_SUPPORT_CLEAN_AREA
+      : VACUUM_SUPPORT_START;
+    const selectionBlocked = state !== 'paused' && this._selectionNeedsReview;
+    this._start.disabled = unavailable || busy || selectionBlocked ||
+      state === 'cleaning' || state === 'returning' || !vacuumSupports(entity, startFeature);
+    this._pause.disabled = unavailable || busy || state !== 'cleaning' ||
+      !vacuumSupports(entity, VACUUM_SUPPORT_PAUSE);
+    this._dock.disabled = unavailable || busy || ['docked', 'returning'].includes(state) ||
+      !vacuumSupports(entity, VACUUM_SUPPORT_RETURN_HOME);
+    this._start.querySelector('span').textContent = state === 'paused' ? 'fortsetzen' : 'start';
   }
 
   _renderControls(entity, unavailable) {
@@ -976,6 +1489,7 @@ export class TerminalVacuumCard extends HTMLElement {
     const mopIntensityEntity = this._entity(this._config.mop_intensity_entity);
     const mopModeEntity = this._entity(this._config.mop_mode_entity);
     const busy = Boolean(this._busyControl);
+    this._renderSelection();
 
     const cleaningOptions = vacuumOptionValues(cleaningEntity);
     this._syncSelect(this._cleaningControl, cleaningOptions, cleaningEntity?.state);
@@ -1010,22 +1524,9 @@ export class TerminalVacuumCard extends HTMLElement {
     this._normal.disabled = unavailable || busy || !usesMop;
     this._thorough.disabled = unavailable || busy || !usesMop;
 
-    const state = entity?.state || 'unavailable';
-    const startFeature = state !== 'paused' && this._selectedAreaIds.size > 0
-      ? VACUUM_SUPPORT_CLEAN_AREA
-      : VACUUM_SUPPORT_START;
-    this._start.disabled = unavailable || busy || state === 'cleaning' || state === 'returning' ||
-      !vacuumSupports(entity, startFeature);
-    this._pause.disabled = unavailable || busy || state !== 'cleaning' ||
-      !vacuumSupports(entity, VACUUM_SUPPORT_PAUSE);
-    this._dock.disabled = unavailable || busy || ['docked', 'returning'].includes(state) ||
-      !vacuumSupports(entity, VACUUM_SUPPORT_RETURN_HOME);
-    this._start.querySelector('span').textContent = state === 'paused' ? 'fortsetzen' : 'start';
-
     this._operationStatus.dataset.error = String(Boolean(this._operationError));
     this._operationStatus.textContent = this._operationError ||
       (this._busyControl ? 'befehl wird ausgeführt…' : '');
-    this._renderSelection();
   }
 
   _syncSelect(control, options, currentValue) {
@@ -1087,16 +1588,25 @@ export class TerminalVacuumCard extends HTMLElement {
   _startCleaning() {
     const entity = this._entity();
     if (!entity || this._busyControl) return;
-    if (entity.state === 'paused' || this._selectedAreaIds.size === 0) {
-      this._callVacuumService('start', {}, 'start');
+    if (entity.state === 'paused') {
+      if (vacuumSupports(entity, VACUUM_SUPPORT_START)) {
+        this._callVacuumService('start', {}, 'start');
+      }
       return;
     }
-    if (!vacuumSupports(entity, VACUUM_SUPPORT_CLEAN_AREA)) return;
-    this._callVacuumService(
-      'clean_area',
-      { cleaning_area_id: [...this._selectedAreaIds] },
-      'start'
-    );
+    if (this._selectionNeedsReview) return;
+    if (this._selectedAreaIds.size > 0) {
+      if (!vacuumSupports(entity, VACUUM_SUPPORT_CLEAN_AREA)) return;
+      this._callVacuumService(
+        'clean_area',
+        { cleaning_area_id: [...this._selectedAreaIds] },
+        'start'
+      );
+      return;
+    }
+    if (vacuumSupports(entity, VACUUM_SUPPORT_START)) {
+      this._callVacuumService('start', {}, 'start');
+    }
   }
 
   _callVacuumService(service, data, focusKey) {
@@ -1147,14 +1657,21 @@ export class TerminalVacuumCard extends HTMLElement {
   }
 
   _captureFocusKey() {
-    return this.shadowRoot.activeElement?.dataset?.focusKey || '';
+    const root = this._popupRoot || this.shadowRoot;
+    return root.activeElement?.dataset?.focusKey || '';
   }
 
   _restoreFocusKey(key) {
     if (!key) return;
-    const target = [...this.shadowRoot.querySelectorAll('[data-focus-key]')]
+    const roots = this._popupRoot ? [this._popupRoot, this.shadowRoot] : [this.shadowRoot];
+    const target = roots
+      .flatMap((root) => [...root.querySelectorAll('[data-focus-key]')])
       .find((element) => element.dataset.focusKey === key && !element.disabled);
-    target?.focus();
+    if (target) {
+      target.focus();
+    } else if (this._popupRoot) {
+      (this._popupClose || this._popupDialog)?.focus();
+    }
   }
 
   _resetMapping() {
@@ -1215,6 +1732,6 @@ defineElement(TAG, TerminalVacuumCard);
 registerCard({
   type: TAG,
   name: 'Terminal Vacuum Card',
-  description: 'A terminal-style vacuum control with selectable map rooms.',
+  description: 'A compact terminal vacuum status card with popup map and controls.',
   documentationURL: DOCUMENTATION_URL,
 });

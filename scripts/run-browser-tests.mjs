@@ -16,6 +16,7 @@ const tests = [
   'alarm',
   'shutter',
   'vacuum',
+  'vacuum-mobile',
   'navigation',
   'popup',
   'popup-mobile',
@@ -59,7 +60,11 @@ try {
         '--no-sandbox',
         '--allow-file-access-from-files',
         '--run-all-compositor-stages-before-draw',
-        test === 'popup-mobile' ? '--window-size=500,844' : '--window-size=800,600',
+        test === 'vacuum-mobile'
+          ? '--window-size=390,844'
+          : test === 'popup-mobile'
+            ? '--window-size=500,844'
+            : '--window-size=800,600',
         '--virtual-time-budget=6000',
         `--user-data-dir=${userDataDir}`,
         '--dump-dom',

@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+## 0.18.1 — 2026-08-31
+
+- Collapse the Vacuum Card to a compact status row by default and open its complete map and controls in an accessible terminal popup on tap.
+- Make room selection substantially clearer with persistent accent outlines, subtle area fills, stronger selected states, a prominent map instruction, and visible selected-room counts in both the popup and compact card.
+- Keep the popup synchronized with live entity updates, trap keyboard focus, support Escape/backdrop/close dismissal, and return focus to the card.
+- Preserve selected Home Assistant areas through live map-image reloads, fail closed when a replacement map can no longer validate them, and defensively recheck Start/Clean Area feature support before every command.
+
 ## 0.18.0 — 2026-08-31
 
 - Add `custom:terminal-vacuum-card` with a live calibrated map, accessible room selection through native Home Assistant area mappings, and full-width responsive Terminal styling.

@@ -1,0 +1,164 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>terminal-vacuum-card mobile popup test running</title>
+    <style>
+      :root {
+        --card-background-color: #181825;
+        --primary-text-color: #cdd6f4;
+        --secondary-text-color: #6c7086;
+        --accent-color: #89b4fa;
+        --error-color: #f38ba8;
+      }
+      body { margin: 12px; background: #11111b; }
+      terminal-vacuum-card { display: block; width: 100%; }
+    </style>
+    <script>
+      customElements.define(
+        'ha-icon',
+        class extends HTMLElement {
+          set icon(value) { this._icon = value; }
+          get icon() { return this._icon; }
+        }
+      );
+    </script>
+    <script type="module" src="../dist/terminal-cards.js"></script>
+  </head>
+  <body>
+    <pre id="result">WAITING</pre>
+    <script type="module">
+      function assert(condition, message) {
+        if (!condition) throw new Error(message);
+      }
+
+      async function tick() {
+        await Promise.resolve();
+        await new Promise((resolve) => setTimeout(resolve, 20));
+      }
+
+      async function waitFor(condition, message) {
+        const deadline = performance.now() + 3000;
+        while (!condition() && performance.now() < deadline) await tick();
+        assert(condition(), message);
+      }
+
+      const source = `data:image/svg+xml,${encodeURIComponent(
+        '<svg xmlns="http://www.w3.org/2000/svg" width="400" height="300"><rect width="400" height="300" fill="#89b4fa"/></svg>'
+      )}`;
+      const states = {
+        'vacuum.robobert': {
+          entity_id: 'vacuum.robobert',
+          state: 'docked',
+          attributes: {
+            friendly_name: 'Robobert',
+            fan_speed: 'balanced',
+            fan_speed_list: ['quiet', 'balanced', 'turbo'],
+            supported_features: 4 + 16 + 32 + 8192 + 16384,
+          },
+        },
+        'image.robobert_map': {
+          entity_id: 'image.robobert_map',
+          state: 'current',
+          attributes: {
+            entity_picture: source,
+            rooms: {
+              1: { number: 1, name: 'Küche', x0: 0, y0: 0, x1: 100, y1: 100 },
+            },
+            calibration_points: [
+              { vacuum: { x: 0, y: 0 }, map: { x: 0, y: 300 } },
+              { vacuum: { x: 100, y: 0 }, map: { x: 400, y: 300 } },
+              { vacuum: { x: 0, y: 100 }, map: { x: 0, y: 0 } },
+            ],
+          },
+        },
+        'select.cleaning': {
+          entity_id: 'select.cleaning', state: 'vac_and_mop',
+          attributes: { options: ['vacuum', 'vac_and_mop', 'mop'] },
+        },
+        'select.mop': {
+          entity_id: 'select.mop', state: 'standard',
+          attributes: { options: ['standard', 'deep'] },
+        },
+        'select.intensity': {
+          entity_id: 'select.intensity', state: 'medium',
+          attributes: { options: ['off', 'low', 'medium', 'high'] },
+        },
+      };
+      const hass = {
+        states,
+        entities: {
+          'vacuum.robobert': {
+            options: {
+              vacuum: {
+                area_mapping: { kuche: ['0_1'] },
+                last_seen_segments: [{ id: '0_1', name: 'Kuche', group: 'EG' }],
+              },
+            },
+          },
+        },
+        areas: { kuche: { name: 'Küche' } },
+        connection: {},
+        formatEntityState: (entity) => entity.state,
+        callService: () => Promise.resolve(),
+      };
+
+      async function run() {
+        await customElements.whenDefined('terminal-vacuum-card');
+        const card = document.createElement('terminal-vacuum-card');
+        card.setConfig({
+          entity: 'vacuum.robobert',
+          map_entity: 'image.robobert_map',
+          cleaning_mode_entity: 'select.cleaning',
+          mop_mode_entity: 'select.mop',
+          mop_intensity_entity: 'select.intensity',
+          border_title: 'vacuum // erdgeschoss',
+          accent_color: 'cyan',
+        });
+        card.hass = hass;
+        document.body.append(card);
+        await waitFor(
+          () => card.shadowRoot.querySelectorAll('.room-zone').length === 1,
+          'mobile map room did not render'
+        );
+
+        const trigger = card.shadowRoot.querySelector('.main-target');
+        trigger.focus();
+        trigger.click();
+        await waitFor(() => Boolean(card._popupRoot), 'mobile vacuum popup did not open');
+        await tick();
+
+        const root = card._popupRoot;
+        const hostStyle = getComputedStyle(card._popupHost);
+        const shellStyle = getComputedStyle(root.querySelector('.popup-shell'));
+        const dialogStyle = getComputedStyle(root.querySelector('.popup-dialog'));
+        const bodyStyle = getComputedStyle(root.querySelector('.popup-body'));
+        assert(hostStyle.paddingLeft === '8px' && hostStyle.paddingRight === '8px', 'mobile popup side gap is not 8px');
+        assert(parseFloat(hostStyle.paddingTop) >= 80, 'mobile popup top safe area is too small');
+        assert(parseFloat(hostStyle.paddingBottom) >= 80, 'mobile popup bottom safe area is too small');
+        assert(parseFloat(shellStyle.width) <= innerWidth - 16, 'mobile popup shell exceeds side gaps');
+        assert(dialogStyle.borderRadius === '0px', 'mobile popup frame is rounded');
+        assert(bodyStyle.overflowY === 'auto', 'mobile popup body is not independently scrollable');
+        assert(
+          getComputedStyle(root.querySelector('.setting-grid')).gridTemplateColumns.split(' ').length === 1,
+          'mobile vacuum settings did not collapse to one column'
+        );
+        assert(getComputedStyle(root.querySelector('.room-zone')).borderTopWidth === '2px', 'mobile room outline is not prominent');
+
+        root.querySelector('.popup-backdrop').click();
+        assert(!card._popupRoot, 'mobile popup backdrop did not close');
+        assert(card.shadowRoot.activeElement === trigger, 'mobile popup did not restore trigger focus');
+
+        document.body.dataset.testStatus = 'PASS';
+        document.querySelector('#result').textContent =
+          'PASS: compact mobile vacuum popup, safe-area spacing, responsive controls and visible rooms';
+      }
+
+      run().catch((error) => {
+        document.body.dataset.testStatus = 'FAIL';
+        document.querySelector('#result').textContent = `FAIL: ${error.stack || error}`;
+        console.error(error);
+      });
+    </script>
+  </body>
+</html>

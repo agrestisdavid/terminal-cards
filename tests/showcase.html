@@ -337,6 +337,9 @@
       document.querySelector('main').append(vacuum);
       setTimeout(() => {
         vacuum.shadowRoot.querySelector('.room-zone:not(:disabled)')?.click();
+        if (location.hash === '#vacuum-popup') {
+          vacuum.shadowRoot.querySelector('.main-target')?.click();
+        }
       }, 100);
 
       const waste = document.createElement('terminal-waste-card');

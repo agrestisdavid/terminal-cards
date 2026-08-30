@@ -105,6 +105,22 @@
         icon: 'mdi:compass',
       });
       compact.style.width = '240px';
+      const roomySecondary = create({
+        name: 'mobile destination',
+        navigation_path: '/lovelace/roomy',
+        icon: 'mdi:compass',
+        variant: 'pane',
+        label: 'secondary content gets the reclaimed width',
+        show_navigation_icon: false,
+      });
+      roomySecondary.style.width = '240px';
+      const silentPane = create({
+        name: 'silent destination',
+        navigation_path: '/lovelace/silent',
+        variant: 'pane',
+        show_path: false,
+        show_navigation_icon: false,
+      });
       const equalGrid = document.createElement('div');
       equalGrid.id = 'equal-grid';
       const gridContinuous = create({
@@ -163,9 +179,24 @@
         const compactTargetStyle = getComputedStyle(compact.shadowRoot.querySelector('.nav-target'));
         assert(
           compactMainStyle.paddingLeft === '10px' && compactMainStyle.paddingRight === '10px' &&
-            compactMainStyle.columnGap === '10px' && compactTargetStyle.columnGap === '10px',
+            compactMainStyle.columnGap === '10px' && compactTargetStyle.columnGap === '6px',
           'narrow navigation layout does not reclaim horizontal text space'
         );
+        const roomyTitle = roomySecondary.shadowRoot.querySelector('.border-title');
+        const roomyName = roomySecondary.shadowRoot.querySelector('.name');
+        const roomyText = roomySecondary.shadowRoot.querySelector('.text');
+        const roomyArrow = roomySecondary.shadowRoot.querySelector('.arrow');
+        assert(!roomyTitle.hidden && roomyTitle.textContent === 'mobile destination', 'navigation name cannot be used as the border title');
+        assert(roomyName.hidden, 'name-as-title navigation repeats the name inside the card');
+        assert(roomySecondary.shadowRoot.querySelector('.secondary').textContent === 'secondary content gets the reclaimed width', 'name-as-title navigation lost its secondary content');
+        assert(roomyArrow.hidden && getComputedStyle(roomyArrow).display === 'none', 'hidden navigation icon still consumes layout space');
+        assert(
+          roomyText.getBoundingClientRect().width > compact.shadowRoot.querySelector('.text').getBoundingClientRect().width + 30,
+          'hiding the navigation icon did not reclaim enough horizontal text space'
+        );
+        const silentTarget = silentPane.shadowRoot.querySelector('.nav-target');
+        assert(silentPane.shadowRoot.querySelector('.secondary').hidden, 'empty pane secondary content remains visible');
+        assert(silentTarget.getAttribute('aria-label') === 'Navigate to silent destination', 'name-as-title link has no accessible name when secondary content is empty');
 
         const paneCard = pane.shadowRoot.querySelector('.card');
         const paneRect = paneCard.getBoundingClientRect();
@@ -343,6 +374,7 @@
           { name: 'bad icon', navigation_path: '/lovelace', more_icon: '' },
           { name: 'bad template', navigation_path: '/lovelace', state_template: 42 },
           { name: 'bad icon action', navigation_path: '/lovelace', icon_tap_action: 'toggle' },
+          { name: 'bad icon visibility', navigation_path: '/lovelace', show_navigation_icon: 'no' },
         ]) {
           try {
             document.createElement('terminal-navigation-card').setConfig(config);
@@ -350,7 +382,7 @@
             invalidConfig += 1;
           }
         }
-        assert(invalidConfig === 10, 'invalid navigation configuration was accepted');
+        assert(invalidConfig === 11, 'invalid navigation configuration was accepted');
         assert(continuous.getCardSize() === 1, 'navigation card size is wrong');
         assert(
           window.customCards.some((entry) => entry.type === 'terminal-navigation-card'),
@@ -362,7 +394,17 @@
         assert(pathField.selector.navigation, 'native navigation selector missing');
         const variantField = fields.find((field) => field.name === 'variant');
         assert(variantField.selector.select.options.length === 2, 'variant selector is incomplete');
-        assert(fields.some((field) => field.name === 'more_icon'), 'navigation icon field missing');
+        assert(variantField.selector.select.options[1].label === 'Use name as border title', 'name-as-title editor option is unclear');
+        const showNavigationIcon = fields.find((field) => field.name === 'show_navigation_icon');
+        assert(showNavigationIcon.selector.boolean && showNavigationIcon.default === true, 'navigation icon visibility toggle is missing');
+        const navigationIcon = fields.find((field) => field.name === 'more_icon');
+        assert(navigationIcon.selector.icon, 'navigation icon field missing');
+        assert(
+          navigationIcon.visible?.field === 'show_navigation_icon' &&
+            navigationIcon.visible?.operator === 'not_eq' &&
+            navigationIcon.visible?.value === false,
+          'navigation icon picker remains visible while the icon is hidden'
+        );
         assert(fields.find((field) => field.name === 'off_icon').selector.icon, 'navigation off icon selector missing');
         assert(fields.find((field) => field.name === 'entity').selector.entity, 'navigation entity selector missing');
         assert(
@@ -379,7 +421,8 @@
         document.body.dataset.testStatus = 'PASS';
         document.title = 'PASS terminal-navigation-card';
         document.querySelector('#result').textContent = [
-          'PASS: continuous and title-in-border navigation variants',
+          'PASS: optional name-as-title mode leaves only secondary content inside',
+          'PASS: trailing navigation icon can be hidden to reclaim text width',
           'PASS: square border, title overlay, hover accent without glow and equal-row sizing',
           'PASS: click and keyboard internal navigation',
           'PASS: separate main-icon entity action with native HA services',

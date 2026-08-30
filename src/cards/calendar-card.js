@@ -415,7 +415,7 @@ export class TerminalCalendarCard extends HTMLElement {
       const summary = document.createElement('div');
       summary.className = 'summary';
       summary.textContent = String(event?.summary || 'untitled event');
-      content.append(when, summary);
+      content.append(summary, when);
       if (this._config.show_location && event?.location) {
         const location = document.createElement('div');
         location.className = 'location';

@@ -347,11 +347,21 @@
           navigationFields.find((field) => field.name === 'navigation_path').selector.navigation,
           'native navigation selector missing'
         );
-        assert(navigationFields.some((field) => field.name === 'variant'), 'navigation variant missing');
+        const navigationVariant = navigationFields.find((field) => field.name === 'variant');
+        assert(navigationVariant.selector.select, 'navigation name-placement selector missing');
+        assert(navigationVariant.selector.select.options[1].label === 'Use name as border title', 'navigation name-as-title option is unclear');
         const navigationAccent = navigationFields.find((field) => field.name === 'accent_color');
         assert(navigationAccent.selector.ui_color?.default_color === 'accent', 'navigation card does not use the HA theme color selector');
         assert(navigationFields.some((field) => field.name === 'title_position'), 'navigation title position missing');
-        assert(navigationFields.some((field) => field.name === 'more_icon'), 'navigation icon option missing');
+        const navigationIconVisibility = navigationFields.find((field) => field.name === 'show_navigation_icon');
+        assert(navigationIconVisibility.selector.boolean, 'navigation icon visibility toggle missing');
+        const navigationIcon = navigationFields.find((field) => field.name === 'more_icon');
+        assert(navigationIcon.selector.icon, 'navigation icon option missing');
+        assert(
+          navigationIcon.visible?.field === 'show_navigation_icon' &&
+            navigationIcon.visible?.value === false,
+          'navigation icon picker is not conditional on icon visibility'
+        );
         assert(navigationFields.find((field) => field.name === 'off_icon').selector.icon, 'navigation off icon missing');
         const navigationBorderTitle = navigationFields.find((field) => field.name === 'border_title');
         assert(navigationBorderTitle.selector.text, 'navigation border title missing');

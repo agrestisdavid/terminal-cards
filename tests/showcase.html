@@ -229,9 +229,10 @@
           {
             type: 'custom:terminal-navigation-card', name: 'kitchen',
             navigation_path: '/dashboard-test/kitchen', icon: 'mdi:fridge',
-            variant: 'continuous', accent_color: 'cyan',
-            more_icon: 'mdi:arrow-right-bold', entity: 'light.kitchen',
-            off_icon: 'mdi:lightbulb-off-outline', border_title: 'shortcuts',
+            variant: 'pane', accent_color: 'cyan',
+            show_navigation_icon: false, entity: 'light.kitchen',
+            off_icon: 'mdi:lightbulb-off-outline',
+            label: 'icon toggles kitchen light with more room',
             icon_tap_action: { action: 'toggle' },
           },
           {

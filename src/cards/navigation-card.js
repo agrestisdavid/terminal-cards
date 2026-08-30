@@ -94,7 +94,7 @@ const STYLES = `
     display: flex;
     flex: 1 1 auto;
     align-items: center;
-    gap: 14px;
+    gap: 8px;
     min-width: 0;
     cursor: pointer;
     outline: none;
@@ -104,7 +104,7 @@ const STYLES = `
       gap: 10px;
       padding-inline: 10px;
     }
-    .nav-target { gap: 10px; }
+    .nav-target { gap: 6px; }
   }
   .nav-target:focus-visible {
     outline: 1px solid var(--terminal-accent);
@@ -147,6 +147,7 @@ const STYLES = `
     pointer-events: auto;
     --mdc-icon-size: 20px;
   }
+  .arrow[hidden] { display: none !important; }
   .arrow:hover { border-color: currentColor; }
   .card:hover .icon, .card:hover .name, .card:hover .arrow,
   .card:focus-within .icon, .card:focus-within .name,
@@ -170,7 +171,7 @@ export class TerminalNavigationCard extends HTMLElement {
       name: 'Name',
       icon: 'Icon',
       off_icon: 'Inactive-state icon',
-      variant: 'Border style',
+      variant: 'Name placement',
       label: 'Secondary label',
       show_path: 'Show navigation path',
       entity: 'State entity',
@@ -179,6 +180,7 @@ export class TerminalNavigationCard extends HTMLElement {
       accent_color: 'Accent color',
       title_position: 'Border title position',
       more_icon: 'Navigation icon',
+      show_navigation_icon: 'Show navigation icon',
       popup_title: 'Popup border title',
       border_title: 'Border title',
     };
@@ -206,8 +208,8 @@ export class TerminalNavigationCard extends HTMLElement {
             select: {
               mode: 'dropdown',
               options: [
-                { value: 'continuous', label: 'Continuous border' },
-                { value: 'pane', label: 'Name in border' },
+                { value: 'continuous', label: 'Name inside card' },
+                { value: 'pane', label: 'Use name as border title' },
               ],
             },
           },
@@ -246,17 +248,33 @@ export class TerminalNavigationCard extends HTMLElement {
           name: '',
           title: 'Appearance',
           flatten: true,
-          schema: appearanceSchema({
-            titlePosition: true,
-            moreIcon: true,
-            popupTitle: true,
-            borderTitle: true,
-          }).map((field) => field.name === 'border_title'
-            ? {
-                ...field,
-                visible: { field: 'variant', operator: 'not_eq', value: 'pane' },
+          schema: [
+            { name: 'show_navigation_icon', default: true, selector: { boolean: {} } },
+            ...appearanceSchema({
+              titlePosition: true,
+              moreIcon: true,
+              popupTitle: true,
+              borderTitle: true,
+            }).map((field) => {
+              if (field.name === 'border_title') {
+                return {
+                  ...field,
+                  visible: { field: 'variant', operator: 'not_eq', value: 'pane' },
+                };
               }
-            : field),
+              if (field.name === 'more_icon') {
+                return {
+                  ...field,
+                  visible: {
+                    field: 'show_navigation_icon',
+                    operator: 'not_eq',
+                    value: false,
+                  },
+                };
+              }
+              return field;
+            }),
+          ],
         },
       ],
       computeLabel: (schema) => labels[schema.name] || schema.name,
@@ -280,7 +298,10 @@ export class TerminalNavigationCard extends HTMLElement {
           return 'Used when the selected state entity is off, or closed for a cover.';
         }
         if (schema.name === 'border_title') {
-          return 'Optional only for continuous borders; pane navigation already uses the name in its border.';
+          return 'Optional only when the name stays inside the card; border-title mode already uses the name.';
+        }
+        if (schema.name === 'show_navigation_icon') {
+          return 'Hides the trailing navigation icon and gives the secondary content more horizontal space.';
         }
         return undefined;
       },
@@ -397,6 +418,12 @@ export class TerminalNavigationCard extends HTMLElement {
       throw new Error('terminal-navigation-card: "state_template" must be a string');
     }
     if (
+      config.show_navigation_icon !== undefined &&
+      typeof config.show_navigation_icon !== 'boolean'
+    ) {
+      throw new Error('terminal-navigation-card: "show_navigation_icon" must be a boolean');
+    }
+    if (
       config.icon_tap_action !== undefined &&
       (!config.icon_tap_action ||
         typeof config.icon_tap_action !== 'object' ||
@@ -450,6 +477,7 @@ export class TerminalNavigationCard extends HTMLElement {
     this.dataset.borderTitle = String(Boolean(customBorderTitle));
     this._card.dataset.variant = variant;
     this._card.setAttribute('aria-label', `Navigate to ${name}`);
+    this._navTarget.setAttribute('aria-label', `Navigate to ${name}`);
     this._borderTitle.hidden = !borderTitle;
     this._borderTitle.dataset.titlePosition = this._config.title_position || 'left';
     this._borderTitle.textContent = borderTitle;
@@ -458,6 +486,7 @@ export class TerminalNavigationCard extends HTMLElement {
     this._icon.icon = isEntityInactive(entity) && this._config.off_icon
       ? this._config.off_icon
       : this._config.icon || 'mdi:arrow-right';
+    this._arrow.hidden = this._config.show_navigation_icon === false;
     this._arrow.icon = this._config.more_icon || 'mdi:chevron-right';
     const hasIconAction = (this._config.icon_tap_action?.action || 'none') !== 'none';
     const iconActionLabel = hasIconAction

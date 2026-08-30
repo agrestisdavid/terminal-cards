@@ -97,7 +97,10 @@
         assert(title.textContent === 'next events', 'calendar border title is missing');
         assert(getComputedStyle(title).right === '12px', 'calendar title cannot be positioned right');
         assert(rows.length === 3, 'calendar max_events did not limit the list to three');
+        const firstContent = rows[0].querySelector('.event-content');
         assert(rows[0].querySelector('.summary').textContent === '<b>first event</b>', 'calendar events are not sorted');
+        assert(firstContent.children[0].classList.contains('summary'), 'calendar description is not the first line');
+        assert(firstContent.children[1].classList.contains('when'), 'calendar date and time are not below the description');
         assert(!rows[0].querySelector('b'), 'calendar summary was interpreted as HTML');
         const firstEndLabel = new Intl.DateTimeFormat('en-GB', {
           hour: '2-digit',
@@ -145,6 +148,10 @@
         await Promise.resolve();
         Date.now = originalDateNow;
         assert(card.shadowRoot.querySelector('.when').textContent.includes('all-day'), 'all-day event is not labelled');
+        const allDayContent = card.shadowRoot.querySelector('.event-content');
+        assert(allDayContent.children[0].classList.contains('summary'), 'all-day description is not above its date');
+        assert(allDayContent.children[1].classList.contains('when'), 'all-day date is not below its description');
+        assert(allDayContent.children[2].classList.contains('location'), 'calendar location is not below description and date');
         assert(card.shadowRoot.querySelector('.location').textContent === '<office>', 'event location is missing');
         assert(!card.shadowRoot.querySelector('.location').querySelector('office'), 'calendar location was interpreted as HTML');
         assert(card.getCardSize() === 5, 'calendar size does not reflect configured event count');
@@ -234,6 +241,7 @@
         document.title = 'PASS terminal-calendar-card';
         document.querySelector('#result').textContent = [
           'PASS: next events sorted, limited and rendered safely',
+          'PASS: descriptions render above date/time and optional location',
           'PASS: start/end times, overnight dates and all-day formatting',
           'PASS: reactive calendar subscription with stale/disconnect cleanup',
           'PASS: native calendar editor selectors and validation',

@@ -111,7 +111,7 @@ tap_action:
 
 ### `custom:terminal-calendar-card`
 
-A compact agenda for one `calendar.*` entity. It shows the next three events by default and subscribes to Home Assistant's live calendar event API. The visual editor can change the event count from 1 to 10, search between 1 and 365 days ahead (30 by default), and optionally show event locations. Timed events show their start and end times, with both dates for overnight events; all-day events remain clearly labelled. Events are sorted chronologically and rendered as a terminal tree.
+A compact agenda for one `calendar.*` entity. It shows the next three events by default and subscribes to Home Assistant's live calendar event API. Each tree entry presents its description first, followed by the localized date and time; an optional location remains on the final line. The visual editor can change the event count from 1 to 10, search between 1 and 365 days ahead (30 by default), and optionally show event locations. Timed events show their start and end times, with both dates for overnight events; all-day events remain clearly labelled. Events are sorted chronologically and rendered safely as text.
 
 ```yaml
 type: custom:terminal-calendar-card
@@ -208,7 +208,7 @@ hold_action:
 
 ### `custom:terminal-navigation-card`
 
-An internal Home Assistant navigation card. `variant` switches between a continuous border and the Wrapper-style name embedded in the top border. The visual editor uses Home Assistant's native navigation-path picker. The optional state `entity` can also power a separate `icon_tap_action`: clicking the main icon runs a native Home Assistant action or service while clicking the remaining card still navigates.
+An internal Home Assistant navigation card. The native Name placement selector keeps the name inside the card or uses it as the border title; border-title mode leaves only the secondary content inside. The trailing navigation icon can be hidden to reclaim its complete layout width, and the remaining icon gap is compact so long labels and paths have more room. The visual editor uses Home Assistant's native navigation-path picker. The optional state `entity` can also power a separate `icon_tap_action`: clicking the main icon runs a native Home Assistant action or service while clicking the remaining card still navigates.
 
 ```yaml
 type: custom:terminal-navigation-card
@@ -216,11 +216,11 @@ name: kitchen
 navigation_path: /dashboard-test/kitchen
 icon: mdi:lightbulb
 off_icon: mdi:lightbulb-off-outline
-variant: continuous
-border_title: shortcuts # optional for continuous; pane uses name
+variant: pane # uses the name as border title
 title_position: right
 accent_color: cyan
-more_icon: mdi:arrow-right-bold
+show_navigation_icon: false # gives secondary content more room
+more_icon: mdi:arrow-right-bold # used when the icon is visible
 entity: light.kitchen
 state_template: "{{ states(config.entity) | upper }}"
 icon_tap_action:

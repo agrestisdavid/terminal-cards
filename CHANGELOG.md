@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## 0.17.0 — 2026-08-30
+
+- Clarify the Navigation Card's name-placement control so the name can become the border title while only secondary content remains inside.
+- Add a native `show_navigation_icon` option and tighter trailing-icon spacing to reclaim horizontal room for Navigation secondary text.
+- Render Calendar event descriptions above their localized date and time, with optional locations remaining last.
+
 ## 0.16.2 — 2026-08-30
 
 - Show only the earliest upcoming collection for each semantic waste type across the Waste Card, skipping later duplicates while backfilling the list with other bin types.
